@@ -18,6 +18,15 @@ function checkRateLimit(ip) {
   return record.count <= MAX_PER_HOUR;
 }
 
+async function fetchMarketaux(searchTerm) {
+  const base = `https://api.marketaux.com/v1/news/all?language=en&filter_entities=true&limit=40&api_token=${process.env.MARKETAUX_API_KEY}`;
+  const url = searchTerm ? `${base}&search=${encodeURIComponent(searchTerm)}` : base;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`News API failed: ${res.status}`);
+  const data = await res.json();
+  return data.data || [];
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -29,18 +38,50 @@ export default async function handler(req, res) {
   }
 
   try {
-    const newsUrl = `https://api.marketaux.com/v1/news/all?language=en&filter_entities=true&limit=40&api_token=${process.env.MARKETAUX_API_KEY}`;
-    const newsRes = await fetch(newsUrl);
-    if (!newsRes.ok) throw new Error(`News API failed: ${newsRes.status}`);
-    const newsData = await newsRes.json();
+    const body = req.body || {};
+    const filter = (body.filter || "").trim().toLowerCase();
+    const isWeirdFilter = filter === "weird";
 
-    if (!newsData.data || newsData.data.length < 6) {
-      throw new Error(`Not enough news returned (got ${newsData.data?.length || 0}, need at least 6)`);
+    let articles = [];
+    let fallbackNote = null;
+
+    if (isWeirdFilter || !filter) {
+      // No specific topic — just pull general news
+      articles = await fetchMarketaux(null);
+    } else {
+      // Topic filter — try filtered first
+      const filtered = await fetchMarketaux(filter);
+      if (filtered.length >= 6) {
+        articles = filtered;
+      } else {
+        // Pad with general news
+        const general = await fetchMarketaux(null);
+        const seenUrls = new Set(filtered.map(a => a.url));
+        const padding = general.filter(a => !seenUrls.has(a.url));
+        articles = [...filtered, ...padding];
+        if (filtered.length === 0) {
+          fallbackNote = `No stories matched "${filter}" — showing general market news instead.`;
+        } else {
+          fallbackNote = `Only ${filtered.length} ${filtered.length === 1 ? "story" : "stories"} matched "${filter}" — padded with general market news.`;
+        }
+      }
     }
 
-    const headlines = newsData.data.map((article, i) =>
+    if (articles.length < 6) {
+      throw new Error(`Not enough news available right now (got ${articles.length}). Try again later.`);
+    }
+
+    const headlines = articles.slice(0, 40).map((article, i) =>
       `${i + 1}. ${article.title} — ${article.description || ""} (Source: ${article.source}) [URL: ${article.url}]`
     ).join("\n");
+
+    const weirdInstruction = isWeirdFilter
+      ? `Special instruction: the user has chosen the "weird" lens. ALL six stories should lean into the unusual, counterintuitive, or quirky angle of the news. Find the surprising read on each. The "weird stats" story is still required as one of the six, but the other five should also feel offbeat.`
+      : `EXACTLY ONE of the six must be a "weird stats" story — built around an unusual, counterintuitive, or surprising statistic about the markets, AND it must lean bullish (find the optimistic read on the number). Tag this one as "Weird stats".`;
+
+    const focusInstruction = filter && !isWeirdFilter
+      ? `\n\nThe user has filtered for: "${filter}". Prefer stories from the headlines below that relate to this topic. If the headlines below are a mix of filtered and general news, prioritize the ones that fit the filter.`
+      : "";
 
     const message = await client.messages.create({
       model: "claude-opus-4-7",
@@ -48,15 +89,16 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "user",
-          content: `Below are real financial news headlines from today. You MUST pick exactly 6 (six) stories. Not 5. Not 7. Exactly 6. This is a hard requirement — if you return any other number, the response is invalid.
+          content: `Below are real financial news headlines from today. You MUST pick exactly 6 (six) stories. Not 5. Not 7. Exactly 6. This is a hard requirement.
 
 Selection criteria for the six:
 - Must be IMPORTANT (real market signal, not fluff or PR)
 - Must be slightly QUIRKY (an odd angle, a counterintuitive detail, something most people would miss)
 - Prefer variety across asset classes / sectors
-- EXACTLY ONE of the six must be a "weird stats" story — built around an unusual, counterintuitive, or surprising statistic about the markets, AND it must lean bullish (find the optimistic read on the number). Tag this one as "Weird stats".
 
-Rewrite each one in the voice of James Altucher: punchy, contrarian, conversational, slightly self-deprecating, short sentences, rhetorical questions, occasional weird tangents that land. Keep each body to 3-4 sentences (not 5) — be tight. Don't just summarize — interpret.
+${weirdInstruction}${focusInstruction}
+
+Rewrite each one in the voice of James Altucher: punchy, contrarian, conversational, slightly self-deprecating, short sentences, rhetorical questions, occasional weird tangents that land. Keep each body to 3-4 sentences — be tight. Don't just summarize — interpret.
 
 For each story, you MUST include the source URL from the headline list (the value inside [URL: ...]). Copy it exactly.
 
@@ -71,7 +113,7 @@ Return ONLY valid JSON with exactly 6 entries in the stories array. No preamble.
   ]
 }
 
-Count your stories before returning. If you have fewer than 6, add more. If you have more than 6, remove some.`
+Count your stories before returning. Exactly 6.`
         }
       ]
     });
@@ -90,9 +132,10 @@ Count your stories before returning. If you have fewer than 6, add more. If you 
     }
 
     if (data.stories.length !== 6) {
-      console.error(`Expected 6 stories, got ${data.stories.length}. Stories:`, data.stories);
       throw new Error(`Claude returned ${data.stories.length} stories instead of 6. Try again.`);
     }
+
+    if (fallbackNote) data.note = fallbackNote;
 
     res.status(200).json(data);
   } catch (err) {
