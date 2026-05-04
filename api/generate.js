@@ -8,7 +8,7 @@ const MAX_PER_HOUR = 5;
 const WINDOW_MS = 60 * 60 * 1000;
 
 function checkRateLimit(ip) {
-  const now = Date.now();
+ const now = Date.now();
   const record = rateLimits.get(ip) || { count: 0, resetAt: now + WINDOW_MS };
   if (now > record.resetAt) {
     record.count = 0;
