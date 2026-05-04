@@ -1,6 +1,7 @@
 {
   "name": "altucher-news",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
     "@vercel/kv": "^2.0.0"
