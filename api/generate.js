@@ -82,4 +82,4 @@ Return ONLY valid JSON, no preamble, no markdown fences, in this exact shape:
     res.status(500).json({ error: err.message });
   }
 }
-}
+
