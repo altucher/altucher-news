@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Use Corcel API (TAO Subnet 26 - Tensor Alchemy) for image generation
-// OpenAI-compatible endpoint: https://api.corcel.io/bittensor/v1/images/generations
-const CORCEL_API_URL = 'https://api.corcel.io/bittensor/v1/images/generations'
+// WOMBO Dream API (Bittensor Subnet 30)
+// Uses the dream-api npm package
 
 export async function POST(req: Request) {
   try {
@@ -17,73 +16,117 @@ export async function POST(req: Request) {
       )
     }
 
-    const apiKey = process.env.CORCEL_API_KEY
+    const apiKey = process.env.WOMBO_API_KEY
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'CORCEL_API_KEY not configured' },
+        { error: 'WOMBO_API_KEY not configured. Get your API key from https://dream.ai' },
         { status: 500 }
       )
     }
 
-    console.log('[Image Gen] Generating image via Corcel for prompt:', prompt.substring(0, 50))
+    console.log('[Image Gen] Generating image via WOMBO Dream (SN30) for prompt:', prompt.substring(0, 50))
 
-    const response = await fetch(CORCEL_API_URL, {
+    // WOMBO Dream API endpoint
+    // First, create a task
+    const createTaskResponse = await fetch('https://api.luan.tools/api/tasks/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        prompt,
-        model: 'flux-schnell',
-        n: 1,
-        size: '1024x1024',
+        use_target_image: false,
       }),
     })
 
-    const responseText = await response.text()
-    console.log('[Image Gen] Response status:', response.status)
-
-    if (!response.ok) {
-      console.error('[Image Gen] Corcel error:', response.status, responseText.substring(0, 200))
+    if (!createTaskResponse.ok) {
+      const errorText = await createTaskResponse.text()
+      console.error('[Image Gen] Failed to create task:', errorText)
       return NextResponse.json(
-        { error: `Image generation failed: ${responseText.substring(0, 200)}` },
-        { status: response.status }
+        { error: `Failed to create image task: ${errorText.substring(0, 200)}` },
+        { status: createTaskResponse.status }
       )
     }
 
-    let data
-    try {
-      data = JSON.parse(responseText)
-    } catch {
-      console.error('[Image Gen] Invalid JSON response')
+    const taskData = await createTaskResponse.json()
+    const taskId = taskData.id
+
+    console.log('[Image Gen] Created task:', taskId)
+
+    // Start the image generation
+    const generateResponse = await fetch(`https://api.luan.tools/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input_spec: {
+          style: 115, // FLUX style
+          prompt: prompt,
+          display_freq: 10,
+          width: 1024,
+          height: 1024,
+        },
+      }),
+    })
+
+    if (!generateResponse.ok) {
+      const errorText = await generateResponse.text()
+      console.error('[Image Gen] Failed to start generation:', errorText)
       return NextResponse.json(
-        { error: 'Invalid response from Corcel' },
-        { status: 500 }
+        { error: `Failed to start generation: ${errorText.substring(0, 200)}` },
+        { status: generateResponse.status }
       )
     }
 
-    console.log('[Image Gen] Success, response keys:', Object.keys(data))
+    // Poll for completion
+    let imageUrl = null
+    let attempts = 0
+    const maxAttempts = 60 // 60 seconds max
 
-    // Handle various response formats
-    const imageUrl = data.url || data.image_url || data.data?.[0]?.url || data.data?.[0]?.b64_json || data.image
+    while (!imageUrl && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const statusResponse = await fetch(`https://api.luan.tools/api/tasks/${taskId}`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      })
+
+      if (!statusResponse.ok) {
+        attempts++
+        continue
+      }
+
+      const statusData = await statusResponse.json()
+      
+      if (statusData.state === 'completed' && statusData.result) {
+        imageUrl = statusData.result
+        break
+      } else if (statusData.state === 'failed') {
+        console.error('[Image Gen] Generation failed:', statusData)
+        return NextResponse.json(
+          { error: 'Image generation failed' },
+          { status: 500 }
+        )
+      }
+      
+      attempts++
+    }
 
     if (!imageUrl) {
-      console.error('[Image Gen] No image URL in response:', JSON.stringify(data).substring(0, 300))
       return NextResponse.json(
-        { error: 'No image URL in response' },
-        { status: 500 }
+        { error: 'Image generation timed out' },
+        { status: 504 }
       )
     }
 
-    // If it's base64, prefix it
-    const finalUrl = imageUrl.startsWith('http') || imageUrl.startsWith('data:') 
-      ? imageUrl 
-      : `data:image/png;base64,${imageUrl}`
+    console.log('[Image Gen] Success, image URL:', imageUrl.substring(0, 50))
 
     return NextResponse.json({
       success: true,
-      imageUrl: finalUrl,
+      imageUrl,
       prompt,
     })
   } catch (error) {
