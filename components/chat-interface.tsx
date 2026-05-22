@@ -68,7 +68,8 @@ export default function ChatInterface() {
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [showLimitWarning, setShowLimitWarning] = useState(false)
   const [generatingImage, setGeneratingImage] = useState(false)
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null)
+  const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string}>>([])
+  const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -323,7 +324,7 @@ export default function ChatInterface() {
     if (!prompt.trim() || generatingImage) return
     
     setGeneratingImage(true)
-    setGeneratedImage(null)
+    setCurrentImagePrompt(prompt)
     
     try {
       const response = await fetch('/api/image', {
@@ -339,13 +340,18 @@ export default function ChatInterface() {
       }
       
       if (data.imageUrl) {
-        setGeneratedImage(data.imageUrl)
+        setGeneratedImages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          prompt: prompt,
+          imageUrl: data.imageUrl
+        }])
       }
     } catch (error) {
       console.error('[Image Gen] Error:', error)
       alert(error instanceof Error ? error.message : 'Failed to generate image')
     } finally {
       setGeneratingImage(false)
+      setCurrentImagePrompt(null)
     }
   }
 
@@ -739,33 +745,61 @@ export default function ChatInterface() {
                       )}
                     </div>
                   ))}
-                  {isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
-                        <Bot className="w-5 h-5 text-sky-600" />
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground pt-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Thinking...</span>
-                      </div>
-                    </div>
-                  )}
-                  {/* Generated Image Display */}
-                  {generatedImage && (
-                    <div className="flex gap-4">
+{isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-sky-600" />
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground pt-2">
+                    <svg 
+                      className="w-5 h-5 text-sky-500" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <style>
+                        {`
+                          @keyframes sandFlow {
+                            0%, 100% { transform: translateY(0); opacity: 1; }
+                            50% { transform: translateY(4px); opacity: 0.5; }
+                          }
+                          @keyframes hourglassRotate {
+                            0%, 45% { transform: rotate(0deg); }
+                            50%, 95% { transform: rotate(180deg); }
+                            100% { transform: rotate(360deg); }
+                          }
+                          .hourglass-container { animation: hourglassRotate 3s ease-in-out infinite; transform-origin: center; }
+                          .sand-top { animation: sandFlow 1.5s ease-in-out infinite; }
+                          .sand-bottom { animation: sandFlow 1.5s ease-in-out infinite reverse; }
+                        `}
+                      </style>
+                      <g className="hourglass-container">
+                        <path d="M6 2h12v4l-4 4 4 4v4H6v-4l4-4-4-4V2z" stroke="currentColor" strokeWidth="2" fill="none"/>
+                        <circle className="sand-top" cx="12" cy="6" r="2" fill="currentColor" opacity="0.7"/>
+                        <circle className="sand-bottom" cx="12" cy="16" r="2.5" fill="currentColor" opacity="0.9"/>
+                        <line className="sand-top" x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+                      </g>
+                    </svg>
+                    <span className="text-sm">Thinking...</span>
+                  </div>
+                </div>
+              )}
+                  {/* Generated Images Display - All images persist */}
+                  {generatedImages.map((img) => (
+                    <div key={img.id} className="flex gap-4">
                       <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
                         <ImageIcon className="w-5 h-5 text-purple-600" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">Generated Image:</p>
+                        <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
                         <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
                           <img 
-                            src={generatedImage} 
-                            alt="Generated image" 
+                            src={img.imageUrl} 
+                            alt={img.prompt} 
                             className="w-full h-auto"
                           />
                           <button
-                            onClick={() => setGeneratedImage(null)}
+                            onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
                             className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
                           >
                             <X className="w-4 h-4" />
@@ -773,15 +807,18 @@ export default function ChatInterface() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  ))}
                   {generatingImage && (
                     <div className="flex gap-4">
                       <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
                         <ImageIcon className="w-5 h-5 text-purple-600" />
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground pt-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Generating image...</span>
+                      <div className="flex-1">
+                        <p className="text-sm text-muted-foreground mb-2">{currentImagePrompt}</p>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">Generating image...</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1038,27 +1075,50 @@ function MessageBubble({ message }: { message: UIMessage }) {
                 return formatInlineMarkdown(line)
               }
               
-              // Format inline markdown (bold **text**)
-              const formatInlineMarkdown = (text: string): React.ReactNode => {
-                const boldRegex = /\*\*(.+?)\*\*/g
-                const parts: React.ReactNode[] = []
-                let lastIndex = 0
-                let match
-                
-                while ((match = boldRegex.exec(text)) !== null) {
-                  if (match.index > lastIndex) {
-                    parts.push(text.slice(lastIndex, match.index))
-                  }
-                  parts.push(<strong key={keyIndex++} className="font-semibold">{match[1]}</strong>)
-                  lastIndex = match.index + match[0].length
-                }
-                
-                if (lastIndex < text.length) {
-                  parts.push(text.slice(lastIndex))
-                }
-                
-                return parts.length > 0 ? parts : text
-              }
+  // Format inline markdown (bold **text** and italic *text*)
+  const formatInlineMarkdown = (text: string): React.ReactNode => {
+    // First handle bold **text**, then italic *text* (order matters to avoid conflicts)
+    const parts: React.ReactNode[] = []
+    let remaining = text
+    let localKeyIndex = 0
+    
+    // Process the text character by character to handle both ** and *
+    while (remaining.length > 0) {
+      // Check for bold **text**
+      const boldMatch = remaining.match(/^\*\*(.+?)\*\*/)
+      if (boldMatch) {
+        parts.push(<strong key={keyIndex++} className="font-semibold">{boldMatch[1]}</strong>)
+        remaining = remaining.slice(boldMatch[0].length)
+        continue
+      }
+      
+      // Check for italic *text* (but not **)
+      const italicMatch = remaining.match(/^\*([^*]+?)\*/)
+      if (italicMatch) {
+        parts.push(<em key={keyIndex++} className="italic">{italicMatch[1]}</em>)
+        remaining = remaining.slice(italicMatch[0].length)
+        continue
+      }
+      
+      // Find the next * to know how much plain text to consume
+      const nextStar = remaining.indexOf('*', 0)
+      if (nextStar === -1) {
+        // No more stars, push the rest as plain text
+        parts.push(remaining)
+        break
+      } else if (nextStar === 0) {
+        // Star at start but didn't match bold or italic, push it as plain text
+        parts.push('*')
+        remaining = remaining.slice(1)
+      } else {
+        // Push plain text up to the star
+        parts.push(remaining.slice(0, nextStar))
+        remaining = remaining.slice(nextStar)
+      }
+    }
+    
+    return parts.length > 0 ? parts : text
+  }
               
               // Process all lines
               const formattedLines = lines.map((line, i) => {
