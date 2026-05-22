@@ -214,16 +214,16 @@ export async function POST(req: Request) {
       },
     })
 
-    // Model selection - default to Qwen3-32B
+    // Model selection - default to Llama-4-Maverick (faster)
     const modelOptions: Record<string, string> = {
+      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
       'qwen3-32b': 'Qwen/Qwen3-32B',
       'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
-      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
       'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
       'deepseek-v3': 'deepseek-ai/DeepSeek-V3-0324',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'meta-llama/Llama-4-Maverick-17B-128E-Instruct'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
