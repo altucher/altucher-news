@@ -1038,27 +1038,50 @@ function MessageBubble({ message }: { message: UIMessage }) {
                 return formatInlineMarkdown(line)
               }
               
-              // Format inline markdown (bold **text**)
-              const formatInlineMarkdown = (text: string): React.ReactNode => {
-                const boldRegex = /\*\*(.+?)\*\*/g
-                const parts: React.ReactNode[] = []
-                let lastIndex = 0
-                let match
-                
-                while ((match = boldRegex.exec(text)) !== null) {
-                  if (match.index > lastIndex) {
-                    parts.push(text.slice(lastIndex, match.index))
-                  }
-                  parts.push(<strong key={keyIndex++} className="font-semibold">{match[1]}</strong>)
-                  lastIndex = match.index + match[0].length
-                }
-                
-                if (lastIndex < text.length) {
-                  parts.push(text.slice(lastIndex))
-                }
-                
-                return parts.length > 0 ? parts : text
-              }
+  // Format inline markdown (bold **text** and italic *text*)
+  const formatInlineMarkdown = (text: string): React.ReactNode => {
+    // First handle bold **text**, then italic *text* (order matters to avoid conflicts)
+    const parts: React.ReactNode[] = []
+    let remaining = text
+    let localKeyIndex = 0
+    
+    // Process the text character by character to handle both ** and *
+    while (remaining.length > 0) {
+      // Check for bold **text**
+      const boldMatch = remaining.match(/^\*\*(.+?)\*\*/)
+      if (boldMatch) {
+        parts.push(<strong key={keyIndex++} className="font-semibold">{boldMatch[1]}</strong>)
+        remaining = remaining.slice(boldMatch[0].length)
+        continue
+      }
+      
+      // Check for italic *text* (but not **)
+      const italicMatch = remaining.match(/^\*([^*]+?)\*/)
+      if (italicMatch) {
+        parts.push(<em key={keyIndex++} className="italic">{italicMatch[1]}</em>)
+        remaining = remaining.slice(italicMatch[0].length)
+        continue
+      }
+      
+      // Find the next * to know how much plain text to consume
+      const nextStar = remaining.indexOf('*', 0)
+      if (nextStar === -1) {
+        // No more stars, push the rest as plain text
+        parts.push(remaining)
+        break
+      } else if (nextStar === 0) {
+        // Star at start but didn't match bold or italic, push it as plain text
+        parts.push('*')
+        remaining = remaining.slice(1)
+      } else {
+        // Push plain text up to the star
+        parts.push(remaining.slice(0, nextStar))
+        remaining = remaining.slice(nextStar)
+      }
+    }
+    
+    return parts.length > 0 ? parts : text
+  }
               
               // Process all lines
               const formattedLines = lines.map((line, i) => {
