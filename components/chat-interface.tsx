@@ -771,7 +771,7 @@ export default function ChatInterface() {
                       )}
                     </div>
                   ))}
-{isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
+{status === 'submitted' && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
                     <Bot className="w-5 h-5 text-sky-600" />
