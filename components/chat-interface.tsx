@@ -427,7 +427,7 @@ export default function ChatInterface() {
       )}>
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-          <span className="font-[family-name:var(--font-space)] text-xl font-bold text-sky-600 tracking-wider">BlueTAO</span>
+          <span className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground tracking-wide">BlueTAO</span>
           <Button
             variant="ghost"
             size="icon"
@@ -442,13 +442,13 @@ export default function ChatInterface() {
         <div className="p-3">
           <Button
             onClick={handleNewChat}
-            className="w-full justify-start gap-2 bg-sky-500 hover:bg-sky-400 text-white"
+            className="w-full justify-start gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Plus className="w-4 h-4" />
             New Chat
           </Button>
           {showLoginPrompt && (
-            <p className="text-xs text-amber-500 mt-2 text-center animate-pulse">
+            <p className="text-xs text-amber-600 mt-2 text-center animate-pulse">
               Log in to create a chat history
             </p>
           )}
@@ -461,7 +461,7 @@ export default function ChatInterface() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-sidebar-foreground capitalize">{usage.tier} Plan</span>
                 <Link href="/pricing">
-                  <Button variant="ghost" size="sm" className="h-6 text-xs text-sky-500 hover:text-sky-400 p-0">
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary/80 p-0">
                     <Zap className="w-3 h-3 mr-1" />
                     Upgrade
                   </Button>
@@ -472,7 +472,7 @@ export default function ChatInterface() {
                   className={cn(
                     "h-1.5 rounded-full transition-all",
                     usage.remaining < usage.messageLimit * 0.1 ? "bg-red-500" :
-                    usage.remaining < usage.messageLimit * 0.3 ? "bg-amber-500" : "bg-sky-500"
+                    usage.remaining < usage.messageLimit * 0.3 ? "bg-amber-500" : "bg-primary"
                   )}
                   style={{ width: `${Math.min(100, (usage.messageCount / usage.messageLimit) * 100)}%` }}
                 />
@@ -500,7 +500,7 @@ export default function ChatInterface() {
             </div>
           ) : loadingChats ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-sky-500" />
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
             </div>
           ) : chats.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
@@ -602,7 +602,7 @@ export default function ChatInterface() {
         )}
 
         {/* Header */}
-        <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/50 bg-background/60 backdrop-blur-sm">
+        <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/30 bg-background/80 backdrop-blur-md">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -614,7 +614,7 @@ export default function ChatInterface() {
             </Button>
             <button 
               onClick={handleNewChat}
-              className="font-[family-name:var(--font-space)] text-xl font-bold text-sky-600 hover:text-sky-500 transition-colors hidden lg:block tracking-wider"
+              className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground hover:text-primary transition-colors hidden lg:block tracking-wide"
             >
               BlueTAO
             </button>
@@ -624,13 +624,13 @@ export default function ChatInterface() {
               variant="outline"
               size="sm"
               onClick={handleNewChat}
-              className="rounded-full border-border bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+              className="rounded-full border-border/50 bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground text-sm"
             >
               <Plus className="w-4 h-4 mr-2" />
               New Chat
             </Button>
             {showLoginPrompt && (
-              <span className="text-xs text-amber-500 animate-pulse hidden sm:block">
+              <span className="text-xs text-amber-600 animate-pulse hidden sm:block">
                 Log in to create a chat history
               </span>
             )}
@@ -638,7 +638,7 @@ export default function ChatInterface() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link href="/pricing">
-                <Button variant="ghost" size="sm" className="text-sky-500 hover:text-sky-400 hidden sm:flex">
+                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden sm:flex">
                   <Zap className="w-4 h-4 mr-1" />
                   Upgrade
                 </Button>
@@ -666,19 +666,22 @@ export default function ChatInterface() {
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
-                <div className="mb-6">
-                  <BlueTaoLogo className="w-20 h-20 text-sky-500" />
+                <div className="mb-8">
+                  <BlueTaoLogo className="w-24 h-24 text-primary" />
                 </div>
 
                 {/* Title */}
-                <h1 className="font-[family-name:var(--font-space)] text-5xl md:text-6xl text-foreground font-bold tracking-wide mb-12">
+                <h1 className="font-[family-name:var(--font-playfair)] text-5xl md:text-6xl text-foreground font-normal tracking-tight mb-4">
                   Ask anything
                 </h1>
+                <p className="text-muted-foreground text-lg mb-12 max-w-md">
+                  Intelligent answers powered by decentralized AI
+                </p>
                 
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
                   <form onSubmit={handleSubmit} className="relative">
-                    <div className="relative flex items-center rounded-full border border-border bg-card shadow-lg shadow-sky-200/50">
+                    <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
                       <div className="pl-5 text-muted-foreground">
                         <Pencil className="w-5 h-5" />
                       </div>
@@ -708,7 +711,7 @@ export default function ChatInterface() {
                         className={cn(
                           'mr-1 h-10 w-10 rounded-full transition-all',
                           input.trim() && !isLoading && !generatingImage
-                            ? 'bg-purple-500 text-white hover:bg-purple-400'
+                            ? 'bg-violet-600 text-white hover:bg-violet-500'
                             : 'bg-muted text-muted-foreground'
                         )}
                       >
@@ -725,7 +728,7 @@ export default function ChatInterface() {
                         className={cn(
                           'mr-2 h-10 w-10 rounded-full transition-all',
                           input.trim() && !isLoading
-                            ? 'bg-sky-500 text-white hover:bg-sky-400'
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                             : 'bg-muted text-muted-foreground'
                         )}
                       >
@@ -745,7 +748,7 @@ export default function ChatInterface() {
                     <button
                       key={suggestion.label}
                       onClick={() => handleSuggestionClick(suggestion.label)}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-sky-400/50 transition-all text-sm"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border/50 bg-card/80 backdrop-blur-sm text-muted-foreground hover:bg-accent hover:text-foreground hover:border-primary/30 transition-all text-sm"
                     >
                       <suggestion.icon className="w-4 h-4" />
                       {suggestion.label}
@@ -790,8 +793,8 @@ export default function ChatInterface() {
                         const img = item.data as typeof generatedImages[0]
                         return (
                           <div key={`img-${img.id}`} className="flex gap-4">
-                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                              <ImageIcon className="w-5 h-5 text-purple-600" />
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                              <ImageIcon className="w-5 h-5 text-primary" />
                             </div>
                             <div className="flex-1">
                               <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
@@ -929,10 +932,10 @@ export default function ChatInterface() {
 
         {/* Input Area - Chat Mode */}
         {(messages.length > 0 || generatedImages.length > 0 || generatingImage) && (
-          <div className="relative z-10 border-t border-border/50 bg-background/60 backdrop-blur-sm">
+          <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
               <form onSubmit={handleSubmit} className="relative">
-                <div className="relative flex items-center rounded-full border border-border bg-card shadow-sm shadow-sky-200/30">
+                <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
                   <div className="pl-5 text-muted-foreground">
                     <Pencil className="w-5 h-5" />
                   </div>
@@ -963,7 +966,7 @@ export default function ChatInterface() {
                     className={cn(
                       'mr-1 h-9 w-9 rounded-full transition-all',
                       input.trim() && !isLoading && !generatingImage
-                        ? 'bg-purple-500 text-white hover:bg-purple-400'
+                        ? 'bg-violet-600 text-white hover:bg-violet-500'
                         : 'bg-muted text-muted-foreground'
                     )}
                   >
@@ -980,7 +983,7 @@ export default function ChatInterface() {
                     className={cn(
                       'mr-2 h-9 w-9 rounded-full transition-all',
                       input.trim() && !isLoading
-                        ? 'bg-sky-500 text-white hover:bg-sky-400'
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                         : 'bg-muted text-muted-foreground'
                     )}
                   >

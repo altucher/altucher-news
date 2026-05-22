@@ -21,12 +21,12 @@ export default function PricingPage() {
         <header className="p-4 flex items-center justify-between">
           <Link 
             href="/"
-            className="font-[family-name:var(--font-space)] text-2xl font-bold text-sky-600 tracking-wider"
+            className="font-[family-name:var(--font-playfair)] text-2xl font-medium text-foreground tracking-wide"
           >
             BlueTAO
           </Link>
           <Link href="/">
-            <Button variant="outline" className="rounded-full">
+            <Button variant="outline" className="rounded-full border-border/50">
               Back to Chat
             </Button>
           </Link>
@@ -35,7 +35,7 @@ export default function PricingPage() {
         {/* Main Content */}
         <main className="max-w-6xl mx-auto px-4 py-12">
           <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+            <h1 className="font-[family-name:var(--font-playfair)] text-4xl md:text-5xl font-normal text-foreground mb-4">
               Choose Your Plan
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -50,22 +50,22 @@ export default function PricingPage() {
               <div
                 key={plan.id}
                 className={cn(
-                  'relative rounded-2xl border bg-card/80 backdrop-blur-sm p-6 flex flex-col',
-                  plan.id === 'plus' && 'border-sky-500 shadow-lg shadow-sky-500/20',
-                  plan.id === selectedPlan && 'ring-2 ring-sky-500'
+                  'relative rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-6 flex flex-col',
+                  plan.id === 'plus' && 'border-primary shadow-sm',
+                  plan.id === selectedPlan && 'ring-2 ring-primary'
                 )}
               >
                 {plan.id === 'plus' && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-sky-500 text-white text-xs font-semibold rounded-full">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">
                     Most Popular
                   </div>
                 )}
 
-                <h3 className="text-xl font-bold text-foreground mb-2">{plan.name}</h3>
+                <h3 className="text-xl font-semibold text-foreground mb-2">{plan.name}</h3>
                 <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
 
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-foreground">
+                  <span className="text-4xl font-semibold text-foreground">
                     {formatPrice(plan.priceInCents)}
                   </span>
                   {plan.priceInCents > 0 && (
@@ -76,7 +76,7 @@ export default function PricingPage() {
                 <ul className="space-y-3 mb-6 flex-1">
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-sky-500 flex-shrink-0 mt-0.5" />
+                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                       <span className="text-sm text-foreground">{feature}</span>
                     </li>
                   ))}
@@ -84,7 +84,7 @@ export default function PricingPage() {
 
                 {plan.id === 'free' ? (
                   <Link href="/">
-                    <Button variant="outline" className="w-full">
+                    <Button variant="outline" className="w-full border-border/50">
                       Get Started
                     </Button>
                   </Link>
@@ -94,7 +94,7 @@ export default function PricingPage() {
                     className={cn(
                       'w-full',
                       plan.id === 'plus'
-                        ? 'bg-sky-500 hover:bg-sky-400 text-white'
+                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                         : 'bg-foreground/10 hover:bg-foreground/20 text-foreground'
                     )}
                   >
@@ -108,9 +108,9 @@ export default function PricingPage() {
           {/* Checkout Section */}
           {selectedPlan && selectedPlan !== 'free' && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-card/80 backdrop-blur-sm rounded-2xl border p-6">
+              <div className="bg-card/80 backdrop-blur-sm rounded-xl border border-border/50 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-foreground">
+                  <h2 className="text-xl font-semibold text-foreground">
                     Complete Your Subscription
                   </h2>
                   <Button
