@@ -272,12 +272,22 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
     }
 
     // Convert messages to simple format for the model
-    const modelMessages = messages.map(msg => ({
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content: typeof (msg as { content?: string }).content === 'string' 
+    // Prepend critical current facts to the first user message to override outdated training data
+    const currentFactsPrefix = `[IMPORTANT CONTEXT - Today is ${currentDate}. Donald Trump is the current US President (inaugurated Jan 20, 2025). JD Vance is VP. Joe Biden was president 2021-2025 but is NO LONGER president.]\n\n`
+    
+    const modelMessages = messages.map((msg, index) => {
+      const content = typeof (msg as { content?: string }).content === 'string' 
         ? (msg as { content: string }).content 
         : (msg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
-    }))
+      
+      // Add context to first user message
+      const finalContent = (msg.role === 'user' && index === 0) ? currentFactsPrefix + content : content
+      
+      return {
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: finalContent
+      }
+    })
 
     const result = streamText({
       model: chutes.chatModel(selectedModel),
