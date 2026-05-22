@@ -650,7 +650,7 @@ export default function ChatInterface() {
         {/* Main Content */}
         <main className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
-            {messages.length === 0 ? (
+            {messages.length === 0 && generatedImages.length === 0 && !generatingImage ? (
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
