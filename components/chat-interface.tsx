@@ -68,7 +68,8 @@ export default function ChatInterface() {
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [showLimitWarning, setShowLimitWarning] = useState(false)
   const [generatingImage, setGeneratingImage] = useState(false)
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null)
+  const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string}>>([])
+  const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -323,7 +324,7 @@ export default function ChatInterface() {
     if (!prompt.trim() || generatingImage) return
     
     setGeneratingImage(true)
-    setGeneratedImage(null)
+    setCurrentImagePrompt(prompt)
     
     try {
       const response = await fetch('/api/image', {
@@ -339,13 +340,18 @@ export default function ChatInterface() {
       }
       
       if (data.imageUrl) {
-        setGeneratedImage(data.imageUrl)
+        setGeneratedImages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          prompt: prompt,
+          imageUrl: data.imageUrl
+        }])
       }
     } catch (error) {
       console.error('[Image Gen] Error:', error)
       alert(error instanceof Error ? error.message : 'Failed to generate image')
     } finally {
       setGeneratingImage(false)
+      setCurrentImagePrompt(null)
     }
   }
 
@@ -778,22 +784,22 @@ export default function ChatInterface() {
                   </div>
                 </div>
               )}
-                  {/* Generated Image Display */}
-                  {generatedImage && (
-                    <div className="flex gap-4">
+                  {/* Generated Images Display - All images persist */}
+                  {generatedImages.map((img) => (
+                    <div key={img.id} className="flex gap-4">
                       <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
                         <ImageIcon className="w-5 h-5 text-purple-600" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">Generated Image:</p>
+                        <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
                         <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
                           <img 
-                            src={generatedImage} 
-                            alt="Generated image" 
+                            src={img.imageUrl} 
+                            alt={img.prompt} 
                             className="w-full h-auto"
                           />
                           <button
-                            onClick={() => setGeneratedImage(null)}
+                            onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
                             className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
                           >
                             <X className="w-4 h-4" />
@@ -801,15 +807,18 @@ export default function ChatInterface() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  ))}
                   {generatingImage && (
                     <div className="flex gap-4">
                       <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
                         <ImageIcon className="w-5 h-5 text-purple-600" />
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground pt-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Generating image...</span>
+                      <div className="flex-1">
+                        <p className="text-sm text-muted-foreground mb-2">{currentImagePrompt}</p>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">Generating image...</span>
+                        </div>
                       </div>
                     </div>
                   )}
