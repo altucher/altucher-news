@@ -214,13 +214,16 @@ export async function POST(req: Request) {
       },
     })
 
-    // Model selection - default to Qwen3-32B (confirmed working on Chutes)
+    console.log('[v0] Chutes API Key prefix:', apiKey.substring(0, 15))
+    console.log('[v0] Using model:', selectedModel)
+
+    // Model selection - using available Chutes models
     const modelOptions: Record<string, string> = {
-      'qwen3-32b': 'Qwen/Qwen3-32B',
-      'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
+      'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
+      'deepseek-v3': 'deepseek-ai/DeepSeek-V3.2-TEE',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B-TEE'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
