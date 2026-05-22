@@ -6,12 +6,12 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  // Check if Supabase env vars are available - if not, skip session handling
+  // Check if Supabase env vars are available
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   
   if (!supabaseUrl || !supabaseAnonKey) {
-    // Skip Supabase middleware if env vars are not available
+    // Skip Supabase session handling if env vars are not available
     return supabaseResponse
   }
 

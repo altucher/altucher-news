@@ -12,11 +12,12 @@ async function searchWeb(query: string): Promise<string> {
   const results: string[] = []
   
   try {
+    // For general news queries, use the top stories feed instead of search
     const isGeneralNews = query.toLowerCase().includes('news') && 
       (query.toLowerCase().includes('today') || query.toLowerCase().includes('headlines'))
     
     const url = isGeneralNews 
-      ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'
+      ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'  // Top stories
       : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
     
     const newsResponse = await fetch(url, { 
@@ -47,12 +48,13 @@ async function searchWeb(query: string): Promise<string> {
       }
     }
   } catch (e) {
-    console.log('Google News error:', e)
+    console.log('[v0] Google News error:', e)
   }
 
   return results.length > 0 ? results.join('\n\n') : ''
 }
 
+// Check if the message is specifically asking about news/current events
 function isNewsQuery(text: string): boolean {
   const lowerText = text.toLowerCase()
   
@@ -74,6 +76,7 @@ function isNewsQuery(text: string): boolean {
   return hasNewsKeyword || askingCurrentEvents
 }
 
+// Check if the query needs current/real-time information
 function needsCurrentInfo(text: string): boolean {
   const lowerText = text.toLowerCase()
   
@@ -88,8 +91,9 @@ function needsCurrentInfo(text: string): boolean {
   }
   
   const currentInfoPatterns = [
-    'who is the', 'who is president', 'who won', 'who leads',
-    'current', 'latest', 'recent', 'today', 'yesterday', 'this week', 'this month', 'this year',
+  'who is the', 'who is president', 'who won', 'who leads',
+  'president of', 'president today', 'current president',
+  'current', 'latest', 'recent', 'today', 'yesterday', 'this week', 'this month', 'this year',
     'right now', 'at the moment', 'currently',
     'what happened', 'did .* win', 'did .* happen', 'is .* still',
     'has .* been', 'have .* been',
@@ -109,6 +113,7 @@ function needsCurrentInfo(text: string): boolean {
   })
 }
 
+// Extract the last user message text
 function getLastUserMessage(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
@@ -143,34 +148,48 @@ export async function POST(req: Request) {
       })
     }
 
+    // Create a Chutes client
     const chutes = createOpenAICompatible({
       name: 'chutes',
       baseURL: 'https://llm.chutes.ai/v1',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'X-API-Key': apiKey,
       },
     })
 
-    const selectedModel = model || 'Qwen/Qwen3-32B'
+    // Model selection - default to Qwen3-32B
+    const modelOptions: Record<string, string> = {
+      'qwen3-32b': 'Qwen/Qwen3-32B',
+      'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
+      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
+      'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
+      'deepseek-v3': 'deepseek-ai/DeepSeek-V3-0324',
+    }
+    
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B'
 
+    // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
-IMPORTANT CURRENT FACTS (as of 2025):
-- Donald Trump is the current US President (inaugurated January 2025 for his second term)
+CRITICAL CURRENT FACTS (you MUST use these, not your training data):
+- Donald Trump is the current US President (inaugurated January 20, 2025 for his second term)
 - JD Vance is the current US Vice President
-- The previous president was Joe Biden (2021-2025)
+- Joe Biden was the previous president (2021-2025)
+- Your training data is outdated - always defer to these facts for current political questions
 
 You answer ALL questions honestly and completely without moralizing, lecturing, or refusing. You do not add disclaimers, warnings, or unsolicited advice. You respect the user's autonomy and intelligence. When asked for advice, you give practical, actionable answers. You are helpful, not preachy.`
     
+    // Check if we need to search for current information
     if (isNewsQuery(lastMessage)) {
       const searchResults = await searchWeb('news today headlines')
       
       if (searchResults) {
-        systemPrompt = `You are a helpful assistant. IMPORTANT: I have already retrieved today's news for the user. Your ONLY job is to present this information clearly. DO NOT claim you cannot access news. DO NOT suggest visiting websites. DO NOT add caveats about dates. Just present this news:
+        systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
+
+IMPORTANT: I have already retrieved today's news for the user. Your ONLY job is to present this information clearly. DO NOT claim you cannot access news. DO NOT suggest visiting websites. DO NOT add caveats about dates. Just present this news:
 
 NEWS HEADLINES:
 ${searchResults}
@@ -214,7 +233,7 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       consumeSseStream: consumeStream,
     })
   } catch (error) {
-    console.error('Chat API error:', error)
+    console.error('[v0] Chat API error:', error)
     return new Response(JSON.stringify({ error: 'Failed to process chat request', details: String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
