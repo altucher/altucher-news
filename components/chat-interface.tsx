@@ -56,6 +56,7 @@ export default function ChatInterface() {
   const [loadingChats, setLoadingChats] = useState(true)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -252,6 +253,11 @@ export default function ChatInterface() {
   }
 
   const handleNewChat = () => {
+    if (!user) {
+      setShowLoginPrompt(true)
+      setTimeout(() => setShowLoginPrompt(false), 3000)
+      return
+    }
     setCurrentChatId(null)
     setMessages([])
     setNewsHeadlines([])
@@ -326,6 +332,11 @@ export default function ChatInterface() {
             <Plus className="w-4 h-4" />
             New Chat
           </Button>
+          {showLoginPrompt && (
+            <p className="text-xs text-amber-500 mt-2 text-center animate-pulse">
+              Log in to create a chat history
+            </p>
+          )}
         </div>
 
         {/* Chat List */}
@@ -424,15 +435,22 @@ export default function ChatInterface() {
               BlueTAO
             </button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNewChat}
-            className="rounded-full border-border bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewChat}
+              className="rounded-full border-border bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Chat
+            </Button>
+            {showLoginPrompt && (
+              <span className="text-xs text-amber-500 animate-pulse hidden sm:block">
+                Log in to create a chat history
+              </span>
+            )}
+          </div>
           {user ? (
             <span className="text-sm text-muted-foreground ml-4 hidden sm:block">
               Hi, {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
