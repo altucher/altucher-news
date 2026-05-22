@@ -88,6 +88,11 @@ function isNewsQuery(text: string): boolean {
 function needsCurrentInfo(text: string): boolean {
   const lowerText = text.toLowerCase()
   
+  // Force web search if prefixed with special marker
+  if (text.startsWith('[SEARCH THE WEB FOR RECENT DATA]')) {
+    return true
+  }
+  
   const creativePatterns = [
     'write a', 'write me', 'create a', 'make a', 'generate',
     'explain', 'what is the meaning', 'how does', 'why do',
@@ -257,7 +262,9 @@ ${searchResults}
 Respond by organizing these headlines by topic (politics, technology, business, etc.) and presenting them conversationally. Start your response with "Here are today's top stories:" and then list them.`
       }
     } else if (needsCurrentInfo(lastMessage)) {
-      const searchResults = await searchWeb(lastMessage)
+      // Strip the force search prefix if present
+      const cleanQuery = lastMessage.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
+      const searchResults = await searchWeb(cleanQuery)
       
       if (searchResults) {
         systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
@@ -275,12 +282,16 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
 
     // Convert messages to simple format for the model
     // Prepend critical current facts to the first user message to override outdated training data
+    // Also strip the force search prefix from messages
     const currentFactsPrefix = `[IMPORTANT CONTEXT - Today is ${currentDate}. Donald Trump is the current US President (inaugurated Jan 20, 2025). JD Vance is VP. Joe Biden was president 2021-2025 but is NO LONGER president.]\n\n`
     
     const modelMessages = messages.map((msg, index) => {
-      const content = typeof (msg as { content?: string }).content === 'string' 
+      let content = typeof (msg as { content?: string }).content === 'string' 
         ? (msg as { content: string }).content 
         : (msg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
+      
+      // Strip force search prefix from user messages
+      content = content.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
       
       // Add context to first user message
       const finalContent = (msg.role === 'user' && index === 0) ? currentFactsPrefix + content : content

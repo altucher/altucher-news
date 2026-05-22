@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -215,7 +215,7 @@ export default function ChatInterface() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, newsHeadlines])
+  }, [messages, newsHeadlines, generatedImages, generatingImage])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -317,6 +317,13 @@ export default function ChatInterface() {
       const form = document.querySelector('form')
       form?.requestSubmit()
     }, 100)
+  }
+
+  // Re-ask the previous question with web search enabled
+  const handleIncludeRecentHistory = (userQuestion: string) => {
+    if (isLoading) return
+    const enhancedQuery = `[SEARCH THE WEB FOR RECENT DATA] ${userQuestion}`
+    sendMessage({ text: enhancedQuery })
   }
 
   // Generate image from prompt
@@ -743,9 +750,28 @@ export default function ChatInterface() {
                           loading={loadingNews} 
                         />
                       )}
+                      {/* Include recent history button after assistant messages */}
+                      {message.role === 'assistant' && !isLoading && idx > 0 && (
+                        <div className="flex gap-4 mt-2">
+                          <div className="w-9" /> {/* Spacer to align with message */}
+                          <button
+                            onClick={() => {
+                              // Find the user question that preceded this assistant message
+                              const userQuestion = getMessageText(messages[idx - 1])
+                              if (userQuestion) {
+                                handleIncludeRecentHistory(userQuestion)
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-full border border-border transition-colors"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
+                            Include recent history
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
-{isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
+{status === 'submitted' && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
                     <Bot className="w-5 h-5 text-sky-600" />
@@ -781,54 +807,64 @@ export default function ChatInterface() {
                       </g>
                     </svg>
                     <span className="text-sm">Thinking...</span>
-                    <button
-                      onClick={() => stop()}
-                      className="ml-2 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-md transition-colors flex items-center gap-1"
-                    >
-                      <Square className="w-3 h-3 fill-current" />
-                      Stop
-                    </button>
                   </div>
                 </div>
               )}
-                  {/* Generated Images Display - All images persist */}
-                  {generatedImages.map((img) => (
-                    <div key={img.id} className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-purple-600" />
+              {/* Stop button - visible during entire loading/streaming phase */}
+              {isLoading && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    onClick={() => stop()}
+                    className="px-4 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-600 rounded-full transition-colors flex items-center gap-2 shadow-sm"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    Stop generating
+                  </button>
+                </div>
+              )}
+              {/* Generated Images Display - All images persist */}
+              {generatedImages.map((img) => (
+                <div key={img.id} className="flex gap-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                    <ImageIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
+                    <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
+                      <img 
+                        src={img.imageUrl} 
+                        alt={img.prompt} 
+                        className="w-full h-auto"
+                      />
+                      <button
+                        onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
+                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {generatingImage && (
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
+                    <ImageIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground mb-2 font-medium">{currentImagePrompt}</p>
+                    <div className="flex items-center gap-3 text-purple-600 bg-purple-50 rounded-lg px-4 py-3">
+                      <div className="relative">
+                        <Loader2 className="w-5 h-5 animate-spin" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
-                        <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
-                          <img 
-                            src={img.imageUrl} 
-                            alt={img.prompt} 
-                            className="w-full h-auto"
-                          />
-                          <button
-                            onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
-                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">Generating image...</span>
+                        <span className="text-xs text-purple-400">This may take 5-10 seconds</span>
                       </div>
                     </div>
-                  ))}
-                  {generatingImage && (
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">{currentImagePrompt}</p>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="text-sm">Generating image...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
+                </div>
+              )}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
