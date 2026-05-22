@@ -296,6 +296,11 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       system: systemPrompt,
       messages: modelMessages,
       abortSignal: req.signal,
+      providerOptions: {
+        chutes: {
+          thinking: { type: 'enabled' }
+        }
+      }
     })
 
     return result.toUIMessageStreamResponse({
