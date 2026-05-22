@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Use the Chutes invocations API for calling public chutes
-const CHUTES_API_URL = 'https://api.chutes.ai/v1/chutes/chutes/z-image-turbo/run'
+// Use Vercel AI Gateway for image generation (simpler than Chutes custom chutes)
+const AI_GATEWAY_URL = 'https://api.vercel.ai/v1/images/generations'
 
 export async function POST(req: Request) {
   try {
@@ -16,72 +16,53 @@ export async function POST(req: Request) {
       )
     }
 
-    const apiKey = process.env.CHUTES_API_KEY
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'CHUTES_API_KEY not configured. Please add your Chutes API key in the environment variables.' },
-        { status: 500 }
-      )
-    }
-
     console.log('[Image Gen] Generating image for prompt:', prompt.substring(0, 50))
-    console.log('[Image Gen] API Key prefix:', apiKey.substring(0, 10))
 
-    const response = await fetch(CHUTES_API_URL, {
+    // Use Vercel AI Gateway - works out of the box in v0
+    const response = await fetch(AI_GATEWAY_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        model: 'dall-e-3',
         prompt,
-        num_inference_steps: 4,
-        guidance_scale: 0,
-        width: 1024,
-        height: 1024,
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard',
       }),
     })
 
-    const responseText = await response.text()
-    console.log('[Image Gen] Response status:', response.status)
-    console.log('[Image Gen] Response preview:', responseText.substring(0, 200))
-
     if (!response.ok) {
-      console.error('[Image Gen] Chutes API error:', response.status, responseText)
+      const errorText = await response.text()
+      console.error('[Image Gen] AI Gateway error:', response.status, errorText)
       return NextResponse.json(
-        { error: `Image generation failed: ${responseText.substring(0, 200)}` },
+        { error: `Image generation failed: ${errorText.substring(0, 200)}` },
         { status: response.status }
       )
     }
 
-    // Try to parse as JSON
-    let data
-    try {
-      data = JSON.parse(responseText)
-    } catch {
-      // If not JSON, might be binary image data
-      console.log('[Image Gen] Response is not JSON, treating as binary')
-      const base64 = Buffer.from(responseText).toString('base64')
-      return NextResponse.json({
-        success: true,
-        imageUrl: `data:image/png;base64,${base64}`,
-        prompt,
-      })
+    const data = await response.json()
+    console.log('[Image Gen] Success, response:', JSON.stringify(data).substring(0, 200))
+
+    // OpenAI-style response format
+    const imageUrl = data.data?.[0]?.url || data.data?.[0]?.b64_json
+
+    if (!imageUrl) {
+      return NextResponse.json(
+        { error: 'No image URL in response' },
+        { status: 500 }
+      )
     }
 
-    console.log('[Image Gen] Success, response keys:', Object.keys(data))
-
-    // The response format may vary - handle different possible formats
-    let imageUrl = data.image || data.url || data.output || data.image_url || data.b64_json
-    
     // If it's base64, prefix it
-    if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
-      imageUrl = `data:image/png;base64,${imageUrl}`
-    }
+    const finalUrl = imageUrl.startsWith('http') || imageUrl.startsWith('data:') 
+      ? imageUrl 
+      : `data:image/png;base64,${imageUrl}`
 
     return NextResponse.json({
       success: true,
-      imageUrl,
+      imageUrl: finalUrl,
       prompt,
     })
   } catch (error) {
