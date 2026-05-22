@@ -864,19 +864,45 @@ function MessageBubble({ message }: { message: UIMessage }) {
               }
               
               if (segments.length === 0) {
-                return <span>{text}</span>
+                return formatMarkdown(text)
               }
               
               return segments.map((seg, i) => {
                 if (seg.type === 'think' || seg.type === 'think-streaming') {
                   return (
                     <div key={i} className="text-xs italic text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-muted pl-3">
-                      {seg.content.trim()}
+                      {formatMarkdown(seg.content.trim())}
                     </div>
                   )
                 }
-                return <span key={i}>{seg.content}</span>
+                return <span key={i}>{formatMarkdown(seg.content)}</span>
               })
+            }
+            
+            // Parse markdown bold (**text**) and render as bold
+            const formatMarkdown = (text: string): React.ReactNode => {
+              const boldRegex = /\*\*(.+?)\*\*/g
+              const parts: React.ReactNode[] = []
+              let lastIndex = 0
+              let match
+              let keyIndex = 0
+              
+              while ((match = boldRegex.exec(text)) !== null) {
+                // Add text before the bold
+                if (match.index > lastIndex) {
+                  parts.push(text.slice(lastIndex, match.index))
+                }
+                // Add the bold text
+                parts.push(<strong key={keyIndex++} className="font-semibold">{match[1]}</strong>)
+                lastIndex = match.index + match[0].length
+              }
+              
+              // Add remaining text
+              if (lastIndex < text.length) {
+                parts.push(text.slice(lastIndex))
+              }
+              
+              return parts.length > 0 ? parts : text
             }
             
             return (
