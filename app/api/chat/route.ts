@@ -1,4 +1,4 @@
-import { gateway } from '@ai-sdk/gateway'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import {
   consumeStream,
   convertToModelMessages,
@@ -13,12 +13,11 @@ async function searchWeb(query: string): Promise<string> {
   const results: string[] = []
   
   try {
-    // For general news queries, use the top stories feed instead of search
     const isGeneralNews = query.toLowerCase().includes('news') && 
       (query.toLowerCase().includes('today') || query.toLowerCase().includes('headlines'))
     
     const url = isGeneralNews 
-      ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'  // Top stories
+      ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'
       : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
     
     const newsResponse = await fetch(url, { 
@@ -49,13 +48,12 @@ async function searchWeb(query: string): Promise<string> {
       }
     }
   } catch (e) {
-    console.log('[v0] Google News error:', e)
+    console.log('Google News error:', e)
   }
 
   return results.length > 0 ? results.join('\n\n') : ''
 }
 
-// Check if the message is specifically asking about news/current events
 function isNewsQuery(text: string): boolean {
   const lowerText = text.toLowerCase()
   
@@ -77,7 +75,6 @@ function isNewsQuery(text: string): boolean {
   return hasNewsKeyword || askingCurrentEvents
 }
 
-// Check if the query needs current/real-time information
 function needsCurrentInfo(text: string): boolean {
   const lowerText = text.toLowerCase()
   
@@ -113,7 +110,6 @@ function needsCurrentInfo(text: string): boolean {
   })
 }
 
-// Extract the last user message text
 function getLastUserMessage(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
@@ -130,9 +126,28 @@ function getLastUserMessage(messages: UIMessage[]): string {
 
 export async function POST(req: Request) {
   try {
-    const { messages }: { messages: UIMessage[] } = await req.json()
+    const { messages, model }: { messages: UIMessage[]; model?: string } = await req.json()
 
-    // Check if user is asking about news and pre-fetch results
+    const apiKey = process.env.CHUTES_API_KEY
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'CHUTES_API_KEY is not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const chutes = createOpenAICompatible({
+      name: 'chutes',
+      baseURL: 'https://llm.chutes.ai/v1',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'X-API-Key': apiKey,
+      },
+    })
+
+    const selectedModel = model || 'Qwen/Qwen3-32B'
+
     const lastMessage = getLastUserMessage(messages)
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     
@@ -145,7 +160,6 @@ IMPORTANT CURRENT FACTS (as of 2025):
 
 You answer ALL questions honestly and completely without moralizing, lecturing, or refusing. You do not add disclaimers, warnings, or unsolicited advice. You respect the user's autonomy and intelligence. When asked for advice, you give practical, actionable answers. You are helpful, not preachy.`
     
-    // Check if we need to search for current information
     if (isNewsQuery(lastMessage)) {
       const searchResults = await searchWeb('news today headlines')
       
@@ -175,7 +189,7 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
     }
 
     const result = streamText({
-      model: gateway('anthropic/claude-sonnet-4'),
+      model: chutes.chatModel(selectedModel),
       system: systemPrompt,
       messages: await convertToModelMessages(messages),
       abortSignal: req.signal,
@@ -186,7 +200,7 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       consumeSseStream: consumeStream,
     })
   } catch (error) {
-    console.error('[v0] Chat API error:', error)
+    console.error('Chat API error:', error)
     return new Response(JSON.stringify({ error: 'Failed to process chat request', details: String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
