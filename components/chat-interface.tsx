@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -67,6 +67,8 @@ export default function ChatInterface() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [showLimitWarning, setShowLimitWarning] = useState(false)
+  const [generatingImage, setGeneratingImage] = useState(false)
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -314,6 +316,48 @@ export default function ChatInterface() {
       const form = document.querySelector('form')
       form?.requestSubmit()
     }, 100)
+  }
+
+  // Generate image from prompt
+  const handleGenerateImage = async (prompt: string) => {
+    if (!prompt.trim() || generatingImage) return
+    
+    setGeneratingImage(true)
+    setGeneratedImage(null)
+    
+    try {
+      const response = await fetch('/api/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Image generation failed')
+      }
+      
+      if (data.imageUrl) {
+        setGeneratedImage(data.imageUrl)
+      }
+    } catch (error) {
+      console.error('[Image Gen] Error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to generate image')
+    } finally {
+      setGeneratingImage(false)
+    }
+  }
+
+  // Check if message is an image generation request
+  const isImageRequest = (text: string) => {
+    const lowerText = text.toLowerCase()
+    return lowerText.includes('generate image') || 
+           lowerText.includes('create image') ||
+           lowerText.includes('make an image') ||
+           lowerText.includes('draw me') ||
+           lowerText.includes('generate a picture') ||
+           lowerText.includes('create a picture')
   }
 
   const suggestions = [
@@ -615,6 +659,25 @@ export default function ChatInterface() {
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
                       <Button
+                        type="button"
+                        size="icon"
+                        onClick={() => handleGenerateImage(input)}
+                        disabled={!input.trim() || isLoading || generatingImage}
+                        title="Generate Image"
+                        className={cn(
+                          'mr-1 h-10 w-10 rounded-full transition-all',
+                          input.trim() && !isLoading && !generatingImage
+                            ? 'bg-purple-500 text-white hover:bg-purple-400'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {generatingImage ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5" />
+                        )}
+                      </Button>
+                      <Button
                         type="submit"
                         size="icon"
                         disabled={!input.trim() || isLoading}
@@ -687,6 +750,41 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
+                  {/* Generated Image Display */}
+                  {generatedImage && (
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-muted-foreground mb-2">Generated Image:</p>
+                        <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
+                          <img 
+                            src={generatedImage} 
+                            alt="Generated image" 
+                            className="w-full h-auto"
+                          />
+                          <button
+                            onClick={() => setGeneratedImage(null)}
+                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {generatingImage && (
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground pt-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Generating image...</span>
+                      </div>
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
@@ -713,6 +811,25 @@ export default function ChatInterface() {
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
                   />
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={() => handleGenerateImage(input)}
+                    disabled={!input.trim() || isLoading || generatingImage}
+                    title="Generate Image"
+                    className={cn(
+                      'mr-1 h-9 w-9 rounded-full transition-all',
+                      input.trim() && !isLoading && !generatingImage
+                        ? 'bg-purple-500 text-white hover:bg-purple-400'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {generatingImage ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                  </Button>
                   <Button
                     type="submit"
                     size="icon"
