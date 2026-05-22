@@ -68,8 +68,9 @@ export default function ChatInterface() {
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [showLimitWarning, setShowLimitWarning] = useState(false)
   const [generatingImage, setGeneratingImage] = useState(false)
-  const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string}>>([])
+  const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
+  const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -217,6 +218,15 @@ export default function ChatInterface() {
     scrollToBottom()
   }, [messages, newsHeadlines, generatedImages, generatingImage])
 
+  // Track timestamps for new messages
+  useEffect(() => {
+    messages.forEach((msg) => {
+      if (!messageTimestamps[msg.id]) {
+        setMessageTimestamps(prev => ({ ...prev, [msg.id]: Date.now() }))
+      }
+    })
+  }, [messages, messageTimestamps])
+
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -343,15 +353,25 @@ export default function ChatInterface() {
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || 'Image generation failed')
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || 'Image generation failed'
+        throw new Error(errorMsg)
       }
       
       if (data.imageUrl) {
-        setGeneratedImages(prev => [...prev, {
+        const newImage = {
           id: crypto.randomUUID(),
           prompt: prompt,
-          imageUrl: data.imageUrl
-        }])
+          imageUrl: data.imageUrl,
+          createdAt: Date.now()
+        }
+        setGeneratedImages(prev => {
+          const updated = [...prev, newImage]
+          return updated
+        })
+        // Force scroll after state update
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
       }
     } catch (error) {
       console.error('[Image Gen] Error:', error)
@@ -642,7 +662,7 @@ export default function ChatInterface() {
         {/* Main Content */}
         <main className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
-            {messages.length === 0 ? (
+            {messages.length === 0 && generatedImages.length === 0 && !generatingImage ? (
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
@@ -674,7 +694,15 @@ export default function ChatInterface() {
                       <Button
                         type="button"
                         size="icon"
-                        onClick={() => handleGenerateImage(input)}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const prompt = input.trim()
+                          if (prompt) {
+                            setInput('') // Clear input immediately
+                            handleGenerateImage(prompt)
+                          }
+                        }}
                         disabled={!input.trim() || isLoading || generatingImage}
                         title="Generate Image"
                         className={cn(
@@ -739,38 +767,108 @@ export default function ChatInterface() {
               /* Chat View */
               <div className="py-6">
                 <div className="space-y-6">
-                  {messages.map((message, idx) => (
-                    <div key={message.id}>
-                      <MessageBubble message={message} />
-                      {message.role === 'user' && 
-                       isNewsQuery(getMessageText(message)) && 
-                       idx === messages.length - 1 && (
-                        <NewsPanel 
-                          headlines={newsHeadlines} 
-                          loading={loadingNews} 
-                        />
-                      )}
-                      {/* Include recent history button after assistant messages */}
-                      {message.role === 'assistant' && !isLoading && idx > 0 && (
-                        <div className="flex gap-4 mt-2">
-                          <div className="w-9" /> {/* Spacer to align with message */}
-                          <button
-                            onClick={() => {
-                              // Find the user question that preceded this assistant message
-                              const userQuestion = getMessageText(messages[idx - 1])
-                              if (userQuestion) {
-                                handleIncludeRecentHistory(userQuestion)
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-full border border-border transition-colors"
-                          >
-                            <Globe className="w-3.5 h-3.5" />
-                            Include recent history
-                          </button>
+                  {/* Unified timeline: merge messages and images chronologically */}
+                  {(() => {
+                    // Create timeline items with timestamps
+                    const timelineItems: Array<{type: 'message' | 'image', data: typeof messages[0] | typeof generatedImages[0], timestamp: number, idx: number}> = []
+                    
+                    messages.forEach((msg, idx) => {
+                      // Use tracked timestamp or fallback to a very old time for existing messages
+                      const timestamp = messageTimestamps[msg.id] || 0
+                      timelineItems.push({ type: 'message', data: msg, timestamp, idx })
+                    })
+                    
+                    generatedImages.forEach((img, idx) => {
+                      timelineItems.push({ type: 'image', data: img, timestamp: img.createdAt, idx })
+                    })
+                    
+                    // Sort by timestamp
+                    timelineItems.sort((a, b) => a.timestamp - b.timestamp)
+                    
+                    return timelineItems.map((item) => {
+                      if (item.type === 'image') {
+                        const img = item.data as typeof generatedImages[0]
+                        return (
+                          <div key={`img-${img.id}`} className="flex gap-4">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                              <ImageIcon className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
+                              <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
+                                <img 
+                                  src={img.imageUrl} 
+                                  alt={img.prompt} 
+                                  className="w-full h-auto"
+                                />
+                                <button
+                                  onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
+                                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      } else {
+                        const message = item.data as typeof messages[0]
+                        const idx = item.idx
+                        return (
+                          <div key={message.id}>
+                            <MessageBubble message={message} />
+                            {message.role === 'user' && 
+                             isNewsQuery(getMessageText(message)) && 
+                             idx === messages.length - 1 && (
+                              <NewsPanel 
+                                headlines={newsHeadlines} 
+                                loading={loadingNews} 
+                              />
+                            )}
+                            {/* Include recent history button after assistant messages */}
+                            {message.role === 'assistant' && !isLoading && idx > 0 && (
+                              <div className="flex gap-4 mt-2">
+                                <div className="w-9" /> {/* Spacer to align with message */}
+                                <button
+                                  onClick={() => {
+                                    // Find the user question that preceded this assistant message
+                                    const userQuestion = getMessageText(messages[idx - 1])
+                                    if (userQuestion) {
+                                      handleIncludeRecentHistory(userQuestion)
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-full border border-border transition-colors"
+                                >
+                                  <Globe className="w-3.5 h-3.5" />
+                                  Include recent history
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                    })
+                  })()}
+                  {/* Image generating indicator */}
+                  {generatingImage && (
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
+                        <ImageIcon className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground mb-2 font-medium">{currentImagePrompt}</p>
+                        <div className="flex items-center gap-3 text-purple-600 bg-purple-50 rounded-lg px-4 py-3">
+                          <div className="relative">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">Generating image...</span>
+                            <span className="text-xs text-purple-400">This may take 5-10 seconds</span>
+                          </div>
                         </div>
-                      )}
+                      </div>
                     </div>
-                  ))}
+                  )}
 {status === 'submitted' && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
@@ -822,49 +920,6 @@ export default function ChatInterface() {
                   </button>
                 </div>
               )}
-              {/* Generated Images Display - All images persist */}
-              {generatedImages.map((img) => (
-                <div key={img.id} className="flex gap-4">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                    <ImageIcon className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
-                    <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
-                      <img 
-                        src={img.imageUrl} 
-                        alt={img.prompt} 
-                        className="w-full h-auto"
-                      />
-                      <button
-                        onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {generatingImage && (
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
-                    <ImageIcon className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-foreground mb-2 font-medium">{currentImagePrompt}</p>
-                    <div className="flex items-center gap-3 text-purple-600 bg-purple-50 rounded-lg px-4 py-3">
-                      <div className="relative">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">Generating image...</span>
-                        <span className="text-xs text-purple-400">This may take 5-10 seconds</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
@@ -873,7 +928,7 @@ export default function ChatInterface() {
         </main>
 
         {/* Input Area - Chat Mode */}
-        {messages.length > 0 && (
+        {(messages.length > 0 || generatedImages.length > 0 || generatingImage) && (
           <div className="relative z-10 border-t border-border/50 bg-background/60 backdrop-blur-sm">
             <div className="max-w-3xl mx-auto px-4 py-4">
               <form onSubmit={handleSubmit} className="relative">
@@ -894,7 +949,15 @@ export default function ChatInterface() {
                   <Button
                     type="button"
                     size="icon"
-                    onClick={() => handleGenerateImage(input)}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const prompt = input.trim()
+                      if (prompt) {
+                        setInput('') // Clear input immediately
+                        handleGenerateImage(prompt)
+                      }
+                    }}
                     disabled={!input.trim() || isLoading || generatingImage}
                     title="Generate Image"
                     className={cn(

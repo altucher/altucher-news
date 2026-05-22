@@ -107,7 +107,7 @@ function needsCurrentInfo(text: string): boolean {
   'who is the', 'who is president', 'who won', 'who leads',
   'president of', 'president today', 'current president',
   'current', 'latest', 'recent', 'today', 'yesterday', 'this week', 'this month', 'this year',
-    'right now', 'at the moment', 'currently',
+    'right now', 'at the moment', 'currently', 'now', 'nowadays', 'these days', 'as of',
     'what happened', 'did .* win', 'did .* happen', 'is .* still',
     'has .* been', 'have .* been',
     'price of', 'stock price', 'how much is', 'score', 'standings',
@@ -115,7 +115,7 @@ function needsCurrentInfo(text: string): boolean {
     'where is .* now', 'what is .* doing', 'is .* alive', 'is .* dead',
     'how old is', 'age of',
     'super bowl', 'world series', 'election', 'olympics',
-    'released', 'announced', 'launched'
+    'released', 'announced', 'launched', 'happening', 'going on'
   ]
   
   return currentInfoPatterns.some(pattern => {
