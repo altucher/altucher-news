@@ -826,6 +826,11 @@ export default function ChatInterface() {
                 </div>
               )}
               {/* Generated Images Display - All images persist */}
+              {generatedImages.length > 0 && (
+                <div className="bg-green-100 p-2 text-green-800 text-sm mb-4">
+                  DEBUG: {generatedImages.length} images in state
+                </div>
+              )}
               {generatedImages.map((img) => (
                 <div key={img.id} className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
