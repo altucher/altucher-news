@@ -139,6 +139,8 @@ export async function POST(req: Request) {
     const { messages, model }: { messages: UIMessage[]; model?: string } = await req.json()
 
     const apiKey = process.env.CHUTES_API_KEY
+    
+    console.log('[v0] CHUTES_API_KEY present:', !!apiKey, 'length:', apiKey?.length || 0)
 
     if (!apiKey) {
       console.error('[v0] CHUTES_API_KEY is not configured')
