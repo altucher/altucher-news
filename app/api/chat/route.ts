@@ -214,16 +214,15 @@ export async function POST(req: Request) {
       },
     })
 
-    // Model selection - default to Llama-4-Maverick (faster)
+    // Model selection - default to DeepSeek-V3 (fast and available on Chutes)
     const modelOptions: Record<string, string> = {
-      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
+      'deepseek-v3': 'deepseek-ai/DeepSeek-V3-0324',
       'qwen3-32b': 'Qwen/Qwen3-32B',
       'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
       'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
-      'deepseek-v3': 'deepseek-ai/DeepSeek-V3-0324',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'meta-llama/Llama-4-Maverick-17B-128E-Instruct'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'deepseek-ai/DeepSeek-V3-0324'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
