@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -317,6 +317,13 @@ export default function ChatInterface() {
       const form = document.querySelector('form')
       form?.requestSubmit()
     }, 100)
+  }
+
+  // Re-ask the previous question with web search enabled
+  const handleIncludeRecentHistory = (userQuestion: string) => {
+    if (isLoading) return
+    const enhancedQuery = `[SEARCH THE WEB FOR RECENT DATA] ${userQuestion}`
+    sendMessage({ text: enhancedQuery })
   }
 
   // Generate image from prompt
@@ -743,6 +750,25 @@ export default function ChatInterface() {
                           loading={loadingNews} 
                         />
                       )}
+                      {/* Include recent history button after assistant messages */}
+                      {message.role === 'assistant' && !isLoading && idx > 0 && (
+                        <div className="flex gap-4 mt-2">
+                          <div className="w-9" /> {/* Spacer to align with message */}
+                          <button
+                            onClick={() => {
+                              // Find the user question that preceded this assistant message
+                              const userQuestion = getMessageText(messages[idx - 1])
+                              if (userQuestion) {
+                                handleIncludeRecentHistory(userQuestion)
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-full border border-border transition-colors"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
+                            Include recent history
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
 {isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
@@ -781,19 +807,14 @@ export default function ChatInterface() {
                       </g>
                     </svg>
                     <span className="text-sm">Thinking...</span>
+                    <button
+                      onClick={() => stop()}
+                      className="ml-2 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-md transition-colors flex items-center gap-1"
+                    >
+                      <Square className="w-3 h-3 fill-current" />
+                      Stop
+                    </button>
                   </div>
-                </div>
-              )}
-              {/* Stop button - visible during entire streaming */}
-              {isLoading && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
-                <div className="flex justify-center mt-4">
-                  <button
-                    onClick={() => stop()}
-                    className="px-4 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-600 rounded-full transition-colors flex items-center gap-2 shadow-sm"
-                  >
-                    <Square className="w-4 h-4 fill-current" />
-                    Stop generating
-                  </button>
                 </div>
               )}
                   {/* Generated Images Display - All images persist */}

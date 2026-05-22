@@ -88,6 +88,11 @@ function isNewsQuery(text: string): boolean {
 function needsCurrentInfo(text: string): boolean {
   const lowerText = text.toLowerCase()
   
+  // Force web search if prefixed with special marker
+  if (text.startsWith('[SEARCH THE WEB FOR RECENT DATA]')) {
+    return true
+  }
+  
   const creativePatterns = [
     'write a', 'write me', 'create a', 'make a', 'generate',
     'explain', 'what is the meaning', 'how does', 'why do',
