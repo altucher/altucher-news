@@ -70,6 +70,7 @@ export default function ChatInterface() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
+  const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -216,6 +217,15 @@ export default function ChatInterface() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, newsHeadlines, generatedImages, generatingImage])
+
+  // Track timestamps for new messages
+  useEffect(() => {
+    messages.forEach((msg) => {
+      if (!messageTimestamps[msg.id]) {
+        setMessageTimestamps(prev => ({ ...prev, [msg.id]: Date.now() }))
+      }
+    })
+  }, [messages, messageTimestamps])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -763,8 +773,8 @@ export default function ChatInterface() {
                     const timelineItems: Array<{type: 'message' | 'image', data: typeof messages[0] | typeof generatedImages[0], timestamp: number, idx: number}> = []
                     
                     messages.forEach((msg, idx) => {
-                      // Use message createdAt or index-based timestamp
-                      const timestamp = (msg as { createdAt?: number }).createdAt || idx * 1000
+                      // Use tracked timestamp or fallback to a very old time for existing messages
+                      const timestamp = messageTimestamps[msg.id] || 0
                       timelineItems.push({ type: 'message', data: msg, timestamp, idx })
                     })
                     
