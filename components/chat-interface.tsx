@@ -807,14 +807,19 @@ export default function ChatInterface() {
                       </g>
                     </svg>
                     <span className="text-sm">Thinking...</span>
-                    <button
-                      onClick={() => stop()}
-                      className="ml-2 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-md transition-colors flex items-center gap-1"
-                    >
-                      <Square className="w-3 h-3 fill-current" />
-                      Stop
-                    </button>
                   </div>
+                </div>
+              )}
+              {/* Stop button - visible during entire loading/streaming phase */}
+              {isLoading && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    onClick={() => stop()}
+                    className="px-4 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-600 rounded-full transition-colors flex items-center gap-2 shadow-sm"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    Stop generating
+                  </button>
                 </div>
               )}
                   {/* Generated Images Display - All images persist */}
