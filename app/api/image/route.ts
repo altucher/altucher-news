@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 export const maxDuration = 120 // 2 minutes for image generation
 
 // Use Corcel API (TAO Subnet 26 - Tensor Alchemy) for image generation
-const CORCEL_API_URL = 'https://api.corcel.io/v1/image/text-to-image'
+// OpenAI-compatible endpoint: https://api.corcel.io/bittensor/v1/images/generations
+const CORCEL_API_URL = 'https://api.corcel.io/bittensor/v1/images/generations'
 
 export async function POST(req: Request) {
   try {
@@ -35,9 +36,8 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         prompt,
         model: 'flux-schnell',
+        n: 1,
         size: '1024x1024',
-        quality: 'standard',
-        steps: 4,
       }),
     })
 
