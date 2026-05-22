@@ -350,9 +350,12 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
                 const parsed = JSON.parse(data)
                 const choice = parsed.choices?.[0]
                 const delta = choice?.delta
+                
+                console.log('[v0] Kimi delta:', JSON.stringify(delta))
 
                 // Handle reasoning_content (Kimi's thinking)
                 if (delta?.reasoning_content) {
+                  console.log('[v0] Got reasoning_content:', delta.reasoning_content.substring(0, 50))
                   if (!sentThinkOpen) {
                     controller.enqueue(encoder.encode('0:"<think>"\n'))
                     sentThinkOpen = true
@@ -363,6 +366,7 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
 
                 // Handle regular content
                 if (delta?.content) {
+                  console.log('[v0] Got content:', delta.content.substring(0, 50))
                   if (sentThinkOpen && !sentThinkClose) {
                     controller.enqueue(encoder.encode('0:"</think>"\n'))
                     sentThinkClose = true
