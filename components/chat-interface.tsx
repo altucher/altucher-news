@@ -68,7 +68,7 @@ export default function ChatInterface() {
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [showLimitWarning, setShowLimitWarning] = useState(false)
   const [generatingImage, setGeneratingImage] = useState(false)
-  const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string}>>([])
+  const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -351,7 +351,8 @@ export default function ChatInterface() {
         const newImage = {
           id: crypto.randomUUID(),
           prompt: prompt,
-          imageUrl: data.imageUrl
+          imageUrl: data.imageUrl,
+          createdAt: Date.now()
         }
         setGeneratedImages(prev => {
           const updated = [...prev, newImage]
@@ -756,30 +757,89 @@ export default function ChatInterface() {
               /* Chat View */
               <div className="py-6">
                 <div className="space-y-6">
-                  {/* Generated Images Display - Rendered FIRST so they appear at top */}
-                  {generatedImages.length > 0 && generatedImages.map((img) => (
-                    <div key={img.id} className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
-                        <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
-                          <img 
-                            src={img.imageUrl} 
-                            alt={img.prompt} 
-                            className="w-full h-auto"
-                          />
-                          <button
-                            onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
-                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {/* Unified timeline: merge messages and images chronologically */}
+                  {(() => {
+                    // Create timeline items with timestamps
+                    const timelineItems: Array<{type: 'message' | 'image', data: typeof messages[0] | typeof generatedImages[0], timestamp: number, idx: number}> = []
+                    
+                    messages.forEach((msg, idx) => {
+                      // Use message createdAt or index-based timestamp
+                      const timestamp = (msg as { createdAt?: number }).createdAt || idx * 1000
+                      timelineItems.push({ type: 'message', data: msg, timestamp, idx })
+                    })
+                    
+                    generatedImages.forEach((img, idx) => {
+                      timelineItems.push({ type: 'image', data: img, timestamp: img.createdAt, idx })
+                    })
+                    
+                    // Sort by timestamp
+                    timelineItems.sort((a, b) => a.timestamp - b.timestamp)
+                    
+                    return timelineItems.map((item) => {
+                      if (item.type === 'image') {
+                        const img = item.data as typeof generatedImages[0]
+                        return (
+                          <div key={`img-${img.id}`} className="flex gap-4">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                              <ImageIcon className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
+                              <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
+                                <img 
+                                  src={img.imageUrl} 
+                                  alt={img.prompt} 
+                                  className="w-full h-auto"
+                                />
+                                <button
+                                  onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
+                                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      } else {
+                        const message = item.data as typeof messages[0]
+                        const idx = item.idx
+                        return (
+                          <div key={message.id}>
+                            <MessageBubble message={message} />
+                            {message.role === 'user' && 
+                             isNewsQuery(getMessageText(message)) && 
+                             idx === messages.length - 1 && (
+                              <NewsPanel 
+                                headlines={newsHeadlines} 
+                                loading={loadingNews} 
+                              />
+                            )}
+                            {/* Include recent history button after assistant messages */}
+                            {message.role === 'assistant' && !isLoading && idx > 0 && (
+                              <div className="flex gap-4 mt-2">
+                                <div className="w-9" /> {/* Spacer to align with message */}
+                                <button
+                                  onClick={() => {
+                                    // Find the user question that preceded this assistant message
+                                    const userQuestion = getMessageText(messages[idx - 1])
+                                    if (userQuestion) {
+                                      handleIncludeRecentHistory(userQuestion)
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-full border border-border transition-colors"
+                                >
+                                  <Globe className="w-3.5 h-3.5" />
+                                  Include recent history
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                    })
+                  })()}
+                  {/* Image generating indicator */}
                   {generatingImage && (
                     <div className="flex gap-4">
                       <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
@@ -799,39 +859,6 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
-                  {/* Messages rendered AFTER images */}
-                  {messages.map((message, idx) => (
-                    <div key={message.id}>
-                      <MessageBubble message={message} />
-                      {message.role === 'user' && 
-                       isNewsQuery(getMessageText(message)) && 
-                       idx === messages.length - 1 && (
-                        <NewsPanel 
-                          headlines={newsHeadlines} 
-                          loading={loadingNews} 
-                        />
-                      )}
-                      {/* Include recent history button after assistant messages */}
-                      {message.role === 'assistant' && !isLoading && idx > 0 && (
-                        <div className="flex gap-4 mt-2">
-                          <div className="w-9" /> {/* Spacer to align with message */}
-                          <button
-                            onClick={() => {
-                              // Find the user question that preceded this assistant message
-                              const userQuestion = getMessageText(messages[idx - 1])
-                              if (userQuestion) {
-                                handleIncludeRecentHistory(userQuestion)
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-full border border-border transition-colors"
-                          >
-                            <Globe className="w-3.5 h-3.5" />
-                            Include recent history
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
 {status === 'submitted' && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
