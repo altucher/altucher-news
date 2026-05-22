@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Use Vercel AI Gateway for image generation (simpler than Chutes custom chutes)
-const AI_GATEWAY_URL = 'https://api.vercel.ai/v1/images/generations'
+// Use Corcel API (TAO Subnet 26 - Tensor Alchemy) for image generation
+const CORCEL_API_URL = 'https://api.corcel.io/v1/image/text-to-image'
 
 export async function POST(req: Request) {
   try {
@@ -16,39 +16,60 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log('[Image Gen] Generating image for prompt:', prompt.substring(0, 50))
+    const apiKey = process.env.CORCEL_API_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'CORCEL_API_KEY not configured' },
+        { status: 500 }
+      )
+    }
 
-    // Use Vercel AI Gateway - works out of the box in v0
-    const response = await fetch(AI_GATEWAY_URL, {
+    console.log('[Image Gen] Generating image via Corcel for prompt:', prompt.substring(0, 50))
+
+    const response = await fetch(CORCEL_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'dall-e-3',
         prompt,
-        n: 1,
+        model: 'flux-schnell',
         size: '1024x1024',
         quality: 'standard',
+        steps: 4,
       }),
     })
 
+    const responseText = await response.text()
+    console.log('[Image Gen] Response status:', response.status)
+
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[Image Gen] AI Gateway error:', response.status, errorText)
+      console.error('[Image Gen] Corcel error:', response.status, responseText.substring(0, 200))
       return NextResponse.json(
-        { error: `Image generation failed: ${errorText.substring(0, 200)}` },
+        { error: `Image generation failed: ${responseText.substring(0, 200)}` },
         { status: response.status }
       )
     }
 
-    const data = await response.json()
-    console.log('[Image Gen] Success, response:', JSON.stringify(data).substring(0, 200))
+    let data
+    try {
+      data = JSON.parse(responseText)
+    } catch {
+      console.error('[Image Gen] Invalid JSON response')
+      return NextResponse.json(
+        { error: 'Invalid response from Corcel' },
+        { status: 500 }
+      )
+    }
 
-    // OpenAI-style response format
-    const imageUrl = data.data?.[0]?.url || data.data?.[0]?.b64_json
+    console.log('[Image Gen] Success, response keys:', Object.keys(data))
+
+    // Handle various response formats
+    const imageUrl = data.url || data.image_url || data.data?.[0]?.url || data.data?.[0]?.b64_json || data.image
 
     if (!imageUrl) {
+      console.error('[Image Gen] No image URL in response:', JSON.stringify(data).substring(0, 300))
       return NextResponse.json(
         { error: 'No image URL in response' },
         { status: 500 }
