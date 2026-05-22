@@ -207,15 +207,14 @@ export async function POST(req: Request) {
     }
 
     // Model selection - using available Chutes models
-    // Qwen3 uses <think> tags which our UI handles well
     const modelOptions: Record<string, string> = {
-      'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
       'kimi-k2.6': 'moonshotai/Kimi-K2.6-TEE',
       'kimi-k2.5': 'moonshotai/Kimi-K2.5-TEE',
+      'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
       'deepseek-v3': 'deepseek-ai/DeepSeek-V3.2-TEE',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B-TEE'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'moonshotai/Kimi-K2.6-TEE'
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
