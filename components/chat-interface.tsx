@@ -739,17 +739,45 @@ export default function ChatInterface() {
                       )}
                     </div>
                   ))}
-                  {isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
-                        <Bot className="w-5 h-5 text-sky-600" />
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground pt-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Thinking...</span>
-                      </div>
-                    </div>
-                  )}
+{isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-sky-600" />
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground pt-2">
+                    <svg 
+                      className="w-5 h-5 text-sky-500" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <style>
+                        {`
+                          @keyframes sandFlow {
+                            0%, 100% { transform: translateY(0); opacity: 1; }
+                            50% { transform: translateY(4px); opacity: 0.5; }
+                          }
+                          @keyframes hourglassRotate {
+                            0%, 45% { transform: rotate(0deg); }
+                            50%, 95% { transform: rotate(180deg); }
+                            100% { transform: rotate(360deg); }
+                          }
+                          .hourglass-container { animation: hourglassRotate 3s ease-in-out infinite; transform-origin: center; }
+                          .sand-top { animation: sandFlow 1.5s ease-in-out infinite; }
+                          .sand-bottom { animation: sandFlow 1.5s ease-in-out infinite reverse; }
+                        `}
+                      </style>
+                      <g className="hourglass-container">
+                        <path d="M6 2h12v4l-4 4 4 4v4H6v-4l4-4-4-4V2z" stroke="currentColor" strokeWidth="2" fill="none"/>
+                        <circle className="sand-top" cx="12" cy="6" r="2" fill="currentColor" opacity="0.7"/>
+                        <circle className="sand-bottom" cx="12" cy="16" r="2.5" fill="currentColor" opacity="0.9"/>
+                        <line className="sand-top" x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+                      </g>
+                    </svg>
+                    <span className="text-sm">Thinking...</span>
+                  </div>
+                </div>
+              )}
                   {/* Generated Image Display */}
                   {generatedImage && (
                     <div className="flex gap-4">
