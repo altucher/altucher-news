@@ -44,24 +44,14 @@ export async function startSubscriptionCheckout(planId: string) {
   const headersList = await headers()
   const origin = headersList.get('origin') || 'http://localhost:3000'
 
-  // Create Checkout Session for subscription
+  // Create Checkout Session for subscription using actual Stripe price ID
   const session = await stripe.checkout.sessions.create({
     ui_mode: 'embedded',
     customer: customerId,
     redirect_on_completion: 'never',
     line_items: [
       {
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `BlueTAO ${plan.name}`,
-            description: plan.description,
-          },
-          unit_amount: plan.priceInCents,
-          recurring: {
-            interval: 'month',
-          },
-        },
+        price: plan.stripePriceId, // Use the actual Stripe price ID
         quantity: 1,
       },
     ],

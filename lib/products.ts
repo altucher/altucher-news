@@ -5,6 +5,7 @@ export interface SubscriptionPlan {
   priceInCents: number
   messagesPerDay: number
   features: string[]
+  stripePriceId?: string // Stripe price ID for checkout
 }
 
 // Subscription tiers - prices include 10% margin over Chutes costs
@@ -27,6 +28,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     description: 'Perfect for casual users',
     priceInCents: 399, // $3.99/month
     messagesPerDay: 300,
+    stripePriceId: 'price_1TZvC1RT7TYD7CahxOqTcgxn',
     features: [
       '300 messages per day',
       'Access to all AI models',
@@ -40,6 +42,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     description: 'For power users who need more',
     priceInCents: 1099, // $10.99/month
     messagesPerDay: 2000,
+    stripePriceId: 'price_1TZvC1RT7TYD7Cah53z1ted1',
     features: [
       '2,000 messages per day',
       'Access to all AI models',
@@ -54,6 +57,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     description: 'Unlimited potential for professionals',
     priceInCents: 2199, // $21.99/month
     messagesPerDay: 5000,
+    stripePriceId: 'price_1TZvC1RT7TYD7CahQmW8GuhI',
     features: [
       '5,000 messages per day',
       'Access to all AI models',
