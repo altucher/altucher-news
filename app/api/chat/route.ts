@@ -197,6 +197,7 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.CHUTES_API_KEY
+    console.log('[v0] CHUTES_API_KEY exists:', !!apiKey)
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'CHUTES_API_KEY is not configured' }), {
@@ -291,6 +292,9 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
     })
   } catch (error) {
     console.error('[v0] Chat API error:', error)
+    console.error('[v0] Error name:', (error as Error)?.name)
+    console.error('[v0] Error message:', (error as Error)?.message)
+    console.error('[v0] Error stack:', (error as Error)?.stack)
     return new Response(JSON.stringify({ error: 'Failed to process chat request', details: String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
