@@ -709,42 +709,49 @@ function MessageBubble({ message }: { message: UIMessage }) {
           if (part.type === 'text') {
             if (!part.text) return null
             
-            // Parse <think> tags and format them differently
+            // Parse <think> tags and format them differently (handles streaming too)
             const formatTextWithThinking = (text: string) => {
-              console.log('[v0] Formatting text:', text.substring(0, 200))
-              const thinkRegex = /<think>([\s\S]*?)<\/think>/g
-              const hasThinkTags = thinkRegex.test(text)
-              console.log('[v0] Has think tags:', hasThinkTags)
+              const segments: { type: 'text' | 'think' | 'think-streaming'; content: string }[] = []
               
-              // Reset regex after test
-              thinkRegex.lastIndex = 0
+              // Check for complete <think>...</think> tags
+              const completeThinkRegex = /<think>([\s\S]*?)<\/think>/g
+              // Check for incomplete/streaming <think>... (no closing tag yet)
+              const incompleteThinkRegex = /<think>([\s\S]*)$/
               
-              const segments: { type: 'text' | 'think'; content: string }[] = []
               let lastIndex = 0
               let match
               
-              while ((match = thinkRegex.exec(text)) !== null) {
-                // Add text before the think tag
+              // Process complete think tags
+              while ((match = completeThinkRegex.exec(text)) !== null) {
                 if (match.index > lastIndex) {
                   segments.push({ type: 'text', content: text.slice(lastIndex, match.index) })
                 }
-                // Add the think content
                 segments.push({ type: 'think', content: match[1] })
                 lastIndex = match.index + match[0].length
               }
               
-              // Add remaining text after last think tag
-              if (lastIndex < text.length) {
-                segments.push({ type: 'text', content: text.slice(lastIndex) })
+              // Check remaining text for incomplete think tag (streaming)
+              const remainingText = text.slice(lastIndex)
+              const incompleteMatch = remainingText.match(incompleteThinkRegex)
+              
+              if (incompleteMatch) {
+                // Text before the incomplete think tag
+                const beforeThink = remainingText.slice(0, incompleteMatch.index)
+                if (beforeThink) {
+                  segments.push({ type: 'text', content: beforeThink })
+                }
+                // The streaming think content
+                segments.push({ type: 'think-streaming', content: incompleteMatch[1] })
+              } else if (remainingText) {
+                segments.push({ type: 'text', content: remainingText })
               }
               
-              // If no think tags found, return original text
               if (segments.length === 0) {
                 return <span>{text}</span>
               }
               
               return segments.map((seg, i) => {
-                if (seg.type === 'think') {
+                if (seg.type === 'think' || seg.type === 'think-streaming') {
                   return (
                     <div key={i} className="text-xs italic text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-muted pl-3">
                       {seg.content.trim()}
