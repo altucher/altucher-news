@@ -711,7 +711,14 @@ function MessageBubble({ message }: { message: UIMessage }) {
             
             // Parse <think> tags and format them differently
             const formatTextWithThinking = (text: string) => {
+              console.log('[v0] Formatting text:', text.substring(0, 200))
               const thinkRegex = /<think>([\s\S]*?)<\/think>/g
+              const hasThinkTags = thinkRegex.test(text)
+              console.log('[v0] Has think tags:', hasThinkTags)
+              
+              // Reset regex after test
+              thinkRegex.lastIndex = 0
+              
               const segments: { type: 'text' | 'think'; content: string }[] = []
               let lastIndex = 0
               let match
