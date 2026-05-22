@@ -214,14 +214,14 @@ export async function POST(req: Request) {
       },
     })
 
-    // Model selection - default to DeepSeek-R1 (reasoning model on Chutes)
+    // Model selection - default to Qwen3-32B (confirmed working on Chutes)
     const modelOptions: Record<string, string> = {
-      'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
       'qwen3-32b': 'Qwen/Qwen3-32B',
       'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
+      'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'deepseek-ai/DeepSeek-R1'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)

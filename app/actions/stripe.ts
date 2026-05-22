@@ -6,75 +6,74 @@ import { SUBSCRIPTION_PLANS, getPlanById } from '@/lib/products'
 import { createClient } from '@/lib/supabase/server'
 
 export async function startSubscriptionCheckout(planId: string) {
-  // Get the plan
-  const plan = getPlanById(planId)
-  if (!plan || plan.id === 'free') {
-    throw new Error(`Invalid plan: "${planId}"`)
-  }
+  try {
+    // Get the plan
+    const plan = getPlanById(planId)
+    if (!plan || plan.id === 'free') {
+      throw new Error(`Invalid plan: "${planId}"`)
+    }
 
-  // Get current user
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    throw new Error('You must be logged in to subscribe')
-  }
+    if (!plan.stripePriceId) {
+      throw new Error(`Plan "${planId}" does not have a Stripe price ID configured`)
+    }
 
-  // Check if user already has a Stripe customer ID
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('stripe_customer_id')
-    .eq('user_id', user.id)
-    .single()
+    // Get current user
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      throw new Error('You must be logged in to subscribe')
+    }
 
-  let customerId = subscription?.stripe_customer_id
+    // Check if user already has a Stripe customer ID
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('user_id', user.id)
+      .single()
 
-  // Create Stripe customer if doesn't exist
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email,
-      metadata: {
-        supabase_user_id: user.id,
+    let customerId = subscription?.stripe_customer_id
+
+    // Create Stripe customer if doesn't exist
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: {
+          supabase_user_id: user.id,
+        },
+      })
+      customerId = customer.id
+    }
+
+    // Get the origin for redirect URLs
+    const headersList = await headers()
+    const origin = headersList.get('origin') || 'http://localhost:3000'
+
+    // Create Checkout Session for subscription using actual Stripe price ID
+    const session = await stripe.checkout.sessions.create({
+      ui_mode: 'embedded',
+      customer: customerId,
+      redirect_on_completion: 'never',
+      line_items: [
+        {
+          price: plan.stripePriceId,
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      subscription_data: {
+        metadata: {
+          supabase_user_id: user.id,
+          plan_id: plan.id,
+        },
       },
     })
-    customerId = customer.id
+
+    return session.client_secret
+  } catch (error) {
+    console.error('[Stripe Checkout Error]', error)
+    throw error
   }
-
-  // Get the origin for redirect URLs
-  const headersList = await headers()
-  const origin = headersList.get('origin') || 'http://localhost:3000'
-
-  // Create Checkout Session for subscription
-  const session = await stripe.checkout.sessions.create({
-    ui_mode: 'embedded',
-    customer: customerId,
-    redirect_on_completion: 'never',
-    line_items: [
-      {
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `BlueTAO ${plan.name}`,
-            description: plan.description,
-          },
-          unit_amount: plan.priceInCents,
-          recurring: {
-            interval: 'month',
-          },
-        },
-        quantity: 1,
-      },
-    ],
-    mode: 'subscription',
-    subscription_data: {
-      metadata: {
-        supabase_user_id: user.id,
-        plan_id: plan.id,
-      },
-    },
-  })
-
-  return session.client_secret
 }
 
 export async function createBillingPortalSession() {
