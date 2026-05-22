@@ -902,7 +902,15 @@ export default function ChatInterface() {
                   <Button
                     type="button"
                     size="icon"
-                    onClick={() => handleGenerateImage(input)}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const prompt = input.trim()
+                      if (prompt) {
+                        setInput('') // Clear input immediately
+                        handleGenerateImage(prompt)
+                      }
+                    }}
                     disabled={!input.trim() || isLoading || generatingImage}
                     title="Generate Image"
                     className={cn(
