@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 
 interface Chat {
   id: string
@@ -402,12 +403,8 @@ export default function ChatInterface() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Background Image - always visible */}
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: 'url(/bg.jpg)' }}
-        />
-        <div className="absolute inset-0 bg-background/60" />
+        {/* Animated Ocean Background */}
+        <AnimatedOceanBackground />
 
         {/* Header */}
         <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/50 bg-background/60 backdrop-blur-sm">
@@ -460,20 +457,7 @@ export default function ChatInterface() {
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
                 <div className="mb-6">
-                  <svg 
-                    viewBox="0 0 60 60" 
-                    className="w-16 h-16 text-sky-500"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <circle cx="30" cy="30" r="20" />
-                    <circle cx="30" cy="30" r="8" fill="currentColor" opacity="0.3" />
-                    <circle cx="22" cy="24" r="2" fill="currentColor" />
-                    <circle cx="42" cy="18" r="1.5" fill="currentColor" />
-                    <circle cx="14" cy="35" r="1" fill="currentColor" />
-                    <circle cx="48" cy="38" r="1.5" fill="currentColor" />
-                  </svg>
+                  <BlueTaoLogo className="w-20 h-20 text-sky-500" />
                 </div>
 
                 {/* Title */}
