@@ -996,8 +996,9 @@ function MessageBubble({ message }: { message: UIMessage }) {
                     return null // Don't show thinking when answer is available
                   }
                   return (
-                    <div key={i} className="text-xs italic text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-muted pl-3">
-                      {formatMarkdown(seg.content.trim())}
+                    <div key={i} className="text-xs text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-sky-500/50 pl-3">
+                      <span className="font-semibold text-sky-500 not-italic">Thinking...</span>
+                      <span className="italic ml-2">{formatMarkdown(seg.content.trim())}</span>
                     </div>
                   )
                 }
