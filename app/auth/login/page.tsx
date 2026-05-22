@@ -80,14 +80,14 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-background/60" />
       
       <div className="relative z-10 flex flex-col items-center">
-        <h1 className="font-[family-name:var(--font-space)] text-5xl font-bold text-blue-400 mb-4 tracking-wider">
-          BLUE
+        <h1 className="font-[family-name:var(--font-space)] text-5xl font-bold text-sky-600 mb-4 tracking-wider">
+          BlueTAO
         </h1>
         <p className="text-muted-foreground mb-8 text-center max-w-md">
           Uncensored AI powered by decentralized compute
         </p>
         
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-blue-900/20 border border-border w-full max-w-sm">
+        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-sky-200/50 border border-border w-full max-w-sm">
           <h2 className="text-xl font-medium text-foreground mb-6 text-center">
             {isSignUp ? 'Create an account' : 'Sign in to continue'}
           </h2>
@@ -113,7 +113,7 @@ export default function LoginPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-400/50"
                 />
               </div>
             )}
@@ -141,7 +141,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-6"
+              className="w-full flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 text-white rounded-xl py-6"
             >
               <Mail className="w-5 h-5" />
               {isLoading ? 'Please wait...' : (isSignUp ? 'Sign up' : 'Sign in')}

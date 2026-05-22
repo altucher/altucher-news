@@ -283,7 +283,7 @@ export default function ChatInterface() {
   if (checkingAuth) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
       </div>
     )
   }
@@ -305,7 +305,7 @@ export default function ChatInterface() {
       )}>
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-          <span className="font-[family-name:var(--font-space)] text-xl font-bold text-blue-400 tracking-wider">BLUE</span>
+          <span className="font-[family-name:var(--font-space)] text-xl font-bold text-sky-600 tracking-wider">BlueTAO</span>
           <Button
             variant="ghost"
             size="icon"
@@ -320,7 +320,7 @@ export default function ChatInterface() {
         <div className="p-3">
           <Button
             onClick={handleNewChat}
-            className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-500 text-white"
+            className="w-full justify-start gap-2 bg-sky-500 hover:bg-sky-400 text-white"
           >
             <Plus className="w-4 h-4" />
             New Chat
@@ -343,7 +343,7 @@ export default function ChatInterface() {
             </div>
           ) : loadingChats ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+              <Loader2 className="w-5 h-5 animate-spin text-sky-500" />
             </div>
           ) : chats.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
@@ -422,9 +422,9 @@ export default function ChatInterface() {
             </Button>
             <button 
               onClick={handleNewChat}
-              className="font-[family-name:var(--font-space)] text-xl font-bold text-blue-400 hover:text-blue-300 transition-colors hidden lg:block tracking-wider"
+              className="font-[family-name:var(--font-space)] text-xl font-bold text-sky-600 hover:text-sky-500 transition-colors hidden lg:block tracking-wider"
             >
-              BLUE
+              BlueTAO
             </button>
           </div>
           <Button
@@ -462,7 +462,7 @@ export default function ChatInterface() {
                 <div className="mb-6">
                   <svg 
                     viewBox="0 0 60 60" 
-                    className="w-16 h-16 text-blue-400"
+                    className="w-16 h-16 text-sky-500"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.5"
@@ -484,7 +484,7 @@ export default function ChatInterface() {
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
                   <form onSubmit={handleSubmit} className="relative">
-                    <div className="relative flex items-center rounded-full border border-border bg-card shadow-lg shadow-blue-900/20">
+                    <div className="relative flex items-center rounded-full border border-border bg-card shadow-lg shadow-sky-200/50">
                       <div className="pl-5 text-muted-foreground">
                         <Pencil className="w-5 h-5" />
                       </div>
@@ -504,7 +504,7 @@ export default function ChatInterface() {
                         className={cn(
                           'mr-2 h-10 w-10 rounded-full transition-all',
                           input.trim() && !isLoading
-                            ? 'bg-blue-600 text-white hover:bg-blue-500'
+                            ? 'bg-sky-500 text-white hover:bg-sky-400'
                             : 'bg-muted text-muted-foreground'
                         )}
                       >
@@ -524,7 +524,7 @@ export default function ChatInterface() {
                     <button
                       key={suggestion.label}
                       onClick={() => handleSuggestionClick(suggestion.label)}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-blue-500/50 transition-all text-sm"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-sky-400/50 transition-all text-sm"
                     >
                       <suggestion.icon className="w-4 h-4" />
                       {suggestion.label}
@@ -535,7 +535,7 @@ export default function ChatInterface() {
                 {/* Footer Link */}
                 <div className="mt-16">
                   <button className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 transition-colors">
-                    Learn more about BLUE
+                    Learn more about BlueTAO
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
@@ -561,8 +561,8 @@ export default function ChatInterface() {
                   ))}
                   {isLoading && messages[messages.length - 1]?.role === 'user' && !isNewsQuery(getMessageText(messages[messages.length - 1])) && (
                     <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-600/20 flex items-center justify-center">
-                        <Bot className="w-5 h-5 text-blue-400" />
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
+                        <Bot className="w-5 h-5 text-sky-600" />
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground pt-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -582,7 +582,7 @@ export default function ChatInterface() {
           <div className="relative z-10 border-t border-border/50 bg-background/60 backdrop-blur-sm">
             <div className="max-w-3xl mx-auto px-4 py-4">
               <form onSubmit={handleSubmit} className="relative">
-                <div className="relative flex items-center rounded-full border border-border bg-card shadow-sm shadow-blue-900/10">
+                <div className="relative flex items-center rounded-full border border-border bg-card shadow-sm shadow-sky-200/30">
                   <div className="pl-5 text-muted-foreground">
                     <Pencil className="w-5 h-5" />
                   </div>
@@ -603,7 +603,7 @@ export default function ChatInterface() {
                     className={cn(
                       'mr-2 h-9 w-9 rounded-full transition-all',
                       input.trim() && !isLoading
-                        ? 'bg-blue-600 text-white hover:bg-blue-500'
+                        ? 'bg-sky-500 text-white hover:bg-sky-400'
                         : 'bg-muted text-muted-foreground'
                     )}
                   >
@@ -628,7 +628,7 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
     return (
       <div className="mt-4 ml-13">
         <div className="flex items-center gap-2 p-4 rounded-2xl bg-card border border-border">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+          <Loader2 className="w-4 h-4 animate-spin text-sky-500" />
           <span className="text-sm text-muted-foreground">Fetching latest news...</span>
         </div>
       </div>
@@ -643,7 +643,7 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
     <div className="mt-4 ml-13">
       <div className="rounded-2xl bg-card border border-border overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-accent">
-          <Newspaper className="w-4 h-4 text-blue-400" />
+          <Newspaper className="w-4 h-4 text-sky-500" />
           <span className="font-medium text-sm text-foreground">Today&apos;s Top Stories</span>
         </div>
         <div className="divide-y divide-border">
@@ -655,11 +655,11 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
               rel="noopener noreferrer"
               className="flex items-start gap-3 p-3 hover:bg-accent transition-colors group"
             >
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600/20 flex items-center justify-center text-xs font-medium text-blue-400">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-sky-100 flex items-center justify-center text-xs font-medium text-sky-600">
                 {idx + 1}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-foreground leading-snug group-hover:text-blue-300 transition-colors">
+                <p className="text-sm text-foreground leading-snug group-hover:text-sky-600 transition-colors">
                   {headline.title}
                 </p>
                 {headline.source && (
@@ -684,13 +684,13 @@ function MessageBubble({ message }: { message: UIMessage }) {
       <div
         className={cn(
           'flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center',
-          isUser ? 'bg-blue-600' : 'bg-blue-600/20'
+          isUser ? 'bg-sky-500' : 'bg-sky-100'
         )}
       >
         {isUser ? (
           <User className="w-5 h-5 text-white" />
         ) : (
-          <Bot className="w-5 h-5 text-blue-400" />
+          <Bot className="w-5 h-5 text-sky-600" />
         )}
       </div>
       <div
@@ -714,7 +714,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
                 className={cn(
                   'rounded-2xl px-4 py-3',
                   isUser
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-sky-500 text-white'
                     : 'bg-card border border-border text-foreground'
                 )}
               >

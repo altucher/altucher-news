@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
 
 export const metadata: Metadata = {
-  title: 'BLUE',
+  title: 'BlueTAO',
   description: 'Uncensored AI powered by decentralized compute',
   generator: 'v0.app',
   icons: {
