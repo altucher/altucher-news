@@ -7,7 +7,7 @@ import type { UIMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
 
-export const maxDuration = 60
+export const maxDuration = 300 // 5 minutes for slow Chutes API
 
 // Supabase admin client for usage tracking (bypasses RLS)
 const supabaseAdmin = createClient(
