@@ -343,7 +343,8 @@ export default function ChatInterface() {
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || 'Image generation failed')
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || 'Image generation failed'
+        throw new Error(errorMsg)
       }
       
       if (data.imageUrl) {
