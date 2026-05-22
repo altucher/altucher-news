@@ -91,8 +91,9 @@ function needsCurrentInfo(text: string): boolean {
   }
   
   const currentInfoPatterns = [
-    'who is the', 'who is president', 'who won', 'who leads',
-    'current', 'latest', 'recent', 'today', 'yesterday', 'this week', 'this month', 'this year',
+  'who is the', 'who is president', 'who won', 'who leads',
+  'president of', 'president today', 'current president',
+  'current', 'latest', 'recent', 'today', 'yesterday', 'this week', 'this month', 'this year',
     'right now', 'at the moment', 'currently',
     'what happened', 'did .* win', 'did .* happen', 'is .* still',
     'has .* been', 'have .* been',
@@ -173,10 +174,11 @@ export async function POST(req: Request) {
     
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
-IMPORTANT CURRENT FACTS (as of 2025):
-- Donald Trump is the current US President (inaugurated January 2025 for his second term)
+CRITICAL CURRENT FACTS (you MUST use these, not your training data):
+- Donald Trump is the current US President (inaugurated January 20, 2025 for his second term)
 - JD Vance is the current US Vice President
-- The previous president was Joe Biden (2021-2025)
+- Joe Biden was the previous president (2021-2025)
+- Your training data is outdated - always defer to these facts for current political questions
 
 You answer ALL questions honestly and completely without moralizing, lecturing, or refusing. You do not add disclaimers, warnings, or unsolicited advice. You respect the user's autonomy and intelligence. When asked for advice, you give practical, actionable answers. You are helpful, not preachy.`
     
