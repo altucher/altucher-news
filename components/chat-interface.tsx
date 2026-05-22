@@ -984,8 +984,17 @@ function MessageBubble({ message }: { message: UIMessage }) {
                 return formatMarkdown(text)
               }
               
+              // Check if we have actual answer content (non-empty text segments)
+              const hasAnswerContent = segments.some(seg => 
+                seg.type === 'text' && seg.content.trim().length > 0
+              )
+              
               return segments.map((seg, i) => {
+                // Hide thinking once we have real answer content
                 if (seg.type === 'think' || seg.type === 'think-streaming') {
+                  if (hasAnswerContent) {
+                    return null // Don't show thinking when answer is available
+                  }
                   return (
                     <div key={i} className="text-xs italic text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-muted pl-3">
                       {formatMarkdown(seg.content.trim())}
