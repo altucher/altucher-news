@@ -205,6 +205,14 @@ export async function POST(req: Request) {
       })
     }
 
+    // Model selection - using available Chutes models
+    const modelOptions: Record<string, string> = {
+      'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
+      'deepseek-v3': 'deepseek-ai/DeepSeek-V3.2-TEE',
+    }
+    
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B-TEE'
+
     // Create a Chutes client
     const chutes = createOpenAICompatible({
       name: 'chutes',
@@ -216,14 +224,6 @@ export async function POST(req: Request) {
 
     console.log('[v0] Chutes API Key prefix:', apiKey.substring(0, 15))
     console.log('[v0] Using model:', selectedModel)
-
-    // Model selection - using available Chutes models
-    const modelOptions: Record<string, string> = {
-      'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
-      'deepseek-v3': 'deepseek-ai/DeepSeek-V3.2-TEE',
-    }
-    
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B-TEE'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
