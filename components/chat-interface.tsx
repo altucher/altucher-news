@@ -825,44 +825,44 @@ export default function ChatInterface() {
                   </button>
                 </div>
               )}
-                  {/* Generated Images Display - All images persist */}
-                  {generatedImages.map((img) => (
-                    <div key={img.id} className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
-                        <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
-                          <img 
-                            src={img.imageUrl} 
-                            alt={img.prompt} 
-                            className="w-full h-auto"
-                          />
-                          <button
-                            onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
-                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+              {/* Generated Images Display - All images persist */}
+              {generatedImages.map((img) => (
+                <div key={img.id} className="flex gap-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                    <ImageIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-2">{img.prompt}</p>
+                    <div className="relative rounded-lg overflow-hidden border border-border max-w-md">
+                      <img 
+                        src={img.imageUrl} 
+                        alt={img.prompt} 
+                        className="w-full h-auto"
+                      />
+                      <button
+                        onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
+                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                  ))}
-                  {generatingImage && (
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
-                        <ImageIcon className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-muted-foreground mb-2">{currentImagePrompt}</p>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="text-sm">Generating image...</span>
-                        </div>
-                      </div>
+                  </div>
+                </div>
+              ))}
+              {generatingImage && (
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                    <ImageIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-2">{currentImagePrompt}</p>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Generating image...</span>
                     </div>
-                  )}
+                  </div>
+                </div>
+              )}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
