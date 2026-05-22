@@ -879,30 +879,71 @@ function MessageBubble({ message }: { message: UIMessage }) {
               })
             }
             
-            // Parse markdown bold (**text**) and render as bold
+            // Parse markdown and render formatted text
             const formatMarkdown = (text: string): React.ReactNode => {
-              const boldRegex = /\*\*(.+?)\*\*/g
-              const parts: React.ReactNode[] = []
-              let lastIndex = 0
-              let match
+              // Split by lines to handle line-based formatting
+              const lines = text.split('\n')
               let keyIndex = 0
               
-              while ((match = boldRegex.exec(text)) !== null) {
-                // Add text before the bold
-                if (match.index > lastIndex) {
-                  parts.push(text.slice(lastIndex, match.index))
+              const formatLine = (line: string): React.ReactNode => {
+                // Check for ### headers (subtitles)
+                const headerMatch = line.match(/^###\s+(.+)$/)
+                if (headerMatch) {
+                  return (
+                    <div key={keyIndex++} className="text-base font-bold mt-3 mb-1">
+                      {formatInlineMarkdown(headerMatch[1])}
+                    </div>
+                  )
                 }
-                // Add the bold text
-                parts.push(<strong key={keyIndex++} className="font-semibold">{match[1]}</strong>)
-                lastIndex = match.index + match[0].length
+                
+                // Check for bullet points (- at start of line)
+                const bulletMatch = line.match(/^-\s+(.+)$/)
+                if (bulletMatch) {
+                  return (
+                    <div key={keyIndex++} className="flex items-start gap-2 ml-2">
+                      <span className="text-sky-500 mt-0.5">•</span>
+                      <span>{formatInlineMarkdown(bulletMatch[1])}</span>
+                    </div>
+                  )
+                }
+                
+                // Regular line - just apply inline formatting
+                return formatInlineMarkdown(line)
               }
               
-              // Add remaining text
-              if (lastIndex < text.length) {
-                parts.push(text.slice(lastIndex))
+              // Format inline markdown (bold **text**)
+              const formatInlineMarkdown = (text: string): React.ReactNode => {
+                const boldRegex = /\*\*(.+?)\*\*/g
+                const parts: React.ReactNode[] = []
+                let lastIndex = 0
+                let match
+                
+                while ((match = boldRegex.exec(text)) !== null) {
+                  if (match.index > lastIndex) {
+                    parts.push(text.slice(lastIndex, match.index))
+                  }
+                  parts.push(<strong key={keyIndex++} className="font-semibold">{match[1]}</strong>)
+                  lastIndex = match.index + match[0].length
+                }
+                
+                if (lastIndex < text.length) {
+                  parts.push(text.slice(lastIndex))
+                }
+                
+                return parts.length > 0 ? parts : text
               }
               
-              return parts.length > 0 ? parts : text
+              // Process all lines
+              const formattedLines = lines.map((line, i) => {
+                const formatted = formatLine(line)
+                // Add line break after each line except the last
+                if (i < lines.length - 1) {
+                  return <span key={`line-${i}`}>{formatted}{'\n'}</span>
+                }
+                return <span key={`line-${i}`}>{formatted}</span>
+              })
+              
+              return formattedLines
             }
             
             return (
