@@ -708,6 +708,46 @@ function MessageBubble({ message }: { message: UIMessage }) {
         {parts.map((part, index) => {
           if (part.type === 'text') {
             if (!part.text) return null
+            
+            // Parse <think> tags and format them differently
+            const formatTextWithThinking = (text: string) => {
+              const thinkRegex = /<think>([\s\S]*?)<\/think>/g
+              const segments: { type: 'text' | 'think'; content: string }[] = []
+              let lastIndex = 0
+              let match
+              
+              while ((match = thinkRegex.exec(text)) !== null) {
+                // Add text before the think tag
+                if (match.index > lastIndex) {
+                  segments.push({ type: 'text', content: text.slice(lastIndex, match.index) })
+                }
+                // Add the think content
+                segments.push({ type: 'think', content: match[1] })
+                lastIndex = match.index + match[0].length
+              }
+              
+              // Add remaining text after last think tag
+              if (lastIndex < text.length) {
+                segments.push({ type: 'text', content: text.slice(lastIndex) })
+              }
+              
+              // If no think tags found, return original text
+              if (segments.length === 0) {
+                return <span>{text}</span>
+              }
+              
+              return segments.map((seg, i) => {
+                if (seg.type === 'think') {
+                  return (
+                    <div key={i} className="text-xs italic text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-muted pl-3">
+                      {seg.content.trim()}
+                    </div>
+                  )
+                }
+                return <span key={i}>{seg.content}</span>
+              })
+            }
+            
             return (
               <div
                 key={index}
@@ -719,7 +759,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
                 )}
               >
                 <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {part.text}
+                  {formatTextWithThinking(part.text)}
                 </div>
               </div>
             )
