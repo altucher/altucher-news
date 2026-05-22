@@ -4,8 +4,16 @@ import {
   streamText,
 } from 'ai'
 import type { UIMessage } from 'ai'
+import { createClient } from '@supabase/supabase-js'
+import { getMessageLimit } from '@/lib/products'
 
 export const maxDuration = 60
+
+// Supabase admin client for usage tracking (bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 // Web search function using Google News RSS
 async function searchWeb(query: string): Promise<string> {
@@ -137,7 +145,56 @@ function getLastUserMessage(messages: UIMessage[]): string {
 
 export async function POST(req: Request) {
   try {
-    const { messages, model }: { messages: UIMessage[]; model?: string } = await req.json()
+    const { messages, model, userId }: { messages: UIMessage[]; model?: string; userId?: string } = await req.json()
+
+    // Check usage limits if user is provided
+    if (userId) {
+      // Get user's subscription tier
+      const { data: subscription } = await supabaseAdmin
+        .from('subscriptions')
+        .select('tier, status')
+        .eq('user_id', userId)
+        .single()
+
+      const tier = (subscription?.status === 'active' ? subscription?.tier : 'free') || 'free'
+      const messageLimit = getMessageLimit(tier)
+
+      // Get today's usage
+      const today = new Date().toISOString().split('T')[0]
+      const { data: usage } = await supabaseAdmin
+        .from('usage')
+        .select('message_count')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .single()
+
+      const currentCount = usage?.message_count || 0
+
+      // Check if user has exceeded their limit
+      if (currentCount >= messageLimit) {
+        return new Response(JSON.stringify({ 
+          error: 'LIMIT_EXCEEDED',
+          message: `You've reached your daily limit of ${messageLimit} messages. Upgrade your plan for more messages.`,
+          currentCount,
+          limit: messageLimit,
+          tier
+        }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Increment usage count (upsert for new day)
+      await supabaseAdmin
+        .from('usage')
+        .upsert({
+          user_id: userId,
+          date: today,
+          message_count: currentCount + 1,
+        }, {
+          onConflict: 'user_id,date',
+        })
+    }
 
     const apiKey = process.env.CHUTES_API_KEY
 
@@ -157,16 +214,16 @@ export async function POST(req: Request) {
       },
     })
 
-    // Model selection - default to Qwen3-32B
+    // Model selection - default to Llama-4-Maverick (faster)
     const modelOptions: Record<string, string> = {
+      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
       'qwen3-32b': 'Qwen/Qwen3-32B',
       'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
-      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
       'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
       'deepseek-v3': 'deepseek-ai/DeepSeek-V3-0324',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'meta-llama/Llama-4-Maverick-17B-128E-Instruct'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)

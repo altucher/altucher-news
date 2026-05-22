@@ -3,13 +3,21 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
+import Link from 'next/link'
+
+interface UsageInfo {
+  tier: string
+  messageCount: number
+  messageLimit: number
+  remaining: number
+}
 
 interface Chat {
   id: string
@@ -57,14 +65,26 @@ export default function ChatInterface() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const [usage, setUsage] = useState<UsageInfo | null>(null)
+  const [showLimitWarning, setShowLimitWarning] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
-  const { messages, sendMessage, status, setMessages } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/chat' }),
+  const { messages, sendMessage, status, setMessages, error } = useChat({
+    transport: new DefaultChatTransport({ 
+      api: '/api/chat',
+      body: user ? { userId: user.id } : undefined,
+    }),
+    onError: (err) => {
+      // Check for limit exceeded error
+      if (err.message?.includes('LIMIT_EXCEEDED') || err.message?.includes('429')) {
+        setShowLimitWarning(true)
+        fetchUsage() // Refresh usage data
+      }
+    }
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
@@ -89,10 +109,25 @@ export default function ChatInterface() {
   useEffect(() => {
     if (user) {
       fetchChats()
+      fetchUsage()
     } else {
       setLoadingChats(false)
     }
   }, [user])
+
+  // Fetch usage info
+  const fetchUsage = async () => {
+    if (!user) return
+    try {
+      const res = await fetch(`/api/usage?userId=${user.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setUsage(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch usage:', err)
+    }
+  }
 
   const fetchChats = async () => {
     try {
@@ -240,6 +275,9 @@ export default function ChatInterface() {
     
     sendMessage({ text: userMessage })
     
+    // Refresh usage after sending
+    setTimeout(() => fetchUsage(), 1000)
+    
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -339,6 +377,36 @@ export default function ChatInterface() {
           )}
         </div>
 
+        {/* Usage Indicator */}
+        {user && usage && (
+          <div className="px-3 pb-3">
+            <div className="bg-sidebar-accent/50 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-sidebar-foreground capitalize">{usage.tier} Plan</span>
+                <Link href="/pricing">
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-sky-500 hover:text-sky-400 p-0">
+                    <Zap className="w-3 h-3 mr-1" />
+                    Upgrade
+                  </Button>
+                </Link>
+              </div>
+              <div className="w-full bg-sidebar-border rounded-full h-1.5 mb-1">
+                <div 
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    usage.remaining < usage.messageLimit * 0.1 ? "bg-red-500" :
+                    usage.remaining < usage.messageLimit * 0.3 ? "bg-amber-500" : "bg-sky-500"
+                  )}
+                  style={{ width: `${Math.min(100, (usage.messageCount / usage.messageLimit) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {usage.remaining} of {usage.messageLimit} messages left today
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Chat List */}
         <div className="flex-1 overflow-y-auto p-2">
           {!user ? (
@@ -417,6 +485,45 @@ export default function ChatInterface() {
         {/* Animated Ocean Background */}
         <AnimatedOceanBackground />
 
+        {/* Limit Warning Banner */}
+        {showLimitWarning && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4">
+            <div className="bg-amber-500/90 backdrop-blur-sm text-white rounded-xl p-4 shadow-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-1">Daily Limit Reached</h3>
+                  <p className="text-sm text-white/90">
+                    You&apos;ve used all your messages for today. Upgrade your plan for more messages.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLimitWarning(false)}
+                  className="text-white hover:bg-white/20 -mt-1 -mr-1"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Link href="/pricing" className="flex-1">
+                  <Button className="w-full bg-white text-amber-600 hover:bg-white/90">
+                    <Zap className="w-4 h-4 mr-2" />
+                    Upgrade Now
+                  </Button>
+                </Link>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowLimitWarning(false)}
+                  className="text-white hover:bg-white/20"
+                >
+                  Later
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/50 bg-background/60 backdrop-blur-sm">
           <div className="flex items-center gap-3">
@@ -452,9 +559,17 @@ export default function ChatInterface() {
             )}
           </div>
           {user ? (
-            <span className="text-sm text-muted-foreground ml-4 hidden sm:block">
-              Hi, {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
-            </span>
+            <div className="flex items-center gap-3">
+              <Link href="/pricing">
+                <Button variant="ghost" size="sm" className="text-sky-500 hover:text-sky-400 hidden sm:flex">
+                  <Zap className="w-4 h-4 mr-1" />
+                  Upgrade
+                </Button>
+              </Link>
+              <span className="text-sm text-muted-foreground hidden sm:block">
+                {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
+              </span>
+            </div>
           ) : (
             <Button
               variant="ghost"
@@ -749,19 +864,86 @@ function MessageBubble({ message }: { message: UIMessage }) {
               }
               
               if (segments.length === 0) {
-                return <span>{text}</span>
+                return formatMarkdown(text)
               }
               
               return segments.map((seg, i) => {
                 if (seg.type === 'think' || seg.type === 'think-streaming') {
                   return (
                     <div key={i} className="text-xs italic text-muted-foreground opacity-70 my-2 py-2 border-l-2 border-muted pl-3">
-                      {seg.content.trim()}
+                      {formatMarkdown(seg.content.trim())}
                     </div>
                   )
                 }
-                return <span key={i}>{seg.content}</span>
+                return <span key={i}>{formatMarkdown(seg.content)}</span>
               })
+            }
+            
+            // Parse markdown and render formatted text
+            const formatMarkdown = (text: string): React.ReactNode => {
+              // Split by lines to handle line-based formatting
+              const lines = text.split('\n')
+              let keyIndex = 0
+              
+              const formatLine = (line: string): React.ReactNode => {
+                // Check for ### headers (subtitles)
+                const headerMatch = line.match(/^###\s+(.+)$/)
+                if (headerMatch) {
+                  return (
+                    <div key={keyIndex++} className="text-base font-bold mt-3 mb-1">
+                      {formatInlineMarkdown(headerMatch[1])}
+                    </div>
+                  )
+                }
+                
+                // Check for bullet points (- at start of line)
+                const bulletMatch = line.match(/^-\s+(.+)$/)
+                if (bulletMatch) {
+                  return (
+                    <div key={keyIndex++} className="flex items-start gap-2 ml-2">
+                      <span className="text-sky-500 mt-0.5">•</span>
+                      <span>{formatInlineMarkdown(bulletMatch[1])}</span>
+                    </div>
+                  )
+                }
+                
+                // Regular line - just apply inline formatting
+                return formatInlineMarkdown(line)
+              }
+              
+              // Format inline markdown (bold **text**)
+              const formatInlineMarkdown = (text: string): React.ReactNode => {
+                const boldRegex = /\*\*(.+?)\*\*/g
+                const parts: React.ReactNode[] = []
+                let lastIndex = 0
+                let match
+                
+                while ((match = boldRegex.exec(text)) !== null) {
+                  if (match.index > lastIndex) {
+                    parts.push(text.slice(lastIndex, match.index))
+                  }
+                  parts.push(<strong key={keyIndex++} className="font-semibold">{match[1]}</strong>)
+                  lastIndex = match.index + match[0].length
+                }
+                
+                if (lastIndex < text.length) {
+                  parts.push(text.slice(lastIndex))
+                }
+                
+                return parts.length > 0 ? parts : text
+              }
+              
+              // Process all lines
+              const formattedLines = lines.map((line, i) => {
+                const formatted = formatLine(line)
+                // Add line break after each line except the last
+                if (i < lines.length - 1) {
+                  return <span key={`line-${i}`}>{formatted}{'\n'}</span>
+                }
+                return <span key={`line-${i}`}>{formatted}</span>
+              })
+              
+              return formattedLines
             }
             
             return (
