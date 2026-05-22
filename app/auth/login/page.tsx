@@ -74,32 +74,30 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-cover bg-center bg-no-repeat relative"
-      style={{ backgroundImage: 'url(/bg.jpg)' }}
-    >
-      <div className="absolute inset-0 bg-background/60" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background relative">
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-secondary/30 to-accent/20" />
       
       <div className="relative z-10 flex flex-col items-center">
-        <h1 className="font-[family-name:var(--font-space)] text-5xl font-bold text-sky-600 mb-4 tracking-wider">
+        <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-normal text-foreground mb-4 tracking-tight">
           BlueTAO
         </h1>
         <p className="text-muted-foreground mb-8 text-center max-w-md">
           Uncensored AI powered by decentralized compute
         </p>
         
-        <div className="bg-card/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg shadow-sky-200/50 border border-border w-full max-w-sm">
+        <div className="bg-card/80 backdrop-blur-sm rounded-xl p-8 shadow-sm border border-border/50 w-full max-w-sm">
           <h2 className="text-xl font-medium text-foreground mb-6 text-center">
             {isSignUp ? 'Create an account' : 'Sign in to continue'}
           </h2>
           
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-600 text-sm">
               {error}
             </div>
           )}
           
           {message && (
-            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm">
+            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-600 text-sm">
               {message}
             </div>
           )}
@@ -113,7 +111,7 @@ export default function LoginPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-400/50"
+                  className="w-full px-4 py-3 rounded-lg border border-border/50 bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
             )}
@@ -124,7 +122,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full px-4 py-3 rounded-lg border border-border/50 bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div>
@@ -135,13 +133,13 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full px-4 py-3 rounded-lg border border-border/50 bg-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 text-white rounded-xl py-6"
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg py-6"
             >
               <Mail className="w-5 h-5" />
               {isLoading ? 'Please wait...' : (isSignUp ? 'Sign up' : 'Sign in')}
@@ -152,7 +150,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => { setIsSignUp(!isSignUp); setError(''); setMessage(''); }}
-              className="text-sm text-muted-foreground hover:text-foreground"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
@@ -160,7 +158,7 @@ export default function LoginPage() {
           
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border"></div>
+              <div className="w-full border-t border-border/50"></div>
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-card/80 text-muted-foreground">or</span>
@@ -170,7 +168,7 @@ export default function LoginPage() {
           <Button
             onClick={handleGoogleLogin}
             disabled={isGoogleLoading}
-            className="w-full flex items-center justify-center gap-3 bg-card hover:bg-accent text-foreground border border-border rounded-xl py-6"
+            className="w-full flex items-center justify-center gap-3 bg-card hover:bg-accent text-foreground border border-border/50 rounded-lg py-6"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
