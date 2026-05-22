@@ -347,14 +347,11 @@ export default function ChatInterface() {
       }
       
       if (data.imageUrl) {
-        console.log('[v0] Image generated, adding to state, URL length:', data.imageUrl.length)
         setGeneratedImages(prev => [...prev, {
           id: crypto.randomUUID(),
           prompt: prompt,
           imageUrl: data.imageUrl
         }])
-      } else {
-        console.log('[v0] No imageUrl in response:', data)
       }
     } catch (error) {
       console.error('[Image Gen] Error:', error)
@@ -856,14 +853,19 @@ export default function ChatInterface() {
               ))}
               {generatingImage && (
                 <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
                     <ImageIcon className="w-5 h-5 text-purple-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-2">{currentImagePrompt}</p>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Generating image...</span>
+                    <p className="text-sm text-foreground mb-2 font-medium">{currentImagePrompt}</p>
+                    <div className="flex items-center gap-3 text-purple-600 bg-purple-50 rounded-lg px-4 py-3">
+                      <div className="relative">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">Generating image...</span>
+                        <span className="text-xs text-purple-400">This may take 5-10 seconds</span>
+                      </div>
                     </div>
                   </div>
                 </div>
