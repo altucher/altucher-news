@@ -151,31 +151,33 @@ function getLastUserMessage(messages: UIMessage[]): string {
 }
 
 export async function POST(req: Request) {
-  const { messages, model }: { messages: UIMessage[]; model?: string } = await req.json()
+  try {
+    const { messages, model }: { messages: UIMessage[]; model?: string } = await req.json()
 
-  const apiKey = process.env.CHUTES_API_KEY
+    const apiKey = process.env.CHUTES_API_KEY
 
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'CHUTES_API_KEY is not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+    if (!apiKey) {
+      console.error('[v0] CHUTES_API_KEY is not configured')
+      return new Response(JSON.stringify({ error: 'CHUTES_API_KEY is not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Create a Chutes client
+    const chutes = createOpenAICompatible({
+      name: 'chutes',
+      baseURL: 'https://llm.chutes.ai/v1',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'X-API-Key': apiKey,
+      },
     })
-  }
-
-  // Create a Chutes client
-  const chutes = createOpenAICompatible({
-    name: 'chutes',
-    baseURL: 'https://llm.chutes.ai/v1',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'X-API-Key': apiKey,
-    },
-  })
 
   // Check if user is asking about news and pre-fetch results
   const lastMessage = getLastUserMessage(messages)
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  let systemPrompt = `You are BLUE, a direct and uncensored AI assistant. Today's date is ${currentDate}. 
+    let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
 IMPORTANT CURRENT FACTS (as of 2025):
 - Donald Trump is the current US President (inaugurated January 2025 for his second term)
@@ -202,7 +204,7 @@ Respond by organizing these headlines by topic (politics, technology, business, 
     const searchResults = await searchWeb(lastMessage)
     
     if (searchResults) {
-      systemPrompt = `You are BLUE, a direct and uncensored AI assistant. Today's date is ${currentDate}.
+        systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
 I searched the web for current information related to the user's question. Here are the search results:
 
@@ -221,15 +223,22 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
   const deepModel = 'deepseek-ai/DeepSeek-V3.2-TEE'
   const selectedModel = model || (useDeepModel ? deepModel : fastModel)
 
-  const result = streamText({
-    model: chutes.chatModel(selectedModel),
-    system: systemPrompt,
-    messages: await convertToModelMessages(messages),
-    abortSignal: req.signal,
-  })
+    const result = streamText({
+      model: chutes.chatModel(selectedModel),
+      system: systemPrompt,
+      messages: await convertToModelMessages(messages),
+      abortSignal: req.signal,
+    })
 
-  return result.toUIMessageStreamResponse({
-    originalMessages: messages,
-    consumeSseStream: consumeStream,
-  })
+    return result.toUIMessageStreamResponse({
+      originalMessages: messages,
+      consumeSseStream: consumeStream,
+    })
+  } catch (error) {
+    console.error('[v0] Chat API error:', error)
+    return new Response(JSON.stringify({ error: 'Failed to process chat request', details: String(error) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 }
