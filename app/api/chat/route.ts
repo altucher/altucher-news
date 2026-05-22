@@ -1,10 +1,9 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import {
   consumeStream,
-  convertToModelMessages,
   streamText,
-  UIMessage,
 } from 'ai'
+import type { UIMessage } from 'ai'
 
 export const maxDuration = 60
 
@@ -113,11 +112,18 @@ function needsCurrentInfo(text: string): boolean {
 function getLastUserMessage(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
-      const parts = messages[i].parts || []
-      for (const part of parts) {
-        if (part.type === 'text') {
-          return part.text
+      // Handle both formats: parts array or direct content
+      const msg = messages[i]
+      if (msg.parts && msg.parts.length > 0) {
+        for (const part of msg.parts) {
+          if (part.type === 'text') {
+            return part.text
+          }
         }
+      }
+      // Fallback to content field
+      if (typeof (msg as { content?: string }).content === 'string') {
+        return (msg as { content: string }).content
       }
     }
   }
@@ -188,10 +194,18 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       }
     }
 
+    // Convert messages to simple format for the model
+    const modelMessages = messages.map(msg => ({
+      role: msg.role as 'user' | 'assistant' | 'system',
+      content: typeof (msg as { content?: string }).content === 'string' 
+        ? (msg as { content: string }).content 
+        : (msg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
+    }))
+
     const result = streamText({
       model: chutes.chatModel(selectedModel),
       system: systemPrompt,
-      messages: await convertToModelMessages(messages),
+      messages: modelMessages,
       abortSignal: req.signal,
     })
 
