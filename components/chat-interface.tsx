@@ -347,11 +347,19 @@ export default function ChatInterface() {
       }
       
       if (data.imageUrl) {
-        setGeneratedImages(prev => [...prev, {
+        const newImage = {
           id: crypto.randomUUID(),
           prompt: prompt,
           imageUrl: data.imageUrl
-        }])
+        }
+        setGeneratedImages(prev => {
+          const updated = [...prev, newImage]
+          return updated
+        })
+        // Force scroll after state update
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
       }
     } catch (error) {
       console.error('[Image Gen] Error:', error)
@@ -823,7 +831,7 @@ export default function ChatInterface() {
                 </div>
               )}
               {/* Generated Images Display - All images persist */}
-              {generatedImages.map((img) => (
+              {generatedImages.length > 0 && generatedImages.map((img) => (
                 <div key={img.id} className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center">
                     <ImageIcon className="w-5 h-5 text-purple-600" />
