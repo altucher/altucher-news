@@ -62,7 +62,7 @@ export async function startSubscriptionCheckout(planId: string) {
 
     // Create Checkout Session for subscription
     const session = await stripe.checkout.sessions.create({
-      ui_mode: 'embedded',
+      ui_mode: 'embedded_page',
       customer: customerId,
       redirect_on_completion: 'never',
       line_items: [
