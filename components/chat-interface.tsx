@@ -347,11 +347,14 @@ export default function ChatInterface() {
       }
       
       if (data.imageUrl) {
+        console.log('[v0] Image generated, adding to state, URL length:', data.imageUrl.length)
         setGeneratedImages(prev => [...prev, {
           id: crypto.randomUUID(),
           prompt: prompt,
           imageUrl: data.imageUrl
         }])
+      } else {
+        console.log('[v0] No imageUrl in response:', data)
       }
     } catch (error) {
       console.error('[Image Gen] Error:', error)
