@@ -683,7 +683,15 @@ export default function ChatInterface() {
                       <Button
                         type="button"
                         size="icon"
-                        onClick={() => handleGenerateImage(input)}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const prompt = input.trim()
+                          if (prompt) {
+                            setInput('') // Clear input immediately
+                            handleGenerateImage(prompt)
+                          }
+                        }}
                         disabled={!input.trim() || isLoading || generatingImage}
                         title="Generate Image"
                         className={cn(
@@ -882,7 +890,7 @@ export default function ChatInterface() {
         </main>
 
         {/* Input Area - Chat Mode */}
-        {messages.length > 0 && (
+        {(messages.length > 0 || generatedImages.length > 0 || generatingImage) && (
           <div className="relative z-10 border-t border-border/50 bg-background/60 backdrop-blur-sm">
             <div className="max-w-3xl mx-auto px-4 py-4">
               <form onSubmit={handleSubmit} className="relative">
