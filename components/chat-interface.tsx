@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -76,7 +76,7 @@ export default function ChatInterface() {
   const router = useRouter()
   const supabase = createClient()
 
-  const { messages, sendMessage, status, setMessages, error } = useChat({
+  const { messages, sendMessage, status, setMessages, error, stop } = useChat({
     transport: new DefaultChatTransport({ 
       api: '/api/chat',
       body: user ? { userId: user.id } : undefined,
@@ -781,6 +781,13 @@ export default function ChatInterface() {
                       </g>
                     </svg>
                     <span className="text-sm">Thinking...</span>
+                    <button
+                      onClick={() => stop()}
+                      className="ml-2 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-md transition-colors flex items-center gap-1"
+                    >
+                      <Square className="w-3 h-3 fill-current" />
+                      Stop
+                    </button>
                   </div>
                 </div>
               )}
