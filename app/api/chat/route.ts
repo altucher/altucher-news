@@ -1,10 +1,9 @@
-import { gateway } from '@ai-sdk/gateway'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import {
   consumeStream,
-  convertToModelMessages,
   streamText,
-  UIMessage,
 } from 'ai'
+import type { UIMessage } from 'ai'
 
 export const maxDuration = 60
 
@@ -117,11 +116,18 @@ function needsCurrentInfo(text: string): boolean {
 function getLastUserMessage(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') {
-      const parts = messages[i].parts || []
-      for (const part of parts) {
-        if (part.type === 'text') {
-          return part.text
+      // Handle both formats: parts array or direct content
+      const msg = messages[i]
+      if (msg.parts && msg.parts.length > 0) {
+        for (const part of msg.parts) {
+          if (part.type === 'text') {
+            return part.text
+          }
         }
+      }
+      // Fallback to content field
+      if (typeof (msg as { content?: string }).content === 'string') {
+        return (msg as { content: string }).content
       }
     }
   }
@@ -130,7 +136,37 @@ function getLastUserMessage(messages: UIMessage[]): string {
 
 export async function POST(req: Request) {
   try {
-    const { messages }: { messages: UIMessage[] } = await req.json()
+    const { messages, model }: { messages: UIMessage[]; model?: string } = await req.json()
+
+    const apiKey = process.env.CHUTES_API_KEY
+
+    if (!apiKey) {
+      console.error('[v0] CHUTES_API_KEY is not configured')
+      return new Response(JSON.stringify({ error: 'CHUTES_API_KEY is not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Create a Chutes client
+    const chutes = createOpenAICompatible({
+      name: 'chutes',
+      baseURL: 'https://llm.chutes.ai/v1',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+
+    // Model selection - default to Qwen3-32B
+    const modelOptions: Record<string, string> = {
+      'qwen3-32b': 'Qwen/Qwen3-32B',
+      'qwen3-235b': 'Qwen/Qwen3-235B-A22B',
+      'llama4-maverick': 'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
+      'deepseek-r1': 'deepseek-ai/DeepSeek-R1',
+      'deepseek-v3': 'deepseek-ai/DeepSeek-V3-0324',
+    }
+    
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3-32B'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
@@ -150,7 +186,9 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       const searchResults = await searchWeb('news today headlines')
       
       if (searchResults) {
-        systemPrompt = `You are a helpful assistant. IMPORTANT: I have already retrieved today's news for the user. Your ONLY job is to present this information clearly. DO NOT claim you cannot access news. DO NOT suggest visiting websites. DO NOT add caveats about dates. Just present this news:
+        systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
+
+IMPORTANT: I have already retrieved today's news for the user. Your ONLY job is to present this information clearly. DO NOT claim you cannot access news. DO NOT suggest visiting websites. DO NOT add caveats about dates. Just present this news:
 
 NEWS HEADLINES:
 ${searchResults}
@@ -174,10 +212,18 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       }
     }
 
+    // Convert messages to simple format for the model
+    const modelMessages = messages.map(msg => ({
+      role: msg.role as 'user' | 'assistant' | 'system',
+      content: typeof (msg as { content?: string }).content === 'string' 
+        ? (msg as { content: string }).content 
+        : (msg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
+    }))
+
     const result = streamText({
-      model: gateway('anthropic/claude-sonnet-4'),
+      model: chutes.chatModel(selectedModel),
       system: systemPrompt,
-      messages: await convertToModelMessages(messages),
+      messages: modelMessages,
       abortSignal: req.signal,
     })
 
