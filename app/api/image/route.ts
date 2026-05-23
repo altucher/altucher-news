@@ -1,10 +1,32 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
 // Chutes Image API (Bittensor SN64) with DreamShaper XL 1.0
 const CHUTES_IMAGE_API = 'https://image.chutes.ai/generate'
 const DREAMSHAPER_MODEL = 'Lykon/dreamshaper-xl-1-0'
+
+// Supabase admin client for analytics tracking
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+// Track analytics event
+async function trackEvent(eventType: string, prompt: string, model: string, costEstimate: number) {
+  try {
+    await supabaseAdmin.from('analytics_events').insert({
+      event_type: eventType,
+      prompt: prompt?.substring(0, 500),
+      model,
+      cost_estimate: costEstimate,
+    })
+  } catch (e) {
+    // Table may not exist, silently fail
+    console.log('[Analytics] Could not track event:', e)
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -55,6 +77,9 @@ export async function POST(req: Request) {
     const imageUrl = `data:image/jpeg;base64,${base64}`
 
     console.log('[Image Gen] Success, generated image size:', imageBuffer.byteLength)
+
+    // Track the image generation event
+    await trackEvent('image_generation', prompt, DREAMSHAPER_MODEL, 0.02)
 
     return NextResponse.json({
       success: true,

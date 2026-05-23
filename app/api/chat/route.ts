@@ -15,6 +15,21 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Track analytics event
+async function trackAnalyticsEvent(eventType: string, prompt: string, model: string, costEstimate: number) {
+  try {
+    await supabaseAdmin.from('analytics_events').insert({
+      event_type: eventType,
+      prompt: prompt?.substring(0, 500),
+      model,
+      cost_estimate: costEstimate,
+    })
+  } catch (e) {
+    // Table may not exist, silently fail
+    console.log('[Analytics] Could not track event:', e)
+  }
+}
+
 // Web search function using Google News RSS
 async function searchWeb(query: string): Promise<string> {
   const results: string[] = []
@@ -310,6 +325,9 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       messages: modelMessages,
       abortSignal: req.signal,
     })
+
+    // Track the chat query event (async, don't wait)
+    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
