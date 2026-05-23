@@ -237,13 +237,13 @@ export async function POST(req: Request) {
 
     // Model selection - using available Chutes models
     const modelOptions: Record<string, string> = {
+      'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.2-TEE',
       'kimi-k2.6': 'moonshotai/Kimi-K2.6-TEE',
       'kimi-k2.5': 'moonshotai/Kimi-K2.5-TEE',
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
-      'deepseek-v3': 'deepseek-ai/DeepSeek-V3.2-TEE',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'moonshotai/Kimi-K2.6-TEE'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'deepseek-ai/DeepSeek-V3.2-TEE'
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
@@ -347,7 +347,7 @@ When answering questions, refer to this document content. You can summarize it, 
       const testResponse = await fetch('https://llm.chutes.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 
-          'Authorization': `Bearer ${process.env.CHUTES_API_KEY}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
