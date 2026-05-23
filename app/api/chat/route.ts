@@ -341,43 +341,16 @@ When answering questions, refer to this document content. You can summarize it, 
       }
     })
 
-    // Check if Chutes model is available by making a quick test request
-    let useChutes = true
-    try {
-      const testResponse = await fetch('https://llm.chutes.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: [{ role: 'user', content: 'hi' }],
-          max_tokens: 1,
-        }),
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      })
-      
-      if (!testResponse.ok) {
-        const errorText = await testResponse.text()
-        console.log('[v0] Chutes test failed:', testResponse.status, errorText)
-        useChutes = false
-      }
-    } catch (e) {
-      useChutes = false
-      console.log('[v0] Chutes unreachable, using fallback:', e)
-    }
-
-    // Use Chutes or fallback to Vercel AI Gateway
+    // Try Chutes directly - fallback happens in catch block if it fails
     const result = streamText({
-      model: useChutes ? chutes.chatModel(selectedModel) : gateway(FALLBACK_MODEL),
+      model: chutes.chatModel(selectedModel),
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
       abortSignal: req.signal,
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, useChutes ? selectedModel : FALLBACK_MODEL, 0.002)
+    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
