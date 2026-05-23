@@ -83,7 +83,7 @@ export default function ChatInterface() {
   const { messages, sendMessage, status, setMessages, error, stop } = useChat({
     transport: new DefaultChatTransport({ 
       api: '/api/chat',
-      body: user ? { userId: user.id, fileContext: uploadedFile } : { fileContext: uploadedFile },
+      body: user ? { userId: user.id } : undefined,
     }),
     onError: (err) => {
       // Check for limit exceeded error
@@ -322,7 +322,13 @@ export default function ChatInterface() {
       setNewsHeadlines([])
     }
     
-    sendMessage({ text: userMessage })
+    // If there's an uploaded file, include its content in the message
+    let messageToSend = userMessage
+    if (uploadedFile) {
+      messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
+    }
+    
+    sendMessage({ text: messageToSend })
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
@@ -448,6 +454,15 @@ export default function ChatInterface() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Hidden file input - always rendered so ref is available */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept=".pdf,.docx,.txt,.md"
+        className="hidden"
+      />
+      
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -730,13 +745,6 @@ export default function ChatInterface() {
                     </div>
                   )}
                   <form onSubmit={handleSubmit} className="relative">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept=".pdf,.docx,.txt,.md"
-                      className="hidden"
-                    />
                     <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
                       <Button
                         type="button"
