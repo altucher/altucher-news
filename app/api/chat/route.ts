@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { gateway } from '@ai-sdk/gateway'
 import {
   consumeStream,
   streamText,
@@ -8,6 +9,9 @@ import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
 
 export const maxDuration = 300 // 5 minutes for slow Chutes API
+
+// Fallback model when Chutes is unavailable (via Vercel AI Gateway)
+const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 
 // Supabase admin client for usage tracking (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -337,23 +341,91 @@ When answering questions, refer to this document content. You can summarize it, 
       }
     })
 
-    // Use standard AI SDK streaming for all models
-    // Kimi's reasoning_content will be handled if the AI SDK supports it
+    // Check if Chutes model is available by making a quick test request
+    let useChutes = true
+    try {
+      const testResponse = await fetch('https://llm.chutes.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${process.env.CHUTES_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 1,
+        }),
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      })
+      
+      if (!testResponse.ok) {
+        const errorText = await testResponse.text()
+        console.log('[v0] Chutes test failed:', testResponse.status, errorText)
+        useChutes = false
+      }
+    } catch (e) {
+      useChutes = false
+      console.log('[v0] Chutes unreachable, using fallback:', e)
+    }
+
+    // Use Chutes or fallback to Vercel AI Gateway
     const result = streamText({
-      model: chutes.chatModel(selectedModel),
+      model: useChutes ? chutes.chatModel(selectedModel) : gateway(FALLBACK_MODEL),
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
       abortSignal: req.signal,
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002)
+    trackAnalyticsEvent('chat_query', lastMessage, useChutes ? selectedModel : FALLBACK_MODEL, 0.002)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       consumeSseStream: consumeStream,
     })
   } catch (error) {
+    const errorMessage = String(error)
+    
+    // If Chutes is unavailable (503, capacity, etc.), fall back to OpenAI
+    if (errorMessage.includes('503') || 
+        errorMessage.includes('Service Unavailable') || 
+        errorMessage.includes('capacity') ||
+        errorMessage.includes('No instances available')) {
+      console.log('[v0] Chutes unavailable, falling back to OpenAI GPT-4o-mini')
+      
+      try {
+        const { messages: fallbackMessages, fileContext: fallbackFileContext } = await req.clone().json()
+        
+        // Build file context for fallback
+        let fallbackFileContextSection = ''
+        if (fallbackFileContext && fallbackFileContext.content) {
+          fallbackFileContextSection = `\n\nUPLOADED DOCUMENT:\nThe user has uploaded a file called "${fallbackFileContext.name}". Here is the content:\n\n---BEGIN DOCUMENT---\n${fallbackFileContext.content}\n---END DOCUMENT---\n\nRefer to this document when answering questions.`
+        }
+        
+        const fallbackModelMessages = fallbackMessages.map((msg: UIMessage) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: typeof msg.content === 'string' 
+            ? msg.content 
+            : (msg.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
+        }))
+        
+        const fallbackResult = streamText({
+          model: gateway(FALLBACK_MODEL),
+          system: `You are BlueTAO, a helpful AI assistant. Answer questions thoughtfully and concisely.${fallbackFileContextSection}`,
+          messages: fallbackModelMessages,
+        })
+        
+        trackAnalyticsEvent('chat_query', 'fallback', FALLBACK_MODEL, 0.001)
+        
+        return fallbackResult.toUIMessageStreamResponse({
+          originalMessages: fallbackMessages,
+          consumeSseStream: consumeStream,
+        })
+      } catch (fallbackError) {
+        console.error('[v0] Fallback also failed:', fallbackError)
+      }
+    }
+    
     console.error('[v0] Chat API error:', error)
     console.error('[v0] Error name:', (error as Error)?.name)
     console.error('[v0] Error message:', (error as Error)?.message)
