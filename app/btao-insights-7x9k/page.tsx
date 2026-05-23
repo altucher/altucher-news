@@ -31,6 +31,15 @@ interface AnalyticsData {
     costEstimate: string
     createdAt: string
   }>
+  allQueries: Array<{
+    id: string
+    type: string
+    prompt: string
+    model: string
+    tokensUsed: number
+    costEstimate: string
+    createdAt: string
+  }>
 }
 
 export default function AnalyticsPage() {
@@ -241,8 +250,8 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Recent Events */}
-        <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6">
-          <h2 className="text-lg font-medium text-foreground mb-4">Recent Events</h2>
+        <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6 mb-8">
+          <h2 className="text-lg font-medium text-foreground mb-4">Recent Events (Last 50)</h2>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -288,6 +297,64 @@ export default function AnalyticsPage() {
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-muted-foreground">
                       No events tracked yet. Events will appear here once the analytics_events table is created.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* All Queries Ever */}
+        <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6">
+          <h2 className="text-lg font-medium text-foreground mb-4">All Queries Ever ({data?.allQueries?.length || 0} total)</h2>
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+            <table className="w-full">
+              <thead className="sticky top-0 bg-card">
+                <tr className="border-b border-border/50">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Time</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Full Prompt</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Model</th>
+                  <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.allQueries?.map((query) => (
+                  <tr key={query.id} className="border-b border-border/30 hover:bg-accent/50">
+                    <td className="py-3 px-4 text-sm text-muted-foreground whitespace-nowrap">
+                      {new Date(query.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                        query.type === 'image_generation' 
+                          ? 'bg-violet-500/10 text-violet-600' 
+                          : 'bg-primary/10 text-primary'
+                      }`}>
+                        {query.type === 'image_generation' ? (
+                          <><ImageIcon className="w-3 h-3" /> Image</>
+                        ) : (
+                          <><MessageSquare className="w-3 h-3" /> Chat</>
+                        )}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-foreground">
+                      <div className="max-w-md whitespace-pre-wrap break-words">
+                        {query.prompt || '-'}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground whitespace-nowrap">
+                      {query.model || '-'}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-foreground text-right whitespace-nowrap">
+                      ${query.costEstimate || '-'}
+                    </td>
+                  </tr>
+                ))}
+                {(!data?.allQueries || data.allQueries.length === 0) && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                      No queries recorded yet.
                     </td>
                   </tr>
                 )}
