@@ -448,6 +448,15 @@ export default function ChatInterface() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Hidden file input - always rendered so ref is available */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept=".pdf,.docx,.txt,.md"
+        className="hidden"
+      />
+      
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -730,13 +739,6 @@ export default function ChatInterface() {
                     </div>
                   )}
                   <form onSubmit={handleSubmit} className="relative">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept=".pdf,.docx,.txt,.md"
-                      className="hidden"
-                    />
                     <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
                       <Button
                         type="button"
