@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -71,8 +71,11 @@ export default function ChatInterface() {
   const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
@@ -80,7 +83,7 @@ export default function ChatInterface() {
   const { messages, sendMessage, status, setMessages, error, stop } = useChat({
     transport: new DefaultChatTransport({ 
       api: '/api/chat',
-      body: user ? { userId: user.id } : undefined,
+      body: user ? { userId: user.id, fileContext: uploadedFile } : { fileContext: uploadedFile },
     }),
     onError: (err) => {
       // Check for limit exceeded error
@@ -247,6 +250,39 @@ export default function ChatInterface() {
       }
     }
   }, [status, messages, currentChatId])
+
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setUploadedFile({ name: data.fileName, content: data.extractedText })
+      } else {
+        alert(data.error || 'Failed to upload file')
+      }
+    } catch (err) {
+      console.error('File upload error:', err)
+      alert('Failed to upload file. Please try again.')
+    } finally {
+      setUploadingFile(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -680,17 +716,48 @@ export default function ChatInterface() {
                 
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
+                  {/* File upload indicator */}
+                  {uploadedFile && (
+                    <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
+                      <FileText className="w-4 h-4 text-primary" />
+                      <span className="truncate max-w-[200px]">{uploadedFile.name}</span>
+                      <button
+                        onClick={() => setUploadedFile(null)}
+                        className="ml-auto text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   <form onSubmit={handleSubmit} className="relative">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept=".pdf,.docx,.txt,.md"
+                      className="hidden"
+                    />
                     <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
-                      <div className="pl-5 text-muted-foreground">
-                        <Pencil className="w-5 h-5" />
-                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingFile}
+                        title="Upload a file (PDF, DOCX, TXT, MD)"
+                        className="ml-2 h-9 w-9 rounded-full bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+                      >
+                        {uploadingFile ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Paperclip className="w-5 h-5" />
+                        )}
+                      </Button>
                       <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Ask anything privately..."
+                        placeholder={uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
@@ -934,17 +1001,41 @@ export default function ChatInterface() {
         {(messages.length > 0 || generatedImages.length > 0 || generatingImage) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
+              {/* File upload indicator */}
+              {uploadedFile && (
+                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <span className="truncate max-w-[200px]">{uploadedFile.name}</span>
+                  <button
+                    onClick={() => setUploadedFile(null)}
+                    className="ml-auto text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="relative">
                 <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
-                  <div className="pl-5 text-muted-foreground">
-                    <Pencil className="w-5 h-5" />
-                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    title="Upload a file (PDF, DOCX, TXT, MD)"
+                    className="ml-2 h-8 w-8 rounded-full bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    {uploadingFile ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Paperclip className="w-4 h-4" />
+                    )}
+                  </Button>
                   <textarea
                     ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask anything..."
+                    placeholder={uploadedFile ? "Ask about your file..." : "Ask anything..."}
                     disabled={isLoading}
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"

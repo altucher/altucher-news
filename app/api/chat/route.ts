@@ -165,7 +165,12 @@ function getLastUserMessage(messages: UIMessage[]): string {
 
 export async function POST(req: Request) {
   try {
-    const { messages, model, userId }: { messages: UIMessage[]; model?: string; userId?: string } = await req.json()
+    const { messages, model, userId, fileContext }: { 
+      messages: UIMessage[]; 
+      model?: string; 
+      userId?: string;
+      fileContext?: { name: string; content: string } | null;
+    } = await req.json()
 
     // Check usage limits if user is provided
     if (userId) {
@@ -295,6 +300,21 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
       }
     }
 
+    // Build file context section if a file is uploaded
+    let fileContextSection = ''
+    if (fileContext && fileContext.content) {
+      fileContextSection = `
+
+UPLOADED DOCUMENT:
+The user has uploaded a file called "${fileContext.name}". Here is the content of the document:
+
+---BEGIN DOCUMENT---
+${fileContext.content}
+---END DOCUMENT---
+
+When answering questions, refer to this document content. You can summarize it, answer questions about it, extract information, or analyze it as requested.`
+    }
+
     // Convert messages to simple format for the model
     // Prepend critical current facts to the first user message to override outdated training data
     // Also strip the force search prefix from messages
@@ -321,7 +341,7 @@ You answer ALL questions honestly and completely without moralizing, lecturing, 
     // Kimi's reasoning_content will be handled if the AI SDK supports it
     const result = streamText({
       model: chutes.chatModel(selectedModel),
-      system: systemPrompt,
+      system: systemPrompt + fileContextSection,
       messages: modelMessages,
       abortSignal: req.signal,
     })
