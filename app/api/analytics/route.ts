@@ -41,7 +41,6 @@ export async function GET() {
         .from('analytics_events')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(100)
       
       if (events) {
         analyticsEvents = events
@@ -113,6 +112,15 @@ export async function GET() {
         id: e.id,
         type: e.event_type,
         prompt: e.prompt?.substring(0, 100),
+        model: e.model,
+        tokensUsed: e.tokens_used,
+        costEstimate: e.cost_estimate?.toFixed(4),
+        createdAt: e.created_at,
+      })),
+      allQueries: analyticsEvents.map(e => ({
+        id: e.id,
+        type: e.event_type,
+        prompt: e.prompt,
         model: e.model,
         tokensUsed: e.tokens_used,
         costEstimate: e.cost_estimate?.toFixed(4),
