@@ -83,7 +83,7 @@ export default function ChatInterface() {
   const { messages, sendMessage, status, setMessages, error, stop } = useChat({
     transport: new DefaultChatTransport({ 
       api: '/api/chat',
-      body: user ? { userId: user.id, fileContext: uploadedFile } : { fileContext: uploadedFile },
+      body: user ? { userId: user.id } : undefined,
     }),
     onError: (err) => {
       // Check for limit exceeded error
@@ -322,7 +322,13 @@ export default function ChatInterface() {
       setNewsHeadlines([])
     }
     
-    sendMessage({ text: userMessage })
+    // If there's an uploaded file, include its content in the message
+    let messageToSend = userMessage
+    if (uploadedFile) {
+      messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
+    }
+    
+    sendMessage({ text: messageToSend })
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
