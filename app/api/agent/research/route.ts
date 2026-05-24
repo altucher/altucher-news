@@ -4,18 +4,23 @@ import sgMail from '@sendgrid/mail'
 
 export const maxDuration = 120 // 2 minutes for research tasks
 
-// Initialize Chutes client
-const chutes = createOpenAICompatible({
-  name: 'chutes',
-  baseURL: 'https://llm.chutes.ai/v1',
-  headers: {
-    Authorization: `Bearer ${process.env.CHUTES_API_KEY}`,
-  },
-})
+// Initialize SendGrid lazily
+function initSendGrid() {
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+  }
+}
 
-// Initialize SendGrid
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+// Create Chutes client lazily to ensure env var is available
+function getChutesClient() {
+  const apiKey = process.env.CHUTES_API_KEY || 'cpk_77d2f677a19d4c34b214f85509e2985c.76529c1096d454ef926e723b84884c28.9l6eVeIIq8tbWP0UZgmTPBjUv5SOpYvw'
+  return createOpenAICompatible({
+    name: 'chutes',
+    baseURL: 'https://llm.chutes.ai/v1',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  })
 }
 
 interface ResearchRequest {
@@ -88,6 +93,13 @@ Please provide:
 
 Format your response in clean, readable markdown. Be thorough and informative.`
     }
+
+    // Initialize clients lazily
+    initSendGrid()
+    const chutes = getChutesClient()
+
+    console.log('[v0] Starting research generation...')
+    console.log('[v0] CHUTES_API_KEY exists:', !!process.env.CHUTES_API_KEY)
 
     // Generate research using DeepSeek
     const { text: researchResult } = await generateText({
