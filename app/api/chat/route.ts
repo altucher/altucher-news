@@ -178,25 +178,26 @@ export async function POST(req: Request) {
 
     // Check usage limits if user is provided
     if (userId) {
-      // Get user's subscription tier
-      const { data: subscription } = await supabaseAdmin
-        .from('subscriptions')
-        .select('tier, status')
-        .eq('user_id', userId)
-        .single()
+      // Run subscription and usage queries in parallel for speed
+      const today = new Date().toISOString().split('T')[0]
+      const [subscriptionResult, usageResult] = await Promise.all([
+        supabaseAdmin
+          .from('subscriptions')
+          .select('tier, status')
+          .eq('user_id', userId)
+          .single(),
+        supabaseAdmin
+          .from('usage')
+          .select('message_count')
+          .eq('user_id', userId)
+          .eq('date', today)
+          .single()
+      ])
 
+      const subscription = subscriptionResult.data
+      const usage = usageResult.data
       const tier = (subscription?.status === 'active' ? subscription?.tier : 'free') || 'free'
       const messageLimit = getMessageLimit(tier)
-
-      // Get today's usage
-      const today = new Date().toISOString().split('T')[0]
-      const { data: usage } = await supabaseAdmin
-        .from('usage')
-        .select('message_count')
-        .eq('user_id', userId)
-        .eq('date', today)
-        .single()
-
       const currentCount = usage?.message_count || 0
 
       // Check if user has exceeded their limit
@@ -213,8 +214,8 @@ export async function POST(req: Request) {
         })
       }
 
-      // Increment usage count (upsert for new day)
-      await supabaseAdmin
+      // Increment usage count in background (don't wait)
+      supabaseAdmin
         .from('usage')
         .upsert({
           user_id: userId,
@@ -223,17 +224,11 @@ export async function POST(req: Request) {
         }, {
           onConflict: 'user_id,date',
         })
+        .then(() => {})
+        .catch(err => console.error('Usage update failed:', err))
     }
 
     const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
-    console.log('[v0] CHUTES_API_KEY exists:', !!apiKey)
-
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'CHUTES_API_KEY is not configured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
 
     // Model selection - using available Chutes models
     const modelOptions: Record<string, string> = {
@@ -253,9 +248,6 @@ export async function POST(req: Request) {
         'Authorization': `Bearer ${apiKey}`,
       },
     })
-
-    console.log('[v0] Chutes API Key prefix:', apiKey.substring(0, 15))
-    console.log('[v0] Using model:', selectedModel)
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
