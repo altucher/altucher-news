@@ -141,7 +141,23 @@ Format your response in clean, readable markdown. Be thorough and informative.`
       html: emailHtml,
     }
 
-    await sgMail.send(msg)
+    console.log('[v0] Attempting to send email to:', email)
+    console.log('[v0] From email:', msg.from)
+    console.log('[v0] Subject:', subjectLine)
+    console.log('[v0] SENDGRID_API_KEY exists:', !!process.env.SENDGRID_API_KEY)
+    console.log('[v0] SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL || 'NOT SET - using default')
+
+    try {
+      await sgMail.send(msg)
+      console.log('[v0] Email sent successfully!')
+    } catch (emailError: unknown) {
+      console.error('[v0] SendGrid error:', emailError)
+      const sgError = emailError as { response?: { body?: unknown } }
+      if (sgError.response?.body) {
+        console.error('[v0] SendGrid error body:', JSON.stringify(sgError.response.body))
+      }
+      throw emailError
+    }
 
     return new Response(JSON.stringify({ 
       success: true, 
