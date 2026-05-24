@@ -359,7 +359,7 @@ When answering questions, refer to this document content. You can summarize it, 
   } catch (error) {
     const errorMessage = String(error)
     
-    // If Chutes is unavailable (503, 429, capacity, etc.), fall back to OpenAI
+    // If Chutes is unavailable (503, 429, capacity, etc.), fall back to Kimi, then OpenAI
     if (errorMessage.includes('503') || 
         errorMessage.includes('429') ||
         errorMessage.includes('Too Many Requests') ||
@@ -367,8 +367,43 @@ When answering questions, refer to this document content. You can summarize it, 
         errorMessage.includes('capacity') ||
         errorMessage.includes('maximum capacity') ||
         errorMessage.includes('No instances available')) {
-      console.log('[v0] Chutes unavailable, falling back to OpenAI GPT-4o-mini')
       
+      // Try Kimi as first fallback (still on Chutes)
+      const kimiModel = 'moonshotai/Kimi-K2.6-TEE'
+      console.log('[v0] DeepSeek unavailable, trying Kimi on Chutes...')
+      
+      try {
+        const { messages: retryMessages, fileContext: retryFileContext } = await req.clone().json()
+        
+        let retryFileContextSection = ''
+        if (retryFileContext && retryFileContext.content) {
+          retryFileContextSection = `\n\nUPLOADED DOCUMENT:\nThe user has uploaded a file called "${retryFileContext.name}". Here is the content:\n\n---BEGIN DOCUMENT---\n${retryFileContext.content}\n---END DOCUMENT---\n\nRefer to this document when answering questions.`
+        }
+        
+        const retryModelMessages = retryMessages.map((msg: UIMessage) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: typeof msg.content === 'string' 
+            ? msg.content 
+            : (msg.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
+        }))
+        
+        const kimiResult = streamText({
+          model: chutes.chatModel(kimiModel),
+          system: systemPrompt + retryFileContextSection,
+          messages: retryModelMessages,
+        })
+        
+        trackAnalyticsEvent('chat_query', 'kimi_fallback', kimiModel, 0.002)
+        
+        return kimiResult.toUIMessageStreamResponse({
+          originalMessages: retryMessages,
+          consumeSseStream: consumeStream,
+        })
+      } catch (kimiError) {
+        console.log('[v0] Kimi also unavailable, falling back to OpenAI GPT-4o-mini')
+      }
+      
+      // Final fallback to OpenAI
       try {
         const { messages: fallbackMessages, fileContext: fallbackFileContext } = await req.clone().json()
         
