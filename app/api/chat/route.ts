@@ -359,10 +359,13 @@ When answering questions, refer to this document content. You can summarize it, 
   } catch (error) {
     const errorMessage = String(error)
     
-    // If Chutes is unavailable (503, capacity, etc.), fall back to OpenAI
+    // If Chutes is unavailable (503, 429, capacity, etc.), fall back to OpenAI
     if (errorMessage.includes('503') || 
+        errorMessage.includes('429') ||
+        errorMessage.includes('Too Many Requests') ||
         errorMessage.includes('Service Unavailable') || 
         errorMessage.includes('capacity') ||
+        errorMessage.includes('maximum capacity') ||
         errorMessage.includes('No instances available')) {
       console.log('[v0] Chutes unavailable, falling back to OpenAI GPT-4o-mini')
       
