@@ -375,6 +375,12 @@ When answering questions, refer to this document content. You can summarize it, 
       try {
         const { messages: retryMessages, fileContext: retryFileContext } = await req.clone().json()
         
+        // Get the last user message for analytics
+        const lastUserMessage = retryMessages.filter((m: UIMessage) => m.role === 'user').pop()
+        const retryLastMessage = typeof lastUserMessage?.content === 'string' 
+          ? lastUserMessage.content 
+          : (lastUserMessage?.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
+        
         let retryFileContextSection = ''
         if (retryFileContext && retryFileContext.content) {
           retryFileContextSection = `\n\nUPLOADED DOCUMENT:\nThe user has uploaded a file called "${retryFileContext.name}". Here is the content:\n\n---BEGIN DOCUMENT---\n${retryFileContext.content}\n---END DOCUMENT---\n\nRefer to this document when answering questions.`
@@ -393,7 +399,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: retryModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', 'kimi_fallback', kimiModel, 0.002)
+        trackAnalyticsEvent('chat_query', retryLastMessage, kimiModel, 0.002)
         
         return kimiResult.toUIMessageStreamResponse({
           originalMessages: retryMessages,
@@ -406,6 +412,12 @@ When answering questions, refer to this document content. You can summarize it, 
       // Final fallback to OpenAI
       try {
         const { messages: fallbackMessages, fileContext: fallbackFileContext } = await req.clone().json()
+        
+        // Get the last user message for analytics
+        const lastFallbackUserMessage = fallbackMessages.filter((m: UIMessage) => m.role === 'user').pop()
+        const fallbackLastMessage = typeof lastFallbackUserMessage?.content === 'string' 
+          ? lastFallbackUserMessage.content 
+          : (lastFallbackUserMessage?.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
         
         // Build file context for fallback
         let fallbackFileContextSection = ''
@@ -426,7 +438,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: fallbackModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', 'fallback', FALLBACK_MODEL, 0.001)
+        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001)
         
         return fallbackResult.toUIMessageStreamResponse({
           originalMessages: fallbackMessages,
