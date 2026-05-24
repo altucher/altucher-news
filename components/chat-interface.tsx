@@ -1160,6 +1160,14 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
           ))}
         </div>
       </div>
+
+      {/* Research Agent Modal */}
+      {showResearchAgent && (
+        <ResearchAgent
+          uploadedFile={uploadedFile}
+          onClose={() => setShowResearchAgent(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1398,14 +1406,6 @@ function MessageBubble({ message }: { message: UIMessage }) {
           return null
         })}
       </div>
-
-      {/* Research Agent Modal */}
-      {showResearchAgent && (
-        <ResearchAgent
-          uploadedFile={uploadedFile}
-          onClose={() => setShowResearchAgent(false)}
-        />
-      )}
     </div>
   )
 }
