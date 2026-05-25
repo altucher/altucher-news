@@ -56,6 +56,11 @@ export async function GET() {
       .select('*', { count: 'exact', head: true })
       .eq('event_type', 'image_generation')
     
+    const { count: detectCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'ai_detection')
+    
     const { data: events, error: eventsError } = await supabaseAdmin
       .from('analytics_events')
       .select('*')
@@ -73,18 +78,22 @@ export async function GET() {
     // Use accurate counts from COUNT queries
     const totalImageGenerations = imageCount || 0
     const totalChatQueries = chatCount || 0
+    const totalAIDetections = detectCount || 0
     const totalAllQueries = totalEventsCount || 0
     
     // Filter events for cost calculation (from fetched data)
     const imageEvents = analyticsEvents.filter(e => e.event_type === 'image_generation')
     const chatEvents = analyticsEvents.filter(e => e.event_type === 'chat_query')
+    const detectEvents = analyticsEvents.filter(e => e.event_type === 'ai_detection')
     
     // Estimate costs (Chutes pricing approximations)
     // Chat: ~$0.001 per 1000 tokens
     // Image: ~$0.02 per image
+    // Detect: ~$0.01 per detection
     const estimatedChatCost = chatEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.001), 0)
     const estimatedImageCost = imageEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.02), 0)
-    const totalEstimatedCost = estimatedChatCost + estimatedImageCost
+    const estimatedDetectCost = detectEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.01), 0)
+    const totalEstimatedCost = estimatedChatCost + estimatedImageCost + estimatedDetectCost
 
     // Daily breakdown
     const dailyStats: Record<string, { queries: number; images: number; cost: number }> = {}
@@ -129,10 +138,12 @@ export async function GET() {
         totalQueries: totalAllQueries,
         totalImageGenerations,
         totalChatQueries,
+        totalAIDetections,
         uniqueUsers,
         activeDays,
         estimatedChatCost: estimatedChatCost.toFixed(4),
         estimatedImageCost: estimatedImageCost.toFixed(4),
+        estimatedDetectCost: estimatedDetectCost.toFixed(4),
         totalEstimatedCost: totalEstimatedCost.toFixed(4),
       },
       topCountries,
