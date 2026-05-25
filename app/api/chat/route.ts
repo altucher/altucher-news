@@ -25,11 +25,15 @@ export async function OPTIONS() {
 // Fallback model when Chutes is unavailable (via Vercel AI Gateway)
 const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 
-// Supabase admin client for usage tracking (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Lazy initialization to avoid build-time errors
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  return createClient(url, key)
+}
 
 // Track analytics event with location
 async function trackAnalyticsEvent(
@@ -40,6 +44,7 @@ async function trackAnalyticsEvent(
   location?: { country?: string; city?: string; region?: string }
 ) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     await supabaseAdmin.from('analytics_events').insert({
       event_type: eventType,
       prompt: prompt?.substring(0, 500),
@@ -205,6 +210,8 @@ export async function POST(req: Request) {
 
     // Check usage limits if user is provided
     if (userId) {
+      const supabaseAdmin = getSupabaseAdmin()
+      
       // Run subscription and usage queries in parallel for speed
       const today = new Date().toISOString().split('T')[0]
       const [subscriptionResult, usageResult] = await Promise.all([
