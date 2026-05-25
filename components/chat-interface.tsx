@@ -667,9 +667,9 @@ export default function ChatInterface() {
             </Button>
             <button 
               onClick={handleNewChat}
-              className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground hover:text-primary transition-colors hidden lg:block tracking-wide"
+              className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground hover:text-primary transition-colors hidden lg:block tracking-wide italic"
             >
-              BlueTAO
+              the front end of bittensor
             </button>
           </div>
           <div className="flex items-center gap-2">
