@@ -480,7 +480,7 @@ export default function ChatInterface() {
       )}>
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-          <span className="font-[family-name:var(--font-playfair)] text-2xl font-medium text-blue-500 tracking-wide">BlueTAO</span>
+          <span className="text-4xl font-bold text-blue-500 tracking-tight" style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>BlueTAO</span>
           <Button
             variant="ghost"
             size="icon"
