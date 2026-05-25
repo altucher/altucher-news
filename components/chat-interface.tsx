@@ -480,7 +480,7 @@ export default function ChatInterface() {
       )}>
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-          <span className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground tracking-wide">BlueTAO</span>
+          <span className="font-[family-name:var(--font-playfair)] text-2xl font-medium text-blue-500 tracking-wide">BlueTAO</span>
           <Button
             variant="ghost"
             size="icon"
@@ -669,7 +669,7 @@ export default function ChatInterface() {
               onClick={handleNewChat}
               className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground hover:text-primary transition-colors hidden lg:block tracking-wide italic"
             >
-              the front end of bittensor
+              a front end to bittensor
             </button>
           </div>
           <div className="flex items-center gap-2">
