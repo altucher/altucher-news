@@ -690,6 +690,12 @@ export default function ChatInterface() {
           </div>
           {user ? (
             <div className="flex items-center gap-3">
+              <Link href="/developers">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hidden sm:flex">
+                  <Code className="w-4 h-4 mr-1" />
+                  Embed
+                </Button>
+              </Link>
               <Link href="/pricing">
                 <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden sm:flex">
                   <Zap className="w-4 h-4 mr-1" />
@@ -701,14 +707,22 @@ export default function ChatInterface() {
               </span>
             </div>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/auth/login')}
-              className="ml-2 text-muted-foreground hover:text-foreground hidden sm:flex"
-            >
-              Sign in
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link href="/developers">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hidden sm:flex">
+                  <Code className="w-4 h-4 mr-1" />
+                  Embed
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push('/auth/login')}
+                className="ml-2 text-muted-foreground hover:text-foreground hidden sm:flex"
+              >
+                Sign in
+              </Button>
+            </div>
           )}
         </header>
 
