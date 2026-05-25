@@ -13,14 +13,23 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Track analytics event
-async function trackEvent(eventType: string, prompt: string, model: string, costEstimate: number) {
+// Track analytics event with location
+async function trackEvent(
+  eventType: string, 
+  prompt: string, 
+  model: string, 
+  costEstimate: number,
+  location?: { country?: string; city?: string; region?: string }
+) {
   try {
     await supabaseAdmin.from('analytics_events').insert({
       event_type: eventType,
       prompt: prompt?.substring(0, 500),
       model,
       cost_estimate: costEstimate,
+      country: location?.country,
+      city: location?.city,
+      region: location?.region,
     })
   } catch (e) {
     // Table may not exist, silently fail
@@ -30,6 +39,12 @@ async function trackEvent(eventType: string, prompt: string, model: string, cost
 
 export async function POST(req: Request) {
   try {
+    // Extract geolocation from Vercel headers
+    const country = req.headers.get('x-vercel-ip-country') || undefined
+    const city = req.headers.get('x-vercel-ip-city') || undefined
+    const region = req.headers.get('x-vercel-ip-country-region') || undefined
+    const location = { country, city, region }
+
     const { prompt } = await req.json()
 
     if (!prompt || typeof prompt !== 'string') {
@@ -79,7 +94,7 @@ export async function POST(req: Request) {
     console.log('[Image Gen] Success, generated image size:', imageBuffer.byteLength)
 
     // Track the image generation event
-    await trackEvent('image_generation', prompt, DREAMSHAPER_MODEL, 0.02)
+    await trackEvent('image_generation', prompt, DREAMSHAPER_MODEL, 0.02, location)
 
     return NextResponse.json({
       success: true,

@@ -105,6 +105,19 @@ export async function GET() {
       }
     })
 
+    // Calculate location stats
+    const locationStats: Record<string, number> = {}
+    analyticsEvents.forEach(e => {
+      const country = (e as { country?: string }).country
+      if (country) {
+        locationStats[country] = (locationStats[country] || 0) + 1
+      }
+    })
+    const topCountries = Object.entries(locationStats)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([country, count]) => ({ country, count }))
+
     return NextResponse.json({
       success: true,
       summary: {
@@ -117,6 +130,7 @@ export async function GET() {
         estimatedImageCost: estimatedImageCost.toFixed(4),
         totalEstimatedCost: totalEstimatedCost.toFixed(4),
       },
+      topCountries,
       dailyStats: Object.entries(dailyStats)
         .sort(([a], [b]) => b.localeCompare(a))
         .slice(0, 30)
@@ -133,6 +147,9 @@ export async function GET() {
         tokensUsed: e.tokens_used,
         costEstimate: e.cost_estimate?.toFixed(4),
         createdAt: e.created_at,
+        country: (e as { country?: string }).country,
+        city: (e as { city?: string }).city,
+        region: (e as { region?: string }).region,
       })),
       allQueries: analyticsEvents.map(e => ({
         id: e.id,
@@ -142,6 +159,9 @@ export async function GET() {
         tokensUsed: e.tokens_used,
         costEstimate: e.cost_estimate?.toFixed(4),
         createdAt: e.created_at,
+        country: (e as { country?: string }).country,
+        city: (e as { city?: string }).city,
+        region: (e as { region?: string }).region,
       })),
     })
   } catch (error) {
