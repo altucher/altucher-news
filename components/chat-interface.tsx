@@ -686,6 +686,12 @@ export default function ChatInterface() {
           </div>
           {user ? (
             <div className="flex items-center gap-3">
+              <Link href="/detect">
+                <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  Is it AI?
+                </Button>
+              </Link>
               <Link href="/developers">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
@@ -704,6 +710,12 @@ export default function ChatInterface() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              <Link href="/detect">
+                <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  Is it AI?
+                </Button>
+              </Link>
               <Link href="/developers">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
