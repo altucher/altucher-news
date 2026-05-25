@@ -3,19 +3,36 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, X, Minimize2 } from 'lucide-react'
 import { useChat } from '@ai-sdk/react'
+import { useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
+import { Suspense } from 'react'
 
-export default function EmbedChat() {
+function EmbedChatContent() {
+  const searchParams = useSearchParams()
   const [isExpanded, setIsExpanded] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   
+  // Get customization from URL params
+  const company = searchParams.get('company') || ''
+  const context = searchParams.get('context') || ''
+  const welcomeMessage = searchParams.get('welcome') || ''
+  
+  // Build welcome message
+  const defaultWelcome = company 
+    ? `Hi! I'm the AI assistant for ${company}. How can I help you today?`
+    : "Hi! I'm BlueTAO, your AI assistant powered by Bittensor. How can I help you today?"
+  
   const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
     api: '/api/chat',
+    body: {
+      // Pass custom context to the API
+      customContext: context ? { company, context } : undefined
+    },
     initialMessages: [
       {
         id: 'welcome',
         role: 'assistant',
-        content: 'Hi! I\'m BlueTAO, your AI assistant powered by Bittensor. How can I help you today?'
+        content: welcomeMessage || defaultWelcome
       }
     ]
   })
@@ -53,8 +70,8 @@ export default function EmbedChat() {
             <span className="text-white font-bold text-sm">B</span>
           </div>
           <div>
-            <h3 className="text-white font-semibold text-sm">BlueTAO</h3>
-            <p className="text-[#a89a8c] text-xs">Powered by Bittensor</p>
+            <h3 className="text-white font-semibold text-sm">{company || 'BlueTAO'}</h3>
+            <p className="text-[#a89a8c] text-xs">Powered by BlueTAO</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -140,5 +157,17 @@ export default function EmbedChat() {
         </p>
       </form>
     </div>
+  )
+}
+
+export default function EmbedChat() {
+  return (
+    <Suspense fallback={
+      <div className="fixed bottom-4 right-4 w-[380px] h-[500px] bg-[#1a1612] border border-[#3d3530] rounded-2xl shadow-2xl flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    }>
+      <EmbedChatContent />
+    </Suspense>
   )
 }
