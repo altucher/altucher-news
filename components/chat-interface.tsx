@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
+import { ResearchAgent } from '@/components/research-agent'
 import Link from 'next/link'
 
 interface UsageInfo {
@@ -72,6 +73,7 @@ export default function ChatInterface() {
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
+  const [showResearchAgent, setShowResearchAgent] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -829,6 +831,14 @@ export default function ChatInterface() {
                       {suggestion.label}
                     </button>
                   ))}
+                  {/* Research Agent Button */}
+                  <button
+                    onClick={() => setShowResearchAgent(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-primary/50 bg-primary/10 backdrop-blur-sm text-primary hover:bg-primary/20 hover:border-primary transition-all text-sm font-medium"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Research Agent
+                  </button>
                 </div>
 
                 {/* Footer Link */}
@@ -1150,6 +1160,14 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
           ))}
         </div>
       </div>
+
+      {/* Research Agent Modal */}
+      {showResearchAgent && (
+        <ResearchAgent
+          uploadedFile={uploadedFile}
+          onClose={() => setShowResearchAgent(false)}
+        />
+      )}
     </div>
   )
 }

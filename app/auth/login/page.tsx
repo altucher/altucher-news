@@ -22,11 +22,16 @@ export default function LoginPage() {
     setError('')
     const supabase = createClient()
     
+    // Use production URL for OAuth, fallback to current origin for dev
+    const redirectUrl = process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? 
+      (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+        ? `${window.location.origin}/auth/callback`
+        : 'https://bluetao.ai/auth/callback')
+    
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? 
-          `${window.location.origin}/auth/callback`,
+        redirectTo: redirectUrl,
       },
     })
   }
@@ -190,10 +195,6 @@ export default function LoginPage() {
             </svg>
             {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
           </Button>
-          
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Google sign-in requires additional setup. Use email for now.
-          </p>
         </div>
       </div>
     </div>

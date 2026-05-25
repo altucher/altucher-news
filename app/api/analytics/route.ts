@@ -57,6 +57,9 @@ export async function GET() {
     const totalImageGenerations = imageEvents.length
     const totalChatQueries = chatEvents.length
     
+    // Total queries = all events from analytics_events (chat + image)
+    const totalAllQueries = analyticsEvents.length
+    
     // Estimate costs (Chutes pricing approximations)
     // Chat: ~$0.001 per 1000 tokens
     // Image: ~$0.02 per image
@@ -91,7 +94,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       summary: {
-        totalQueries,
+        totalQueries: totalAllQueries,
         totalImageGenerations,
         totalChatQueries,
         uniqueUsers,
