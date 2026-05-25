@@ -36,6 +36,21 @@ export async function GET() {
       created_at: string
     }> = []
     
+    // Get total count first (separate query to bypass row limits)
+    const { count: totalEventsCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+    
+    const { count: chatCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'chat_query')
+    
+    const { count: imageCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'image_generation')
+    
     const { data: events, error: eventsError } = await supabaseAdmin
       .from('analytics_events')
       .select('*')
@@ -50,15 +65,14 @@ export async function GET() {
       analyticsEvents = events
     }
 
-    // Calculate image generation count and costs from events
+    // Use accurate counts from COUNT queries
+    const totalImageGenerations = imageCount || 0
+    const totalChatQueries = chatCount || 0
+    const totalAllQueries = totalEventsCount || 0
+    
+    // Filter events for cost calculation (from fetched data)
     const imageEvents = analyticsEvents.filter(e => e.event_type === 'image_generation')
     const chatEvents = analyticsEvents.filter(e => e.event_type === 'chat_query')
-    
-    const totalImageGenerations = imageEvents.length
-    const totalChatQueries = chatEvents.length
-    
-    // Total queries = all events from analytics_events (chat + image)
-    const totalAllQueries = analyticsEvents.length
     
     // Estimate costs (Chutes pricing approximations)
     // Chat: ~$0.001 per 1000 tokens
