@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, X, Minimize2, Maximize2 } from 'lucide-react'
+import { Send, Loader2, X, Minimize2 } from 'lucide-react'
 import { useChat } from '@ai-sdk/react'
 import ReactMarkdown from 'react-markdown'
 
@@ -127,7 +127,7 @@ export default function EmbedChat() {
           />
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !input?.trim()}
             className="p-1.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
           >
             <Send className="w-4 h-4" />

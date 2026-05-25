@@ -7,11 +7,15 @@ export const maxDuration = 120 // 2 minutes for image generation
 const CHUTES_IMAGE_API = 'https://image.chutes.ai/generate'
 const DREAMSHAPER_MODEL = 'Lykon/dreamshaper-xl-1-0'
 
-// Supabase admin client for analytics tracking
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Lazy initialization to avoid build-time errors
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  return createClient(url, key)
+}
 
 // Track analytics event with location
 async function trackEvent(
@@ -22,6 +26,7 @@ async function trackEvent(
   location?: { country?: string; city?: string; region?: string }
 ) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     await supabaseAdmin.from('analytics_events').insert({
       event_type: eventType,
       prompt: prompt?.substring(0, 500),
