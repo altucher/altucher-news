@@ -7,6 +7,21 @@
   var IFRAME_ID = 'bluetao-chat-iframe';
   var BUTTON_ID = 'bluetao-chat-button';
 
+  // Get script element and read data attributes
+  var scripts = document.getElementsByTagName('script');
+  var currentScript = scripts[scripts.length - 1];
+  
+  // Read customization options from data attributes
+  var options = {
+    company: currentScript.getAttribute('data-company') || '',
+    context: currentScript.getAttribute('data-context') || '',
+    contextUrl: currentScript.getAttribute('data-context-url') || '',
+    welcome: currentScript.getAttribute('data-welcome') || '',
+    theme: currentScript.getAttribute('data-theme') || 'dark',
+    position: currentScript.getAttribute('data-position') || 'right',
+    primaryColor: currentScript.getAttribute('data-color') || '#f59e0b'
+  };
+
   // Check if already loaded
   if (document.getElementById(WIDGET_ID)) {
     return;
@@ -15,19 +30,41 @@
   // Create container
   var container = document.createElement('div');
   container.id = WIDGET_ID;
-  container.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 999999; font-family: system-ui, -apple-system, sans-serif;';
+  var positionStyle = options.position === 'left' ? 'left: 20px;' : 'right: 20px;';
+  container.style.cssText = 'position: fixed; bottom: 20px; ' + positionStyle + ' z-index: 999999; font-family: system-ui, -apple-system, sans-serif;';
   document.body.appendChild(container);
 
   // State
   var isOpen = false;
   var iframe = null;
+  var contextFromUrl = '';
+
+  // Fetch context from URL if provided
+  if (options.contextUrl) {
+    fetch(options.contextUrl)
+      .then(function(response) { return response.text(); })
+      .then(function(text) { contextFromUrl = text; })
+      .catch(function(err) { console.warn('BlueTAO: Could not fetch context from URL:', err); });
+  }
+
+  // Build embed URL with parameters
+  function getEmbedUrl() {
+    var params = new URLSearchParams();
+    if (options.company) params.append('company', options.company);
+    if (options.context || contextFromUrl) params.append('context', options.context || contextFromUrl);
+    if (options.welcome) params.append('welcome', options.welcome);
+    if (options.theme) params.append('theme', options.theme);
+    
+    var queryString = params.toString();
+    return BLUETAO_URL + '/embed' + (queryString ? '?' + queryString : '');
+  }
 
   // Create chat button
   function createButton() {
     var button = document.createElement('button');
     button.id = BUTTON_ID;
     button.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    button.style.cssText = 'width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer; background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4); display: flex; align-items: center; justify-content: center; transition: transform 0.2s, box-shadow 0.2s;';
+    button.style.cssText = 'width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer; background: linear-gradient(135deg, ' + options.primaryColor + ' 0%, #ea580c 100%); box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4); display: flex; align-items: center; justify-content: center; transition: transform 0.2s, box-shadow 0.2s;';
     button.onmouseover = function() {
       button.style.transform = 'scale(1.05)';
       button.style.boxShadow = '0 6px 25px rgba(245, 158, 11, 0.5)';
@@ -44,7 +81,7 @@
   function createIframe() {
     iframe = document.createElement('iframe');
     iframe.id = IFRAME_ID;
-    iframe.src = BLUETAO_URL + '/embed';
+    iframe.src = getEmbedUrl();
     iframe.style.cssText = 'width: 400px; height: 550px; border: none; border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); display: none; background: #1a1612;';
     iframe.allow = 'clipboard-write';
     container.insertBefore(iframe, container.firstChild);
@@ -107,6 +144,10 @@
   window.BlueTAO = {
     open: function() { if (!isOpen) toggleChat(); },
     close: function() { if (isOpen) toggleChat(); },
-    toggle: toggleChat
+    toggle: toggleChat,
+    setContext: function(context) { 
+      options.context = context;
+      if (iframe) iframe.src = getEmbedUrl();
+    }
   };
 })();
