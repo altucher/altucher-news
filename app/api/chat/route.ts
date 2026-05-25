@@ -10,6 +10,18 @@ import { getMessageLimit } from '@/lib/products'
 
 export const maxDuration = 300 // 5 minutes for slow Chutes API
 
+// CORS headers for embed widget
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+// Handle OPTIONS for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, { headers: corsHeaders })
+}
+
 // Fallback model when Chutes is unavailable (via Vercel AI Gateway)
 const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 
