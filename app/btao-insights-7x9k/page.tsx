@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe } from 'lucide-react'
+import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -121,7 +121,7 @@ export default function AnalyticsPage() {
               {data?.summary.totalQueries.toLocaleString() || 0}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              {data?.summary.totalChatQueries?.toLocaleString() || 0} chat + {data?.summary.totalImageGenerations?.toLocaleString() || 0} images
+              {data?.summary.totalChatQueries?.toLocaleString() || 0} chat + {data?.summary.totalImageGenerations?.toLocaleString() || 0} images + {data?.summary.totalAIDetections?.toLocaleString() || 0} detections
             </p>
           </div>
 
@@ -134,6 +134,18 @@ export default function AnalyticsPage() {
             </div>
             <p className="text-3xl font-semibold text-foreground">
               {data?.summary.totalImageGenerations.toLocaleString() || 0}
+            </p>
+          </div>
+
+          <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-cyan-500/10 rounded-lg">
+                <Eye className="w-5 h-5 text-cyan-500" />
+              </div>
+              <span className="text-sm text-muted-foreground">AI Detections</span>
+            </div>
+            <p className="text-3xl font-semibold text-foreground">
+              {data?.summary.totalAIDetections?.toLocaleString() || 0}
             </p>
           </div>
 

@@ -1,6 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+// Lazy initialization to avoid build-time errors
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    return null
+  }
+  return createClient(url, key)
+}
+
+// Track analytics event
+async function trackDetectEvent(result: { isAI: boolean; confidence: number } | null, country?: string, city?: string) {
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    if (!supabaseAdmin) return
+    
+    await supabaseAdmin.from('analytics_events').insert({
+      event_type: 'ai_detection',
+      prompt: result ? `AI: ${result.isAI}, Confidence: ${(result.confidence * 100).toFixed(1)}%` : 'Detection failed',
+      model: 'bitmind',
+      cost_estimate: 0.01,
+      country,
+      city,
+    })
+  } catch (e) {
+    console.log('[Analytics] Could not track detect event:', e)
+  }
+}
 
 export async function POST(req: NextRequest) {
+  // Extract geolocation from Vercel headers
+  const country = req.headers.get('x-vercel-ip-country') || undefined
+  const city = req.headers.get('x-vercel-ip-city') || undefined
+  
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -55,6 +89,9 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json()
+    
+    // Track successful detection
+    trackDetectEvent({ isAI: data.isAI, confidence: data.confidence }, country, city)
     
     return NextResponse.json({
       isAI: data.isAI,
