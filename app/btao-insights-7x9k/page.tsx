@@ -115,10 +115,13 @@ export default function AnalyticsPage() {
               <div className="p-2 bg-primary/10 rounded-lg">
                 <MessageSquare className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-sm text-muted-foreground">Total Queries</span>
+              <span className="text-sm text-muted-foreground">Total Queries (All Time)</span>
             </div>
             <p className="text-3xl font-semibold text-foreground">
               {data?.summary.totalQueries.toLocaleString() || 0}
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              {data?.summary.totalChatQueries?.toLocaleString() || 0} chat + {data?.summary.totalImageGenerations?.toLocaleString() || 0} images
             </p>
           </div>
 
