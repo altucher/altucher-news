@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw } from 'lucide-react'
+import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -162,6 +162,24 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
+        {/* Top Countries */}
+        {data?.topCountries && data.topCountries.length > 0 && (
+          <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6 mb-8">
+            <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-primary" />
+              Top Countries
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {data.topCountries.map((item: { country: string; count: number }) => (
+                <div key={item.country} className="flex items-center justify-between p-3 bg-background/50 rounded-lg">
+                  <span className="text-foreground font-medium">{item.country}</span>
+                  <span className="text-muted-foreground">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Cost Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6">
@@ -262,7 +280,7 @@ export default function AnalyticsPage() {
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Time</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Prompt</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Tokens</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Location</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Cost</th>
                 </tr>
               </thead>
@@ -288,8 +306,8 @@ export default function AnalyticsPage() {
                     <td className="py-3 px-4 text-sm text-foreground max-w-xs truncate">
                       {event.prompt || '-'}
                     </td>
-                    <td className="py-3 px-4 text-sm text-foreground text-right">
-                      {event.tokensUsed?.toLocaleString() || '-'}
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                      {event.city && event.country ? `${event.city}, ${event.country}` : event.country || '-'}
                     </td>
                     <td className="py-3 px-4 text-sm text-foreground text-right">
                       ${event.costEstimate || '-'}
