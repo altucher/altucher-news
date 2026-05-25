@@ -691,7 +691,7 @@ export default function ChatInterface() {
           {user ? (
             <div className="flex items-center gap-3">
               <Link href="/developers">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hidden sm:flex">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
                   Embed
                 </Button>
@@ -709,7 +709,7 @@ export default function ChatInterface() {
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/developers">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground hidden sm:flex">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
                   Embed
                 </Button>
