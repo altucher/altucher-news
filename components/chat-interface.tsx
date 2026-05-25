@@ -438,10 +438,6 @@ export default function ChatInterface() {
   }
 
   const suggestions = [
-    { icon: Pencil, label: 'Write content' },
-    { icon: Lightbulb, label: 'Brainstorm ideas' },
-    { icon: Code, label: 'Write code' },
-    { icon: Search, label: 'Research a topic' },
     { icon: Sparkles, label: 'Surprise me' },
   ]
 
