@@ -190,10 +190,6 @@ export default function LoginPage() {
             </svg>
             {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
           </Button>
-          
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            Google sign-in requires additional setup. Use email for now.
-          </p>
         </div>
       </div>
     </div>
