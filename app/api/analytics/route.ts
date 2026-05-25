@@ -36,18 +36,18 @@ export async function GET() {
       created_at: string
     }> = []
     
-    try {
-      const { data: events } = await supabaseAdmin
-        .from('analytics_events')
-        .select('*')
-        .order('created_at', { ascending: false })
-      
-      if (events) {
-        analyticsEvents = events
-      }
-    } catch {
-      // Table may not exist yet
-      console.log('[Analytics] analytics_events table not found, using basic stats')
+    const { data: events, error: eventsError } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10000)
+    
+    if (eventsError) {
+      console.error('[Analytics] analytics_events query error:', eventsError)
+    }
+    
+    if (events) {
+      analyticsEvents = events
     }
 
     // Calculate image generation count and costs from events
