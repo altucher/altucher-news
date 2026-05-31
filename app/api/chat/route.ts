@@ -60,51 +60,68 @@ async function trackAnalyticsEvent(
   }
 }
 
-// Web search function using Google News RSS
+// Web search function using Desearch (Bittensor SN22)
 async function searchWeb(query: string): Promise<string> {
-  const results: string[] = []
+  const apiKey = process.env.DESEARCH_API_KEY
+  
+  if (!apiKey) {
+    console.log('[v0] Desearch API key not set, falling back to basic search')
+    return ''
+  }
   
   try {
-    // For general news queries, use the top stories feed instead of search
-    const isGeneralNews = query.toLowerCase().includes('news') && 
-      (query.toLowerCase().includes('today') || query.toLowerCase().includes('headlines'))
-    
-    const url = isGeneralNews 
-      ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'  // Top stories
-      : `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
-    
-    const newsResponse = await fetch(url, { 
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BlueTAO/1.0)' } 
+    // Use Desearch AI Search for comprehensive results
+    const response = await fetch('https://api.desearch.ai/v1/ai_search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        query: query,
+        model: 'NOVA',
+        date_filter: 'w', // Past week for fresh results
+        streaming: false,
+        result_type: 'ai_search'
+      })
     })
     
-    if (newsResponse.ok) {
-      const newsText = await newsResponse.text()
-      const itemMatches = newsText.match(/<item>[\s\S]*?<\/item>/g)
-      
-      if (itemMatches && itemMatches.length > 0) {
-        const headlines = itemMatches.slice(0, 10).map(item => {
-          const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)
-          const sourceMatch = item.match(/<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/)
-          
-          let title = titleMatch ? titleMatch[1].trim().replace(/<!\[CDATA\[|\]\]>/g, '').trim() : ''
-          let source = sourceMatch ? sourceMatch[1].trim().replace(/<!\[CDATA\[|\]\]>/g, '').trim() : ''
-          
-          if (title) {
-            return `• ${title}${source ? ` (${source})` : ''}`
-          }
-          return ''
-        }).filter(h => h.length > 3)
-        
-        if (headlines.length > 0) {
-          results.push(headlines.join('\n'))
-        }
-      }
+    if (!response.ok) {
+      console.log('[v0] Desearch error:', response.status, await response.text())
+      return ''
     }
+    
+    const data = await response.json()
+    
+    // Format results
+    const results: string[] = []
+    
+    // Add AI summary if available
+    if (data.summary || data.answer) {
+      results.push(data.summary || data.answer)
+    }
+    
+    // Add source links
+    if (data.sources && data.sources.length > 0) {
+      const sources = data.sources.slice(0, 8).map((s: { title: string; url: string; snippet?: string }) => 
+        `• ${s.title}${s.snippet ? `: ${s.snippet}` : ''}`
+      ).join('\n')
+      results.push('\nSources:\n' + sources)
+    }
+    
+    // Fallback to web_links if no sources
+    if (data.web_links && data.web_links.length > 0 && results.length === 0) {
+      const links = data.web_links.slice(0, 8).map((l: { title: string; snippet?: string }) => 
+        `• ${l.title}${l.snippet ? `: ${l.snippet}` : ''}`
+      ).join('\n')
+      results.push(links)
+    }
+    
+    return results.join('\n\n')
   } catch (e) {
-    console.log('[v0] Google News error:', e)
+    console.log('[v0] Desearch error:', e)
+    return ''
   }
-
-  return results.length > 0 ? results.join('\n\n') : ''
 }
 
 // Check if the message is specifically asking about news/current events
@@ -292,6 +309,7 @@ export async function POST(req: Request) {
 
 ABOUT YOU:
 - You are powered by DeepSeek V3.2, a large language model running on Bittensor Subnet 64 (Chutes)
+- Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
 - You are NOT ChatGPT, Claude, or any other centralized AI - you run on decentralized infrastructure
 - BlueTAO is a front end to Bittensor, allowing users to access decentralized AI
