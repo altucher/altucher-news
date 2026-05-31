@@ -69,7 +69,38 @@ async function searchWeb(query: string): Promise<string> {
     return ''
   }
   
+  const results: string[] = []
+  
+  // Check if this is a Twitter/X specific query
+  const isTwitterQuery = /twitter|tweet|x\.com|@\w+|#\w+/i.test(query)
+  
   try {
+    // If Twitter query, also search X
+    if (isTwitterQuery) {
+      const xResponse = await fetch('https://api.desearch.ai/v1/x_search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          query: query.replace(/twitter|tweet|on x/gi, '').trim(),
+          sort: 'relevance',
+          count: 10
+        })
+      })
+      
+      if (xResponse.ok) {
+        const xData = await xResponse.json()
+        if (xData.tweets && xData.tweets.length > 0) {
+          const tweets = xData.tweets.slice(0, 5).map((t: { user?: { username?: string }; text?: string; created_at?: string }) => 
+            `@${t.user?.username || 'unknown'}: ${t.text || ''}`
+          ).join('\n\n')
+          results.push('From X/Twitter:\n' + tweets)
+        }
+      }
+    }
+    
     // Use Desearch AI Search for comprehensive results
     const response = await fetch('https://api.desearch.ai/v1/ai_search', {
       method: 'POST',
@@ -88,13 +119,10 @@ async function searchWeb(query: string): Promise<string> {
     
     if (!response.ok) {
       console.log('[v0] Desearch error:', response.status, await response.text())
-      return ''
+      return results.join('\n\n')
     }
     
     const data = await response.json()
-    
-    // Format results
-    const results: string[] = []
     
     // Add AI summary if available
     if (data.summary || data.answer) {
@@ -120,7 +148,7 @@ async function searchWeb(query: string): Promise<string> {
     return results.join('\n\n')
   } catch (e) {
     console.log('[v0] Desearch error:', e)
-    return ''
+    return results.join('\n\n')
   }
 }
 
