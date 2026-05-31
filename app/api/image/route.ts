@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Chutes Image API (Bittensor SN64) with DreamShaper XL 1.0
+// Chutes Image API (Bittensor SN64) with Stable Diffusion XL
 const CHUTES_IMAGE_API = 'https://image.chutes.ai/generate'
-const DREAMSHAPER_MODEL = 'Lykon/dreamshaper-xl-1-0'
+const SDXL_MODEL = 'stabilityai/stable-diffusion-xl-base-1.0'
 
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
 
-    console.log('[Image Gen] Generating image via Chutes DreamShaper XL for prompt:', prompt.substring(0, 50))
+    console.log('[Image Gen] Generating image via Chutes SDXL for prompt:', prompt.substring(0, 50))
 
     const response = await fetch(CHUTES_IMAGE_API, {
       method: 'POST',
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: DREAMSHAPER_MODEL,
+        model: SDXL_MODEL,
         prompt: prompt,
         negative_prompt: 'blur, distortion, low quality, ugly, deformed',
         guidance_scale: 7.5,
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     console.log('[Image Gen] Success, generated image size:', imageBuffer.byteLength)
 
     // Track the image generation event
-    await trackEvent('image_generation', prompt, DREAMSHAPER_MODEL, 0.02, location)
+    await trackEvent('image_generation', prompt, SDXL_MODEL, 0.02, location)
 
     return NextResponse.json({
       success: true,
