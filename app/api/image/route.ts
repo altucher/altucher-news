@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Chutes Image API (Bittensor SN64) with Stable Diffusion XL
-const CHUTES_IMAGE_API = 'https://image.chutes.ai/generate'
-const SDXL_MODEL = 'stabilityai/stable-diffusion-xl-base-1.0'
+// Fal.ai API for image generation (FLUX schnell - fast and high quality)
+const FAL_API_URL = 'https://fal.run/fal-ai/flux/schnell'
+const FAL_MODEL = 'fal-ai/flux/schnell'
 
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
@@ -59,47 +59,58 @@ export async function POST(req: Request) {
       )
     }
 
-    const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
+    const apiKey = process.env.FAL_KEY
+    
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Image generation is temporarily unavailable. FAL_KEY not configured.' },
+        { status: 503 }
+      )
+    }
 
-    console.log('[Image Gen] Generating image via Chutes SDXL for prompt:', prompt.substring(0, 50))
+    console.log('[Image Gen] Generating image via Fal.ai FLUX schnell for prompt:', prompt.substring(0, 50))
 
-    const response = await fetch(CHUTES_IMAGE_API, {
+    const response = await fetch(FAL_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Key ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: SDXL_MODEL,
         prompt: prompt,
-        negative_prompt: 'blur, distortion, low quality, ugly, deformed',
-        guidance_scale: 7.5,
-        width: 1024,
-        height: 1024,
-        num_inference_steps: 25,
+        image_size: 'landscape_16_9',
+        num_inference_steps: 4,
+        num_images: 1,
+        enable_safety_checker: false,
       }),
     })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('[Image Gen] Chutes API error:', response.status, errorText)
+      console.error('[Image Gen] Fal.ai API error:', response.status, errorText)
       return NextResponse.json(
         { error: `Image generation failed: ${errorText.substring(0, 200)}` },
         { status: response.status }
       )
     }
 
-    // The API returns the raw JPEG image
-    const imageBuffer = await response.arrayBuffer()
+    const data = await response.json()
     
-    // Convert to base64 data URL
-    const base64 = Buffer.from(imageBuffer).toString('base64')
-    const imageUrl = `data:image/jpeg;base64,${base64}`
+    // Fal.ai returns an object with images array containing URLs
+    const imageUrl = data.images?.[0]?.url
+    
+    if (!imageUrl) {
+      console.error('[Image Gen] No image URL in response:', data)
+      return NextResponse.json(
+        { error: 'No image generated' },
+        { status: 500 }
+      )
+    }
 
-    console.log('[Image Gen] Success, generated image size:', imageBuffer.byteLength)
+    console.log('[Image Gen] Success, generated image URL:', imageUrl.substring(0, 50))
 
     // Track the image generation event
-    await trackEvent('image_generation', prompt, SDXL_MODEL, 0.02, location)
+    await trackEvent('image_generation', prompt, FAL_MODEL, 0.003, location)
 
     return NextResponse.json({
       success: true,
