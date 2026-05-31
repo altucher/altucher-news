@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Chutes Image API (Bittensor SN64) with Stable Diffusion XL
-const CHUTES_IMAGE_API = 'https://image.chutes.ai/generate'
-const SDXL_MODEL = 'stabilityai/stable-diffusion-xl-base-1.0'
+// Z Image Turbo on Chutes (Bittensor SN64) - Primary
+const CHUTES_Z_IMAGE_API = 'https://chutes-z-image-turbo.chutes.ai/generate'
+
+// Fal.ai FLUX schnell - Fallback
+const FAL_API_URL = 'https://fal.run/fal-ai/flux/schnell'
 
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
@@ -42,6 +44,88 @@ async function trackEvent(
   }
 }
 
+// Generate image using Chutes Z Image Turbo
+async function generateWithChutes(prompt: string, apiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+  try {
+    console.log('[Image Gen] Trying Chutes Z Image Turbo...')
+    
+    const response = await fetch(CHUTES_Z_IMAGE_API, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Image Gen] Chutes API error:', response.status, errorText.substring(0, 200))
+      return { success: false, error: `Chutes error: ${response.status}` }
+    }
+
+    // Z Image Turbo returns PNG binary directly
+    const imageBuffer = await response.arrayBuffer()
+    
+    if (imageBuffer.byteLength < 1000) {
+      console.error('[Image Gen] Chutes returned too small response, likely error')
+      return { success: false, error: 'Invalid image response' }
+    }
+
+    // Convert to base64 data URL
+    const base64 = Buffer.from(imageBuffer).toString('base64')
+    const imageUrl = `data:image/png;base64,${base64}`
+    
+    console.log('[Image Gen] Chutes Z Image Turbo success, image size:', imageBuffer.byteLength)
+    return { success: true, imageUrl }
+  } catch (e) {
+    console.error('[Image Gen] Chutes error:', e)
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+  }
+}
+
+// Generate image using Fal.ai FLUX (fallback)
+async function generateWithFal(prompt: string, apiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+  try {
+    console.log('[Image Gen] Trying Fal.ai FLUX schnell (fallback)...')
+    
+    const response = await fetch(FAL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        image_size: 'landscape_16_9',
+        num_inference_steps: 4,
+        num_images: 1,
+        enable_safety_checker: false,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Image Gen] Fal.ai API error:', response.status, errorText.substring(0, 200))
+      return { success: false, error: `Fal error: ${response.status}` }
+    }
+
+    const data = await response.json()
+    const imageUrl = data.images?.[0]?.url
+    
+    if (!imageUrl) {
+      console.error('[Image Gen] No image URL in Fal response:', data)
+      return { success: false, error: 'No image in response' }
+    }
+
+    console.log('[Image Gen] Fal.ai FLUX success')
+    return { success: true, imageUrl }
+  } catch (e) {
+    console.error('[Image Gen] Fal error:', e)
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+  }
+}
+
 export async function POST(req: Request) {
   try {
     // Extract geolocation from Vercel headers
@@ -59,52 +143,50 @@ export async function POST(req: Request) {
       )
     }
 
-    const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
-
-    console.log('[Image Gen] Generating image via Chutes SDXL for prompt:', prompt.substring(0, 50))
-
-    const response = await fetch(CHUTES_IMAGE_API, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: SDXL_MODEL,
-        prompt: prompt,
-        negative_prompt: 'blur, distortion, low quality, ugly, deformed',
-        guidance_scale: 7.5,
-        width: 1024,
-        height: 1024,
-        num_inference_steps: 25,
-      }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[Image Gen] Chutes API error:', response.status, errorText)
+    const chutesKey = process.env.CHUTES_API_KEY
+    const falKey = process.env.FAL_KEY
+    
+    if (!chutesKey && !falKey) {
       return NextResponse.json(
-        { error: `Image generation failed: ${errorText.substring(0, 200)}` },
-        { status: response.status }
+        { error: 'Image generation is temporarily unavailable. No API keys configured.' },
+        { status: 503 }
       )
     }
 
-    // The API returns the raw JPEG image
-    const imageBuffer = await response.arrayBuffer()
-    
-    // Convert to base64 data URL
-    const base64 = Buffer.from(imageBuffer).toString('base64')
-    const imageUrl = `data:image/jpeg;base64,${base64}`
+    let result: { success: boolean; imageUrl?: string; error?: string } = { success: false }
+    let model = 'unknown'
 
-    console.log('[Image Gen] Success, generated image size:', imageBuffer.byteLength)
+    // Try Chutes Z Image Turbo first (decentralized, on Bittensor)
+    if (chutesKey) {
+      result = await generateWithChutes(prompt, chutesKey)
+      if (result.success) {
+        model = 'chutes/z-image-turbo'
+      }
+    }
+
+    // Fallback to Fal.ai FLUX if Chutes failed
+    if (!result.success && falKey) {
+      result = await generateWithFal(prompt, falKey)
+      if (result.success) {
+        model = 'fal-ai/flux/schnell'
+      }
+    }
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || 'Image generation failed' },
+        { status: 500 }
+      )
+    }
 
     // Track the image generation event
-    await trackEvent('image_generation', prompt, SDXL_MODEL, 0.02, location)
+    await trackEvent('image_generation', prompt, model, model.includes('chutes') ? 0.01 : 0.003, location)
 
     return NextResponse.json({
       success: true,
-      imageUrl,
+      imageUrl: result.imageUrl,
       prompt,
+      model,
     })
   } catch (error) {
     console.error('[Image Gen] Error:', error)
