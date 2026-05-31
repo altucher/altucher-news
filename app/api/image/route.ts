@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Fal.ai API for image generation (FLUX schnell - fast and high quality)
+// Z Image Turbo on Chutes (Bittensor SN64) - Primary
+const CHUTES_Z_IMAGE_API = 'https://chutes-z-image-turbo.chutes.ai/generate'
+
+// Fal.ai FLUX schnell - Fallback
 const FAL_API_URL = 'https://fal.run/fal-ai/flux/schnell'
-const FAL_MODEL = 'fal-ai/flux/schnell'
 
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
@@ -42,34 +44,51 @@ async function trackEvent(
   }
 }
 
-export async function POST(req: Request) {
+// Generate image using Chutes Z Image Turbo
+async function generateWithChutes(prompt: string, apiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
   try {
-    // Extract geolocation from Vercel headers
-    const country = req.headers.get('x-vercel-ip-country') || undefined
-    const city = req.headers.get('x-vercel-ip-city') || undefined
-    const region = req.headers.get('x-vercel-ip-country-region') || undefined
-    const location = { country, city, region }
-
-    const { prompt } = await req.json()
-
-    if (!prompt || typeof prompt !== 'string') {
-      return NextResponse.json(
-        { error: 'Prompt is required' },
-        { status: 400 }
-      )
-    }
-
-    const apiKey = process.env.FAL_KEY
+    console.log('[Image Gen] Trying Chutes Z Image Turbo...')
     
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Image generation is temporarily unavailable. FAL_KEY not configured.' },
-        { status: 503 }
-      )
+    const response = await fetch(CHUTES_Z_IMAGE_API, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Image Gen] Chutes API error:', response.status, errorText.substring(0, 200))
+      return { success: false, error: `Chutes error: ${response.status}` }
     }
 
-    console.log('[Image Gen] Generating image via Fal.ai FLUX schnell for prompt:', prompt.substring(0, 50))
+    // Z Image Turbo returns PNG binary directly
+    const imageBuffer = await response.arrayBuffer()
+    
+    if (imageBuffer.byteLength < 1000) {
+      console.error('[Image Gen] Chutes returned too small response, likely error')
+      return { success: false, error: 'Invalid image response' }
+    }
 
+    // Convert to base64 data URL
+    const base64 = Buffer.from(imageBuffer).toString('base64')
+    const imageUrl = `data:image/png;base64,${base64}`
+    
+    console.log('[Image Gen] Chutes Z Image Turbo success, image size:', imageBuffer.byteLength)
+    return { success: true, imageUrl }
+  } catch (e) {
+    console.error('[Image Gen] Chutes error:', e)
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+  }
+}
+
+// Generate image using Fal.ai FLUX (fallback)
+async function generateWithFal(prompt: string, apiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+  try {
+    console.log('[Image Gen] Trying Fal.ai FLUX schnell (fallback)...')
+    
     const response = await fetch(FAL_API_URL, {
       method: 'POST',
       headers: {
@@ -87,35 +106,87 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('[Image Gen] Fal.ai API error:', response.status, errorText)
-      return NextResponse.json(
-        { error: `Image generation failed: ${errorText.substring(0, 200)}` },
-        { status: response.status }
-      )
+      console.error('[Image Gen] Fal.ai API error:', response.status, errorText.substring(0, 200))
+      return { success: false, error: `Fal error: ${response.status}` }
     }
 
     const data = await response.json()
-    
-    // Fal.ai returns an object with images array containing URLs
     const imageUrl = data.images?.[0]?.url
     
     if (!imageUrl) {
-      console.error('[Image Gen] No image URL in response:', data)
+      console.error('[Image Gen] No image URL in Fal response:', data)
+      return { success: false, error: 'No image in response' }
+    }
+
+    console.log('[Image Gen] Fal.ai FLUX success')
+    return { success: true, imageUrl }
+  } catch (e) {
+    console.error('[Image Gen] Fal error:', e)
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    // Extract geolocation from Vercel headers
+    const country = req.headers.get('x-vercel-ip-country') || undefined
+    const city = req.headers.get('x-vercel-ip-city') || undefined
+    const region = req.headers.get('x-vercel-ip-country-region') || undefined
+    const location = { country, city, region }
+
+    const { prompt } = await req.json()
+
+    if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json(
-        { error: 'No image generated' },
+        { error: 'Prompt is required' },
+        { status: 400 }
+      )
+    }
+
+    const chutesKey = process.env.CHUTES_API_KEY
+    const falKey = process.env.FAL_KEY
+    
+    if (!chutesKey && !falKey) {
+      return NextResponse.json(
+        { error: 'Image generation is temporarily unavailable. No API keys configured.' },
+        { status: 503 }
+      )
+    }
+
+    let result: { success: boolean; imageUrl?: string; error?: string } = { success: false }
+    let model = 'unknown'
+
+    // Try Chutes Z Image Turbo first (decentralized, on Bittensor)
+    if (chutesKey) {
+      result = await generateWithChutes(prompt, chutesKey)
+      if (result.success) {
+        model = 'chutes/z-image-turbo'
+      }
+    }
+
+    // Fallback to Fal.ai FLUX if Chutes failed
+    if (!result.success && falKey) {
+      result = await generateWithFal(prompt, falKey)
+      if (result.success) {
+        model = 'fal-ai/flux/schnell'
+      }
+    }
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || 'Image generation failed' },
         { status: 500 }
       )
     }
 
-    console.log('[Image Gen] Success, generated image URL:', imageUrl.substring(0, 50))
-
     // Track the image generation event
-    await trackEvent('image_generation', prompt, FAL_MODEL, 0.003, location)
+    await trackEvent('image_generation', prompt, model, model.includes('chutes') ? 0.01 : 0.003, location)
 
     return NextResponse.json({
       success: true,
-      imageUrl,
+      imageUrl: result.imageUrl,
       prompt,
+      model,
     })
   } catch (error) {
     console.error('[Image Gen] Error:', error)
