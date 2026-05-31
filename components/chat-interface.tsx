@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { ResearchAgent } from '@/components/research-agent'
+import { MemoryPanel } from '@/components/memory-panel'
 import Link from 'next/link'
 
 interface UsageInfo {
@@ -74,6 +75,7 @@ export default function ChatInterface() {
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showResearchAgent, setShowResearchAgent] = useState(false)
+  const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -686,6 +688,15 @@ export default function ChatInterface() {
           </div>
           {user ? (
             <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowMemoryPanel(true)}
+                className="text-violet-400 hover:text-violet-300 flex"
+              >
+                <Brain className="w-4 h-4 mr-1" />
+                Memory
+              </Button>
               <Link href="/detect">
                 <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
                   <Sparkles className="w-4 h-4 mr-1" />
@@ -1190,6 +1201,12 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
           onClose={() => setShowResearchAgent(false)}
         />
       )}
+
+      {/* Memory Panel Modal */}
+      <MemoryPanel 
+        isOpen={showMemoryPanel} 
+        onClose={() => setShowMemoryPanel(false)} 
+      />
     </div>
   )
 }
