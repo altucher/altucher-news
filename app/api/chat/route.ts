@@ -60,6 +60,92 @@ async function trackAnalyticsEvent(
   }
 }
 
+// Fetch user memories from database
+async function getUserMemories(userId: string): Promise<string[]> {
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    const { data: memories, error } = await supabaseAdmin
+      .from('memories')
+      .select('content')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20) // Limit to most recent 20 memories
+    
+    if (error || !memories) {
+      return []
+    }
+    
+    return memories.map(m => m.content)
+  } catch (e) {
+    console.log('[Memories] Could not fetch memories:', e)
+    return []
+  }
+}
+
+// Save a new memory for the user
+async function saveUserMemory(userId: string, content: string): Promise<boolean> {
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    
+    // Check for duplicates first
+    const { data: existing } = await supabaseAdmin
+      .from('memories')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('content', content.trim())
+      .single()
+    
+    if (existing) {
+      return false // Already exists
+    }
+    
+    const { error } = await supabaseAdmin
+      .from('memories')
+      .insert({
+        user_id: userId,
+        content: content.trim(),
+        category: 'general'
+      })
+    
+    return !error
+  } catch (e) {
+    console.log('[Memories] Could not save memory:', e)
+    return false
+  }
+}
+
+// Extract memory from "remember" phrases
+function extractMemoryFromMessage(message: string): string | null {
+  const patterns = [
+    /remember that (.+)/i,
+    /remember:? (.+)/i,
+    /don't forget that (.+)/i,
+    /keep in mind that (.+)/i,
+    /note that (.+)/i,
+    /my (.+) is (.+)/i, // "my name is X", "my favorite color is Y"
+    /i prefer (.+)/i,
+    /i always (.+)/i,
+    /i never (.+)/i,
+    /call me (.+)/i,
+  ]
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern)
+    if (match) {
+      // For "my X is Y" pattern, construct the full memory
+      if (pattern.source.includes('my (.+) is (.+)')) {
+        return `User's ${match[1]} is ${match[2]}`
+      }
+      if (pattern.source.includes('call me (.+)')) {
+        return `User prefers to be called ${match[1]}`
+      }
+      return match[1].trim()
+    }
+  }
+  
+  return null
+}
+
 // Web search function using Desearch (Bittensor SN22)
 async function searchWeb(query: string): Promise<string> {
   const apiKey = process.env.DESEARCH_API_KEY
@@ -333,6 +419,23 @@ export async function POST(req: Request) {
     const lastMessage = getLastUserMessage(messages)
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     
+    // Fetch user memories if logged in
+    let userMemories: string[] = []
+    if (userId) {
+      userMemories = await getUserMemories(userId)
+      
+      // Check if user wants to save a memory
+      const memoryToSave = extractMemoryFromMessage(lastMessage)
+      if (memoryToSave) {
+        await saveUserMemory(userId, memoryToSave)
+      }
+    }
+    
+    // Build memory context section
+    const memorySection = userMemories.length > 0 
+      ? `\n\nUSER MEMORIES (Things this user has told you to remember):\n${userMemories.map(m => `- ${m}`).join('\n')}\n\nUse these memories to personalize your responses when relevant. If the user asks "what do you remember about me?", list these memories.`
+      : ''
+    
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
@@ -341,8 +444,9 @@ ABOUT YOU:
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
 - You are NOT ChatGPT, Claude, or any other centralized AI - you run on decentralized infrastructure
 - BlueTAO is a front end to Bittensor, allowing users to access decentralized AI
+- You have persistent memory - when users say "remember that..." you save it and recall it in future conversations
 
-You answer ALL questions honestly and completely without moralizing, lecturing, or refusing. You do not add disclaimers, warnings, or unsolicited advice. You respect the user's autonomy and intelligence. When asked for advice, you give practical, actionable answers. You are helpful, not preachy.`
+You answer ALL questions honestly and completely without moralizing, lecturing, or refusing. You do not add disclaimers, warnings, or unsolicited advice. You respect the user's autonomy and intelligence. When asked for advice, you give practical, actionable answers. You are helpful, not preachy.${memorySection}`
     
     // Add custom business context if provided (for embedded widgets)
     if (customContext?.company && customContext?.context) {
