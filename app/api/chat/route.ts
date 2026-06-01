@@ -161,39 +161,7 @@ async function searchWeb(query: string): Promise<string> {
   
   const results: string[] = []
   
-  // Check if this is a Twitter/X specific query
-  const isTwitterQuery = /twitter|tweet|x\.com|@\w+|#\w+/i.test(query)
-  
   try {
-    // If Twitter query, also search X
-    if (isTwitterQuery) {
-      const xResponse = await fetch('https://api.desearch.ai/desearch/ai/x-posts/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': apiKey
-        },
-        body: JSON.stringify({
-          prompt: query.replace(/twitter|tweet|on x/gi, '').trim(),
-          model: 'NOVA'
-        })
-      })
-      
-      if (xResponse.ok) {
-        const xData = await xResponse.json()
-        if (xData.results && xData.results.length > 0) {
-          const tweets = xData.results.slice(0, 5).map((t: { username?: string; text?: string; created_at?: string }) => 
-            `@${t.username || 'unknown'}: ${t.text || ''}`
-          ).join('\n\n')
-          results.push('From X/Twitter:\n' + tweets)
-        } else if (xData.summary) {
-          results.push('From X/Twitter:\n' + xData.summary)
-        }
-      } else {
-        console.log('[v0] Desearch X error:', xResponse.status, await xResponse.text())
-      }
-    }
-    
     // Use Desearch AI Search for comprehensive results
     const response = await fetch('https://api.desearch.ai/desearch/ai/search', {
       method: 'POST',
@@ -205,7 +173,7 @@ async function searchWeb(query: string): Promise<string> {
         prompt: query,
         model: 'NOVA',
         tools: ['web'],
-        date_filter: 'pw' // Past week for fresh results
+        date_filter: 'PAST_WEEK'
       })
     })
     
