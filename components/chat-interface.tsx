@@ -1327,6 +1327,16 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
         onClose={() => setShowMemoryPanel(false)} 
       />
 
+      {/* DEBUG: Show if BriefingSetup should be visible */}
+      {showBriefingSetup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'red', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 40, borderRadius: 10 }}>
+            <h1 style={{ fontSize: 24, color: 'black' }}>DEBUG: showBriefingSetup is TRUE!</h1>
+            <button onClick={() => setShowBriefingSetup(false)} style={{ marginTop: 20, padding: '10px 20px' }}>Close</button>
+          </div>
+        </div>
+      )}
+
       {/* Briefing Setup Modal */}
       <BriefingSetup 
         isOpen={showBriefingSetup} 
