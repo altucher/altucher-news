@@ -561,6 +561,7 @@ export default function ChatInterface() {
   return (
     <div className="flex h-screen bg-background">
       {/* Hidden file input - always rendered so ref is available */}
+      {/* Hidden file input - always rendered so ref is available */}
       <input
         type="file"
         ref={fileInputRef}
@@ -969,17 +970,15 @@ export default function ChatInterface() {
 
                 {/* Suggestion Pills */}
                 <div className="flex flex-wrap justify-center gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      window.alert('CLICKED! Setting showBriefingSetup to true')
-                      setShowBriefingSetup(true)
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
-                  >
-                    <Newspaper className="w-4 h-4" />
-                    {showBriefingSetup ? 'MODAL IS OPEN' : 'My Morning Briefing'}
-                  </button>
+                  {user && (
+                    <button
+                      onClick={() => setShowBriefingSetup(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
+                    >
+                      <Newspaper className="w-4 h-4" />
+                      My Morning Briefing
+                    </button>
+                  )}
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
@@ -1326,16 +1325,6 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
         isOpen={showMemoryPanel} 
         onClose={() => setShowMemoryPanel(false)} 
       />
-
-      {/* DEBUG: Show if BriefingSetup should be visible */}
-      {showBriefingSetup && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'red', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'white', padding: 40, borderRadius: 10 }}>
-            <h1 style={{ fontSize: 24, color: 'black' }}>DEBUG: showBriefingSetup is TRUE!</h1>
-            <button onClick={() => setShowBriefingSetup(false)} style={{ marginTop: 20, padding: '10px 20px' }}>Close</button>
-          </div>
-        </div>
-      )}
 
       {/* Briefing Setup Modal */}
       <BriefingSetup 

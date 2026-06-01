@@ -99,13 +99,9 @@ export function BriefingSetup({ isOpen, onClose, onGenerate }: BriefingSetupProp
 
   if (!isOpen) return null
 
-  // DEBUG: Log when component renders with isOpen=true
-  console.log('[v0] BriefingSetup rendering with isOpen=true')
-
   return (
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-red-500/80" 
-      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" 
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-card border border-border rounded-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col shadow-xl">
