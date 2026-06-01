@@ -24,6 +24,8 @@ export function BriefingSetup({ isOpen, onClose, onGenerate }: BriefingSetupProp
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  console.log('[v0] BriefingSetup render, isOpen:', isOpen)
+
   useEffect(() => {
     if (isOpen) {
       fetchTopics()
