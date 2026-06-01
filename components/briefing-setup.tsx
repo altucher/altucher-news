@@ -24,8 +24,6 @@ export function BriefingSetup({ isOpen, onClose, onGenerate }: BriefingSetupProp
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  console.log('[v0] BriefingSetup render, isOpen:', isOpen)
-
   useEffect(() => {
     if (isOpen) {
       fetchTopics()
@@ -102,7 +100,7 @@ export function BriefingSetup({ isOpen, onClose, onGenerate }: BriefingSetupProp
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bg-card border border-border rounded-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
