@@ -979,7 +979,6 @@ export default function ChatInterface() {
                       My Morning Briefing
                     </button>
                   )}
-                  </button>
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
