@@ -811,9 +811,6 @@ export default function ChatInterface() {
                 <Newspaper className="w-4 h-4 mr-1" />
                 Briefing
               </Button>
-                <Newspaper className="w-4 h-4 mr-1" />
-                Briefing
-              </Button>
               <Button 
                 variant="ghost" 
                 size="sm" 
