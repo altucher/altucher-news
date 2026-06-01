@@ -100,12 +100,21 @@ export default function ChatInterface() {
 
   const isLoading = status === 'streaming' || status === 'submitted'
   const [thinkingStatus, setThinkingStatus] = useState<string>('Thinking...')
+  const [thinkingDetails, setThinkingDetails] = useState<string[]>([])
   const [hasStartedStreaming, setHasStartedStreaming] = useState(false)
+  const [bufferedContent, setBufferedContent] = useState<string>('')
+  const [displayedContent, setDisplayedContent] = useState<string>('')
+  const bufferRef = useRef<string>('')
+  const displayIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Dynamic thinking status messages based on user input
   useEffect(() => {
     if (status === 'submitted') {
       setHasStartedStreaming(false)
+      setBufferedContent('')
+      setDisplayedContent('')
+      bufferRef.current = ''
+      
       const lastUserMsg = messages.filter(m => m.role === 'user').pop()
       const userText = lastUserMsg ? (typeof lastUserMsg.content === 'string' ? lastUserMsg.content : (lastUserMsg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || '') : ''
       const lowerText = userText.toLowerCase()
@@ -114,42 +123,86 @@ export default function ChatInterface() {
       const topics = userText.match(/\b(?:about|on|for|regarding)\s+([^?.!,]+)/i)?.[1]?.trim() || 
                      userText.split(' ').slice(0, 5).join(' ')
       
-      // Cycle through thinking phases
+      // More detailed thinking phases with sub-details
       const phases = [
-        'Thinking...',
+        { status: 'Initializing...', details: ['Connecting to Bittensor network', 'Routing to optimal miner'] },
+        { status: 'Understanding your question...', details: [`Analyzing: "${topics.substring(0, 40)}${topics.length > 40 ? '...' : ''}"`, 'Identifying key concepts'] },
         lowerText.includes('news') || lowerText.includes('today') || lowerText.includes('latest') 
-          ? `Searching the web for ${topics}...`
-          : `Analyzing your question about ${topics.substring(0, 30)}...`,
+          ? { status: 'Searching the web...', details: [`Querying Desearch (SN22) for: ${topics.substring(0, 30)}`, 'Gathering recent sources'] }
+          : { status: 'Processing with DeepSeek V3.2...', details: ['Running inference on Chutes (SN64)', 'Generating response'] },
         lowerText.includes('twitter') || lowerText.includes('tweet')
-          ? `Searching Twitter for ${topics}...`
-          : 'Processing information...',
-        'Preparing response...'
+          ? { status: 'Searching Twitter/X...', details: [`Looking for tweets about ${topics.substring(0, 25)}`, 'Analyzing social sentiment'] }
+          : { status: 'Synthesizing information...', details: ['Cross-referencing data', 'Formulating comprehensive answer'] },
+        { status: 'Preparing response...', details: ['Formatting output', 'Almost ready...'] }
       ]
       
       let phaseIndex = 0
-      setThinkingStatus(phases[0])
+      setThinkingStatus(phases[0].status)
+      setThinkingDetails(phases[0].details)
       
       const interval = setInterval(() => {
         phaseIndex = (phaseIndex + 1) % phases.length
-        setThinkingStatus(phases[phaseIndex])
-      }, 1500)
+        setThinkingStatus(phases[phaseIndex].status)
+        setThinkingDetails(phases[phaseIndex].details)
+      }, 2000)
       
       return () => clearInterval(interval)
     }
   }, [status, messages])
 
-  // Detect when actual content starts streaming
+  // Buffer incoming content and display smoothly
   useEffect(() => {
     if (status === 'streaming' && messages.length > 0) {
       const lastMsg = messages[messages.length - 1]
       if (lastMsg.role === 'assistant') {
-        const content = typeof lastMsg.content === 'string' ? lastMsg.content : ''
-        if (content.length > 10) {
+        const content = typeof lastMsg.content === 'string' 
+          ? lastMsg.content 
+          : (lastMsg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
+        
+        // Update buffer with new content
+        bufferRef.current = content
+        
+        // Start display interval if not already running and we have enough content
+        if (content.length > 50 && !hasStartedStreaming) {
           setHasStartedStreaming(true)
+          
+          // Display content in chunks for smooth appearance
+          if (!displayIntervalRef.current) {
+            let displayIndex = 0
+            displayIntervalRef.current = setInterval(() => {
+              const targetLength = bufferRef.current.length
+              if (displayIndex < targetLength) {
+                // Show 3-8 characters at a time for smoother display
+                const chunkSize = Math.min(Math.floor(Math.random() * 6) + 3, targetLength - displayIndex)
+                displayIndex = Math.min(displayIndex + chunkSize, targetLength)
+                setDisplayedContent(bufferRef.current.substring(0, displayIndex))
+              } else {
+                // Keep syncing with buffer
+                setDisplayedContent(bufferRef.current)
+              }
+            }, 20) // 50fps for smooth display
+          }
         }
       }
     }
-  }, [status, messages])
+    
+    // Cleanup when streaming stops
+    if (status === 'ready' || status === 'error') {
+      if (displayIntervalRef.current) {
+        clearInterval(displayIntervalRef.current)
+        displayIntervalRef.current = null
+      }
+      // Ensure final content is displayed
+      setDisplayedContent(bufferRef.current)
+    }
+    
+    return () => {
+      if (displayIntervalRef.current && (status === 'ready' || status === 'error')) {
+        clearInterval(displayIntervalRef.current)
+        displayIntervalRef.current = null
+      }
+    }
+  }, [status, messages, hasStartedStreaming])
 
   // Check auth on mount (but don't redirect)
   useEffect(() => {
@@ -1043,43 +1096,35 @@ export default function ChatInterface() {
                   )}
 {(status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-sky-600" />
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
+                    <Bot className="w-5 h-5 text-white" />
                   </div>
-                  <div className="flex flex-col gap-1 pt-2">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <svg 
-                        className="w-5 h-5 text-sky-500" 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <style>
-                          {`
-                            @keyframes sandFlow {
-                              0%, 100% { transform: translateY(0); opacity: 1; }
-                              50% { transform: translateY(4px); opacity: 0.5; }
-                            }
-                            @keyframes hourglassRotate {
-                              0%, 45% { transform: rotate(0deg); }
-                              50%, 95% { transform: rotate(180deg); }
-                              100% { transform: rotate(360deg); }
-                            }
-                            .hourglass-container { animation: hourglassRotate 3s ease-in-out infinite; transform-origin: center; }
-                            .sand-top { animation: sandFlow 1.5s ease-in-out infinite; }
-                            .sand-bottom { animation: sandFlow 1.5s ease-in-out infinite reverse; }
-                          `}
-                        </style>
-                        <g className="hourglass-container">
-                          <path d="M6 2h12v4l-4 4 4 4v4H6v-4l4-4-4-4V2z" stroke="currentColor" strokeWidth="2" fill="none"/>
-                          <circle className="sand-top" cx="12" cy="6" r="2" fill="currentColor" opacity="0.7"/>
-                          <circle className="sand-bottom" cx="12" cy="16" r="2.5" fill="currentColor" opacity="0.9"/>
-                          <line className="sand-top" x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
-                        </g>
-                      </svg>
-                      <span className="text-sm font-medium transition-all duration-300">{thinkingStatus}</span>
+                  <div className="flex-1 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 rounded-2xl p-4 border border-sky-100 dark:border-sky-800/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="relative">
+                        <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping absolute" />
+                        <div className="w-2 h-2 bg-sky-500 rounded-full" />
+                      </div>
+                      <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">{thinkingStatus}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground/70 ml-7">Powered by Bittensor&apos;s decentralized AI network</span>
+                    <div className="space-y-2 ml-5">
+                      {thinkingDetails.map((detail, i) => (
+                        <div 
+                          key={i} 
+                          className="flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in slide-in-from-left-2 duration-300"
+                          style={{ animationDelay: `${i * 150}ms` }}
+                        >
+                          <div className="w-1 h-1 bg-sky-400 rounded-full" />
+                          <span>{detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-sky-200/50 dark:border-sky-700/50">
+                      <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                        Connected to Bittensor&apos;s decentralized AI network
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
