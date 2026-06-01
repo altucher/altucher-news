@@ -17,6 +17,8 @@ interface BriefingSetupProps {
 }
 
 export function BriefingSetup({ isOpen, onClose, onGenerate }: BriefingSetupProps) {
+  console.log('[v0] BriefingSetup component called, isOpen:', isOpen)
+  
   const [topics, setTopics] = useState<Topic[]>([])
   const [loading, setLoading] = useState(true)
   const [newTopic, setNewTopic] = useState('')
@@ -97,7 +99,12 @@ export function BriefingSetup({ isOpen, onClose, onGenerate }: BriefingSetupProp
     onGenerate()
   }
 
-  if (!isOpen) return null
+  if (!isOpen) {
+    console.log('[v0] BriefingSetup returning null because isOpen is false')
+    return null
+  }
+
+  console.log('[v0] BriefingSetup rendering modal UI')
 
   return (
     <div 
