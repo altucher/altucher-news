@@ -85,12 +85,13 @@ export default function ChatInterface() {
   const router = useRouter()
   const supabase = createClient()
 
-  const { messages, sendMessage, status, setMessages, error, stop } = useChat({
+  const { messages, sendMessage, status, setMessages, error, stop, append } = useChat({
     transport: new DefaultChatTransport({ 
       api: '/api/chat',
       body: user ? { userId: user.id } : undefined,
     }),
     onError: (err) => {
+      console.log('[v0] useChat error:', err)
       // Check for limit exceeded error
       if (err.message?.includes('LIMIT_EXCEEDED') || err.message?.includes('429')) {
         setShowLimitWarning(true)
@@ -396,7 +397,11 @@ export default function ChatInterface() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isLoading) return
+    console.log('[v0] handleSubmit called, input:', input, 'isLoading:', isLoading, 'currentChatId:', currentChatId)
+    if (!input.trim() || isLoading) {
+      console.log('[v0] handleSubmit early return - empty input or loading')
+      return
+    }
     
     const userMessage = input
     setInput('')
@@ -438,6 +443,7 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
+    console.log('[v0] Calling sendMessage with:', messageToSend.substring(0, 100))
     sendMessage({ text: messageToSend })
     
     // Refresh usage after sending
@@ -797,7 +803,10 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowBriefingSetup(true)}
+                onClick={() => {
+                  console.log('[v0] Briefing button clicked, setting showBriefingSetup to true')
+                  setShowBriefingSetup(true)
+                }}
                 className="text-amber-500 hover:text-amber-400 flex"
               >
                 <Newspaper className="w-4 h-4 mr-1" />
@@ -971,7 +980,10 @@ export default function ChatInterface() {
                 <div className="flex flex-wrap justify-center gap-3">
                   {user && (
                     <button
-                      onClick={() => setShowBriefingSetup(true)}
+                      onClick={() => {
+                        console.log('[v0] Morning Briefing chip clicked, setting showBriefingSetup to true')
+                        setShowBriefingSetup(true)
+                      }}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
                     >
                       <Newspaper className="w-4 h-4" />
