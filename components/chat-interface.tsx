@@ -803,8 +803,8 @@ export default function ChatInterface() {
                 Memory
               </Button>
               <Link href="/detect">
-                <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
-                  <Sparkles className="w-4 h-4 mr-1" />
+                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
+                  <Sparkles className="w-4 h-4 mr-1.5" />
                   Is it AI?
                 </Button>
               </Link>
@@ -827,8 +827,8 @@ export default function ChatInterface() {
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/detect">
-                <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
-                  <Sparkles className="w-4 h-4 mr-1" />
+                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
+                  <Sparkles className="w-4 h-4 mr-1.5" />
                   Is it AI?
                 </Button>
               </Link>
