@@ -169,7 +169,7 @@ async function searchWeb(query: string): Promise<string> {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': apiKey
         },
         body: JSON.stringify({
           prompt: query.replace(/twitter|tweet|on x/gi, '').trim(),
@@ -197,7 +197,7 @@ async function searchWeb(query: string): Promise<string> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': apiKey
       },
       body: JSON.stringify({
         prompt: query,
