@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { MemoryPanel } from '@/components/memory-panel'
-import { BriefingSetup } from '@/components/briefing-setup'
 import Link from 'next/link'
 
 interface UsageInfo {
@@ -75,8 +74,6 @@ export default function ChatInterface() {
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
-  const [showBriefingSetup, setShowBriefingSetup] = useState(false)
-  const [generatingBriefing, setGeneratingBriefing] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -798,15 +795,6 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowBriefingSetup(true)}
-                className="text-amber-500 hover:text-amber-400 flex"
-              >
-                <Newspaper className="w-4 h-4 mr-1" />
-                Briefing
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
                 onClick={() => setShowMemoryPanel(true)}
                 className="text-violet-400 hover:text-violet-300 flex"
               >
@@ -970,13 +958,6 @@ export default function ChatInterface() {
 
                 {/* Suggestion Pills */}
                 <div className="flex flex-wrap justify-center gap-3">
-                  <button
-                    onClick={() => setShowBriefingSetup(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
-                  >
-                    <Newspaper className="w-4 h-4" />
-                    Morning Briefing
-                  </button>
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
@@ -1322,42 +1303,6 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
       <MemoryPanel 
         isOpen={showMemoryPanel} 
         onClose={() => setShowMemoryPanel(false)} 
-      />
-
-      {/* Briefing Setup Modal */}
-      <BriefingSetup 
-        isOpen={showBriefingSetup} 
-        onClose={() => setShowBriefingSetup(false)}
-        onGenerate={async () => {
-          setGeneratingBriefing(true)
-          try {
-            const res = await fetch('/api/briefing/generate')
-            if (res.ok) {
-              const data = await res.json()
-              // Inject the briefing as a message
-              append({
-                role: 'user',
-                content: 'Show me my morning briefing'
-              })
-              // Wait a moment then add the response
-              setTimeout(() => {
-                append({
-                  role: 'assistant', 
-                  content: data.briefing
-                })
-              }, 500)
-            } else {
-              const data = await res.json()
-              if (data.needsSetup) {
-                setShowBriefingSetup(true)
-              }
-            }
-          } catch (err) {
-            console.error('Failed to generate briefing:', err)
-          } finally {
-            setGeneratingBriefing(false)
-          }
-        }}
       />
     </div>
   )
