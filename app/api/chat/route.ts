@@ -163,43 +163,45 @@ async function searchWeb(query: string): Promise<string> {
   try {
     // If Twitter query, also search X
     if (isTwitterQuery) {
-      const xResponse = await fetch('https://api.desearch.ai/v1/x_search', {
+      const xResponse = await fetch('https://api.desearch.ai/desearch/ai/x-posts/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          query: query.replace(/twitter|tweet|on x/gi, '').trim(),
-          sort: 'relevance',
-          count: 10
+          prompt: query.replace(/twitter|tweet|on x/gi, '').trim(),
+          model: 'NOVA'
         })
       })
       
       if (xResponse.ok) {
         const xData = await xResponse.json()
-        if (xData.tweets && xData.tweets.length > 0) {
-          const tweets = xData.tweets.slice(0, 5).map((t: { user?: { username?: string }; text?: string; created_at?: string }) => 
-            `@${t.user?.username || 'unknown'}: ${t.text || ''}`
+        if (xData.results && xData.results.length > 0) {
+          const tweets = xData.results.slice(0, 5).map((t: { username?: string; text?: string; created_at?: string }) => 
+            `@${t.username || 'unknown'}: ${t.text || ''}`
           ).join('\n\n')
           results.push('From X/Twitter:\n' + tweets)
+        } else if (xData.summary) {
+          results.push('From X/Twitter:\n' + xData.summary)
         }
+      } else {
+        console.log('[v0] Desearch X error:', xResponse.status, await xResponse.text())
       }
     }
     
     // Use Desearch AI Search for comprehensive results
-    const response = await fetch('https://api.desearch.ai/v1/ai_search', {
+    const response = await fetch('https://api.desearch.ai/desearch/ai/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        query: query,
+        prompt: query,
         model: 'NOVA',
-        date_filter: 'w', // Past week for fresh results
-        streaming: false,
-        result_type: 'ai_search'
+        tools: ['web'],
+        date_filter: 'pw' // Past week for fresh results
       })
     })
     
