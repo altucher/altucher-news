@@ -10,8 +10,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
-import { ResearchAgent } from '@/components/research-agent'
 import { MemoryPanel } from '@/components/memory-panel'
+import { BriefingSetup } from '@/components/briefing-setup'
 import Link from 'next/link'
 
 interface UsageInfo {
@@ -74,8 +74,9 @@ export default function ChatInterface() {
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
-  const [showResearchAgent, setShowResearchAgent] = useState(false)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
+  const [showBriefingSetup, setShowBriefingSetup] = useState(false)
+  const [generatingBriefing, setGeneratingBriefing] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -99,6 +100,111 @@ export default function ChatInterface() {
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
+  const [thinkingStatus, setThinkingStatus] = useState<string>('Thinking...')
+  const [thinkingDetails, setThinkingDetails] = useState<string[]>([])
+  const [hasStartedStreaming, setHasStartedStreaming] = useState(false)
+  const [bufferedContent, setBufferedContent] = useState<string>('')
+  const [displayedContent, setDisplayedContent] = useState<string>('')
+  const bufferRef = useRef<string>('')
+  const displayIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Dynamic thinking status messages based on user input
+  useEffect(() => {
+    if (status === 'submitted') {
+      setHasStartedStreaming(false)
+      setBufferedContent('')
+      setDisplayedContent('')
+      bufferRef.current = ''
+      
+      const lastUserMsg = messages.filter(m => m.role === 'user').pop()
+      const userText = lastUserMsg ? (typeof lastUserMsg.content === 'string' ? lastUserMsg.content : (lastUserMsg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || '') : ''
+      const lowerText = userText.toLowerCase()
+      
+      // Extract key topics for personalized messages
+      const topics = userText.match(/\b(?:about|on|for|regarding)\s+([^?.!,]+)/i)?.[1]?.trim() || 
+                     userText.split(' ').slice(0, 5).join(' ')
+      
+      // More detailed thinking phases with sub-details
+      const phases = [
+        { status: 'Initializing...', details: ['Connecting to Bittensor network', 'Routing to optimal miner'] },
+        { status: 'Understanding your question...', details: [`Analyzing: "${topics.substring(0, 40)}${topics.length > 40 ? '...' : ''}"`, 'Identifying key concepts'] },
+        lowerText.includes('news') || lowerText.includes('today') || lowerText.includes('latest') 
+          ? { status: 'Searching the web...', details: [`Querying Desearch (SN22) for: ${topics.substring(0, 30)}`, 'Gathering recent sources'] }
+          : { status: 'Processing with DeepSeek V3.2...', details: ['Running inference on Chutes (SN64)', 'Generating response'] },
+        lowerText.includes('twitter') || lowerText.includes('tweet')
+          ? { status: 'Searching Twitter/X...', details: [`Looking for tweets about ${topics.substring(0, 25)}`, 'Analyzing social sentiment'] }
+          : { status: 'Synthesizing information...', details: ['Cross-referencing data', 'Formulating comprehensive answer'] },
+        { status: 'Preparing response...', details: ['Formatting output', 'Almost ready...'] }
+      ]
+      
+      let phaseIndex = 0
+      setThinkingStatus(phases[0].status)
+      setThinkingDetails(phases[0].details)
+      
+      const interval = setInterval(() => {
+        phaseIndex = (phaseIndex + 1) % phases.length
+        setThinkingStatus(phases[phaseIndex].status)
+        setThinkingDetails(phases[phaseIndex].details)
+      }, 2000)
+      
+      return () => clearInterval(interval)
+    }
+  }, [status, messages])
+
+  // Buffer incoming content and display smoothly
+  useEffect(() => {
+    if (status === 'streaming' && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1]
+      if (lastMsg.role === 'assistant') {
+        const content = typeof lastMsg.content === 'string' 
+          ? lastMsg.content 
+          : (lastMsg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
+        
+        // Update buffer with new content
+        bufferRef.current = content
+        
+        // Start display interval if not already running and we have enough content
+        // Buffer 600 characters before starting to display for smoother experience
+        if (content.length > 600 && !hasStartedStreaming) {
+          setHasStartedStreaming(true)
+          
+          // Display content in chunks for smooth appearance
+          if (!displayIntervalRef.current) {
+            let displayIndex = 0
+            displayIntervalRef.current = setInterval(() => {
+              const targetLength = bufferRef.current.length
+              if (displayIndex < targetLength) {
+                // Show 15-25 characters at a time for faster, smoother display
+                const chunkSize = Math.min(Math.floor(Math.random() * 11) + 15, targetLength - displayIndex)
+                displayIndex = Math.min(displayIndex + chunkSize, targetLength)
+                setDisplayedContent(bufferRef.current.substring(0, displayIndex))
+              } else {
+                // Keep syncing with buffer
+                setDisplayedContent(bufferRef.current)
+              }
+            }, 16) // ~60fps for very smooth display
+          }
+        }
+      }
+    }
+    
+    // Cleanup when streaming stops
+    if (status === 'ready' || status === 'error') {
+      if (displayIntervalRef.current) {
+        clearInterval(displayIntervalRef.current)
+        displayIntervalRef.current = null
+      }
+      // Ensure final content is displayed
+      setDisplayedContent(bufferRef.current)
+    }
+    
+    return () => {
+      if (displayIntervalRef.current && (status === 'ready' || status === 'error')) {
+        clearInterval(displayIntervalRef.current)
+        displayIntervalRef.current = null
+      }
+    }
+  }, [status, messages, hasStartedStreaming])
 
   // Check auth on mount (but don't redirect)
   useEffect(() => {
@@ -691,6 +797,15 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
+                onClick={() => setShowBriefingSetup(true)}
+                className="text-amber-500 hover:text-amber-400 flex"
+              >
+                <Newspaper className="w-4 h-4 mr-1" />
+                Briefing
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
                 onClick={() => setShowMemoryPanel(true)}
                 className="text-violet-400 hover:text-violet-300 flex"
               >
@@ -698,8 +813,8 @@ export default function ChatInterface() {
                 Memory
               </Button>
               <Link href="/detect">
-                <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
-                  <Sparkles className="w-4 h-4 mr-1" />
+                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
+                  <Sparkles className="w-4 h-4 mr-1.5" />
                   Is it AI?
                 </Button>
               </Link>
@@ -722,8 +837,8 @@ export default function ChatInterface() {
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/detect">
-                <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 flex">
-                  <Sparkles className="w-4 h-4 mr-1" />
+                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
+                  <Sparkles className="w-4 h-4 mr-1.5" />
                   Is it AI?
                 </Button>
               </Link>
@@ -854,6 +969,15 @@ export default function ChatInterface() {
 
                 {/* Suggestion Pills */}
                 <div className="flex flex-wrap justify-center gap-3">
+                  {user && (
+                    <button
+                      onClick={() => setShowBriefingSetup(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
+                    >
+                      <Newspaper className="w-4 h-4" />
+                      My Morning Briefing
+                    </button>
+                  )}
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
@@ -864,14 +988,6 @@ export default function ChatInterface() {
                       {suggestion.label}
                     </button>
                   ))}
-                  {/* Research Agent Button */}
-                  <button
-                    onClick={() => setShowResearchAgent(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-primary/50 bg-primary/10 backdrop-blur-sm text-primary hover:bg-primary/20 hover:border-primary transition-all text-sm font-medium"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Research Agent
-                  </button>
                 </div>
 
                 {/* Footer Link */}
@@ -935,9 +1051,23 @@ export default function ChatInterface() {
                       } else {
                         const message = item.data as typeof messages[0]
                         const idx = item.idx
+                        const isLastAssistantMessage = message.role === 'assistant' && idx === messages.length - 1
+                        const isCurrentlyStreaming = isLastAssistantMessage && status === 'streaming'
+                        
+                        // For the last assistant message during streaming, use buffered content
+                        // Hide it completely until we have enough buffered content
+                        if (isCurrentlyStreaming && !hasStartedStreaming) {
+                          return null // Don't show anything until buffer is ready
+                        }
+                        
+                        // Create a modified message with buffered content for smooth display
+                        const displayMessage = isCurrentlyStreaming && hasStartedStreaming
+                          ? { ...message, content: displayedContent }
+                          : message
+                        
                         return (
                           <div key={message.id}>
-                            <MessageBubble message={message} />
+                            <MessageBubble message={displayMessage} />
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
                              idx === messages.length - 1 && (
@@ -990,42 +1120,37 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
-{status === 'submitted' && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
+{(status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-sky-600" />
+                  <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
+                    <Bot className="w-5 h-5 text-white" />
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground pt-2">
-                    <svg 
-                      className="w-5 h-5 text-sky-500" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <style>
-                        {`
-                          @keyframes sandFlow {
-                            0%, 100% { transform: translateY(0); opacity: 1; }
-                            50% { transform: translateY(4px); opacity: 0.5; }
-                          }
-                          @keyframes hourglassRotate {
-                            0%, 45% { transform: rotate(0deg); }
-                            50%, 95% { transform: rotate(180deg); }
-                            100% { transform: rotate(360deg); }
-                          }
-                          .hourglass-container { animation: hourglassRotate 3s ease-in-out infinite; transform-origin: center; }
-                          .sand-top { animation: sandFlow 1.5s ease-in-out infinite; }
-                          .sand-bottom { animation: sandFlow 1.5s ease-in-out infinite reverse; }
-                        `}
-                      </style>
-                      <g className="hourglass-container">
-                        <path d="M6 2h12v4l-4 4 4 4v4H6v-4l4-4-4-4V2z" stroke="currentColor" strokeWidth="2" fill="none"/>
-                        <circle className="sand-top" cx="12" cy="6" r="2" fill="currentColor" opacity="0.7"/>
-                        <circle className="sand-bottom" cx="12" cy="16" r="2.5" fill="currentColor" opacity="0.9"/>
-                        <line className="sand-top" x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
-                      </g>
-                    </svg>
-                    <span className="text-sm">Thinking...</span>
+                  <div className="flex-1 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 rounded-2xl p-4 border border-sky-100 dark:border-sky-800/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="relative">
+                        <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping absolute" />
+                        <div className="w-2 h-2 bg-sky-500 rounded-full" />
+                      </div>
+                      <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">{thinkingStatus}</span>
+                    </div>
+                    <div className="space-y-2 ml-5">
+                      {thinkingDetails.map((detail, i) => (
+                        <div 
+                          key={i} 
+                          className="flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in slide-in-from-left-2 duration-300"
+                          style={{ animationDelay: `${i * 150}ms` }}
+                        >
+                          <div className="w-1 h-1 bg-sky-400 rounded-full" />
+                          <span>{detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-sky-200/50 dark:border-sky-700/50">
+                      <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                        Connected to Bittensor&apos;s decentralized AI network
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1194,18 +1319,46 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
         </div>
       </div>
 
-      {/* Research Agent Modal */}
-      {showResearchAgent && (
-        <ResearchAgent
-          uploadedFile={uploadedFile}
-          onClose={() => setShowResearchAgent(false)}
-        />
-      )}
-
       {/* Memory Panel Modal */}
       <MemoryPanel 
         isOpen={showMemoryPanel} 
         onClose={() => setShowMemoryPanel(false)} 
+      />
+
+      {/* Briefing Setup Modal */}
+      <BriefingSetup 
+        isOpen={showBriefingSetup} 
+        onClose={() => setShowBriefingSetup(false)}
+        onGenerate={async () => {
+          setGeneratingBriefing(true)
+          try {
+            const res = await fetch('/api/briefing/generate')
+            if (res.ok) {
+              const data = await res.json()
+              // Inject the briefing as a message
+              append({
+                role: 'user',
+                content: 'Show me my morning briefing'
+              })
+              // Wait a moment then add the response
+              setTimeout(() => {
+                append({
+                  role: 'assistant', 
+                  content: data.briefing
+                })
+              }, 500)
+            } else {
+              const data = await res.json()
+              if (data.needsSetup) {
+                setShowBriefingSetup(true)
+              }
+            }
+          } catch (err) {
+            console.error('Failed to generate briefing:', err)
+          } finally {
+            setGeneratingBriefing(false)
+          }
+        }}
       />
     </div>
   )

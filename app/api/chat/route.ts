@@ -41,7 +41,8 @@ async function trackAnalyticsEvent(
   prompt: string, 
   model: string, 
   costEstimate: number,
-  location?: { country?: string; city?: string; region?: string }
+  location?: { country?: string; city?: string; region?: string },
+  usedDesearch?: boolean
 ) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
@@ -53,6 +54,7 @@ async function trackAnalyticsEvent(
       country: location?.country,
       city: location?.city,
       region: location?.region,
+      used_desearch: usedDesearch || false,
     })
   } catch (e) {
     // Table may not exist, silently fail
@@ -155,51 +157,26 @@ async function searchWeb(query: string): Promise<string> {
     return ''
   }
   
+  console.log('[v0] Desearch key found, prefix:', apiKey.substring(0, 4))
+  
   const results: string[] = []
   
   // Check if this is a Twitter/X specific query
-  const isTwitterQuery = /twitter|tweet|x\.com|@\w+|#\w+/i.test(query)
+  const isTwitterQuery = /twitter|tweet|x\.com|@\w+|#\w+|posts from/i.test(query)
   
   try {
-    // If Twitter query, also search X
-    if (isTwitterQuery) {
-      const xResponse = await fetch('https://api.desearch.ai/v1/x_search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          query: query.replace(/twitter|tweet|on x/gi, '').trim(),
-          sort: 'relevance',
-          count: 10
-        })
-      })
-      
-      if (xResponse.ok) {
-        const xData = await xResponse.json()
-        if (xData.tweets && xData.tweets.length > 0) {
-          const tweets = xData.tweets.slice(0, 5).map((t: { user?: { username?: string }; text?: string; created_at?: string }) => 
-            `@${t.user?.username || 'unknown'}: ${t.text || ''}`
-          ).join('\n\n')
-          results.push('From X/Twitter:\n' + tweets)
-        }
-      }
-    }
-    
-    // Use Desearch AI Search for comprehensive results
-    const response = await fetch('https://api.desearch.ai/v1/ai_search', {
+    // Use Desearch AI Search - with twitter tool if it's a social media query
+    const response = await fetch('https://api.desearch.ai/desearch/ai/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': apiKey
       },
       body: JSON.stringify({
-        query: query,
+        prompt: query,
         model: 'NOVA',
-        date_filter: 'w', // Past week for fresh results
-        streaming: false,
-        result_type: 'ai_search'
+        tools: isTwitterQuery ? ['twitter', 'web'] : ['web'],
+        date_filter: 'PAST_WEEK'
       })
     })
     
@@ -208,28 +185,52 @@ async function searchWeb(query: string): Promise<string> {
       return results.join('\n\n')
     }
     
-    const data = await response.json()
+    // Desearch returns streaming data, parse it
+    const text = await response.text()
+    const lines = text.split('\n').filter(l => l.startsWith('data: '))
     
-    // Add AI summary if available
-    if (data.summary || data.answer) {
-      results.push(data.summary || data.answer)
+    let summary = ''
+    const tweets: string[] = []
+    const sources: string[] = []
+    
+    for (const line of lines) {
+      try {
+        const data = JSON.parse(line.replace('data: ', ''))
+        
+        // Extract summary/answer
+        if (data.type === 'summary' || data.type === 'answer') {
+          summary = data.content || ''
+        }
+        
+        // Extract tweets
+        if (data.type === 'tweets' && data.content) {
+          for (const tweet of data.content.slice(0, 5)) {
+            tweets.push(`@${tweet.user?.username || 'unknown'}: ${tweet.text || tweet.full_text || ''}`)
+          }
+        }
+        
+        // Extract sources
+        if (data.type === 'flow' && data.content?.type === 'Sources') {
+          sources.push(...(data.content.content || []).slice(0, 5))
+        }
+      } catch {
+        // Ignore parsing errors for individual lines
+      }
     }
     
-    // Add source links
-    if (data.sources && data.sources.length > 0) {
-      const sources = data.sources.slice(0, 8).map((s: { title: string; url: string; snippet?: string }) => 
-        `• ${s.title}${s.snippet ? `: ${s.snippet}` : ''}`
-      ).join('\n')
-      results.push('\nSources:\n' + sources)
+    if (summary) {
+      results.push(summary)
     }
     
-    // Fallback to web_links if no sources
-    if (data.web_links && data.web_links.length > 0 && results.length === 0) {
-      const links = data.web_links.slice(0, 8).map((l: { title: string; snippet?: string }) => 
-        `• ${l.title}${l.snippet ? `: ${l.snippet}` : ''}`
-      ).join('\n')
-      results.push(links)
+    if (tweets.length > 0) {
+      results.push('From X/Twitter:\n' + tweets.join('\n\n'))
     }
+    
+    if (sources.length > 0) {
+      results.push('\nSources: ' + sources.join(', '))
+    }
+    
+    console.log('[v0] Desearch results:', results.length > 0 ? 'Found data' : 'No results')
     
     return results.join('\n\n')
   } catch (e) {
@@ -436,6 +437,9 @@ export async function POST(req: Request) {
       ? `\n\nUSER MEMORIES (Things this user has told you to remember):\n${userMemories.map(m => `- ${m}`).join('\n')}\n\nUse these memories to personalize your responses when relevant. If the user asks "what do you remember about me?", list these memories.`
       : ''
     
+    // Track whether Desearch was used for this query
+    let usedDesearch = false
+    
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
@@ -480,6 +484,7 @@ Respond by organizing these headlines by topic (politics, technology, business, 
       const searchResults = await searchWeb(cleanQuery)
       
       if (searchResults) {
+        usedDesearch = true
         systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
 I searched the web for current information related to the user's question. Here are the search results:
@@ -532,7 +537,7 @@ When answering questions, refer to this document content. You can summarize it, 
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002, location)
+    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002, location, usedDesearch)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
@@ -581,7 +586,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: retryModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', retryLastMessage, kimiModel, 0.002, location)
+        trackAnalyticsEvent('chat_query', retryLastMessage, kimiModel, 0.002, location, usedDesearch)
         
         return kimiResult.toUIMessageStreamResponse({
           originalMessages: retryMessages,
@@ -620,7 +625,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: fallbackModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001, location)
+        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001, location, usedDesearch)
         
         return fallbackResult.toUIMessageStreamResponse({
           originalMessages: fallbackMessages,
