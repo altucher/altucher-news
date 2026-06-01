@@ -157,6 +157,8 @@ async function searchWeb(query: string): Promise<string> {
     return ''
   }
   
+  console.log('[v0] Desearch key found, prefix:', apiKey.substring(0, 4))
+  
   const results: string[] = []
   
   // Check if this is a Twitter/X specific query
@@ -169,7 +171,7 @@ async function searchWeb(query: string): Promise<string> {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': apiKey
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           prompt: query.replace(/twitter|tweet|on x/gi, '').trim(),
@@ -197,7 +199,7 @@ async function searchWeb(query: string): Promise<string> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': apiKey
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         prompt: query,
