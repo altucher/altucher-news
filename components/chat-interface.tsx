@@ -1030,9 +1030,23 @@ export default function ChatInterface() {
                       } else {
                         const message = item.data as typeof messages[0]
                         const idx = item.idx
+                        const isLastAssistantMessage = message.role === 'assistant' && idx === messages.length - 1
+                        const isCurrentlyStreaming = isLastAssistantMessage && status === 'streaming'
+                        
+                        // For the last assistant message during streaming, use buffered content
+                        // Hide it completely until we have enough buffered content
+                        if (isCurrentlyStreaming && !hasStartedStreaming) {
+                          return null // Don't show anything until buffer is ready
+                        }
+                        
+                        // Create a modified message with buffered content for smooth display
+                        const displayMessage = isCurrentlyStreaming && hasStartedStreaming
+                          ? { ...message, content: displayedContent }
+                          : message
+                        
                         return (
                           <div key={message.id}>
-                            <MessageBubble message={message} />
+                            <MessageBubble message={displayMessage} />
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
                              idx === messages.length - 1 && (
