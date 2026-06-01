@@ -560,6 +560,16 @@ export default function ChatInterface() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* CRITICAL DEBUG - Render at very top */}
+      {showBriefingSetup && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'red', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 40, borderRadius: 10 }}>
+            <h1 style={{ fontSize: 32, color: 'black', fontWeight: 'bold' }}>BRIEFING MODAL SHOULD BE HERE!</h1>
+            <button onClick={() => setShowBriefingSetup(false)} style={{ marginTop: 20, padding: '15px 30px', fontSize: 18, cursor: 'pointer' }}>Close This</button>
+          </div>
+        </div>
+      )}
+      
       {/* Hidden file input - always rendered so ref is available */}
       <input
         type="file"
