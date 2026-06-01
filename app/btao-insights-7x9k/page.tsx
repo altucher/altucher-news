@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye } from 'lucide-react'
+import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -30,6 +30,7 @@ interface AnalyticsData {
     tokensUsed: number
     costEstimate: string
     createdAt: string
+    usedDesearch?: boolean
   }>
   allQueries: Array<{
     id: string
@@ -39,6 +40,7 @@ interface AnalyticsData {
     tokensUsed: number
     costEstimate: string
     createdAt: string
+    usedDesearch?: boolean
   }>
 }
 
@@ -303,17 +305,24 @@ export default function AnalyticsPage() {
                       {new Date(event.createdAt).toLocaleString()}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                        event.type === 'image_generation' 
-                          ? 'bg-violet-500/10 text-violet-600' 
-                          : 'bg-primary/10 text-primary'
-                      }`}>
-                        {event.type === 'image_generation' ? (
-                          <><ImageIcon className="w-3 h-3" /> Image</>
-                        ) : (
-                          <><MessageSquare className="w-3 h-3" /> Chat</>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                          event.type === 'image_generation' 
+                            ? 'bg-violet-500/10 text-violet-600' 
+                            : 'bg-primary/10 text-primary'
+                        }`}>
+                          {event.type === 'image_generation' ? (
+                            <><ImageIcon className="w-3 h-3" /> Image</>
+                          ) : (
+                            <><MessageSquare className="w-3 h-3" /> Chat</>
+                          )}
+                        </span>
+                        {event.usedDesearch && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600">
+                            <Search className="w-3 h-3" /> Desearch
+                          </span>
                         )}
-                      </span>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-sm text-foreground max-w-xs truncate">
                       {event.prompt || '-'}
@@ -359,17 +368,24 @@ export default function AnalyticsPage() {
                       {new Date(query.createdAt).toLocaleString()}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                        query.type === 'image_generation' 
-                          ? 'bg-violet-500/10 text-violet-600' 
-                          : 'bg-primary/10 text-primary'
-                      }`}>
-                        {query.type === 'image_generation' ? (
-                          <><ImageIcon className="w-3 h-3" /> Image</>
-                        ) : (
-                          <><MessageSquare className="w-3 h-3" /> Chat</>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                          query.type === 'image_generation' 
+                            ? 'bg-violet-500/10 text-violet-600' 
+                            : 'bg-primary/10 text-primary'
+                        }`}>
+                          {query.type === 'image_generation' ? (
+                            <><ImageIcon className="w-3 h-3" /> Image</>
+                          ) : (
+                            <><MessageSquare className="w-3 h-3" /> Chat</>
+                          )}
+                        </span>
+                        {query.usedDesearch && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600">
+                            <Search className="w-3 h-3" /> Desearch
+                          </span>
                         )}
-                      </span>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-sm text-foreground">
                       <div className="max-w-md whitespace-pre-wrap break-words">

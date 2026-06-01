@@ -41,7 +41,8 @@ async function trackAnalyticsEvent(
   prompt: string, 
   model: string, 
   costEstimate: number,
-  location?: { country?: string; city?: string; region?: string }
+  location?: { country?: string; city?: string; region?: string },
+  usedDesearch?: boolean
 ) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
@@ -53,6 +54,7 @@ async function trackAnalyticsEvent(
       country: location?.country,
       city: location?.city,
       region: location?.region,
+      used_desearch: usedDesearch || false,
     })
   } catch (e) {
     // Table may not exist, silently fail
@@ -438,6 +440,9 @@ export async function POST(req: Request) {
       ? `\n\nUSER MEMORIES (Things this user has told you to remember):\n${userMemories.map(m => `- ${m}`).join('\n')}\n\nUse these memories to personalize your responses when relevant. If the user asks "what do you remember about me?", list these memories.`
       : ''
     
+    // Track whether Desearch was used for this query
+    let usedDesearch = false
+    
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
@@ -482,6 +487,7 @@ Respond by organizing these headlines by topic (politics, technology, business, 
       const searchResults = await searchWeb(cleanQuery)
       
       if (searchResults) {
+        usedDesearch = true
         systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
 I searched the web for current information related to the user's question. Here are the search results:
@@ -534,7 +540,7 @@ When answering questions, refer to this document content. You can summarize it, 
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002, location)
+    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002, location, usedDesearch)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
@@ -583,7 +589,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: retryModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', retryLastMessage, kimiModel, 0.002, location)
+        trackAnalyticsEvent('chat_query', retryLastMessage, kimiModel, 0.002, location, usedDesearch)
         
         return kimiResult.toUIMessageStreamResponse({
           originalMessages: retryMessages,
@@ -622,7 +628,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: fallbackModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001, location)
+        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001, location, usedDesearch)
         
         return fallbackResult.toUIMessageStreamResponse({
           originalMessages: fallbackMessages,

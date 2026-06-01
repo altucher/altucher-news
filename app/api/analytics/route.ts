@@ -166,6 +166,7 @@ export async function GET() {
         country: (e as { country?: string }).country,
         city: (e as { city?: string }).city,
         region: (e as { region?: string }).region,
+        usedDesearch: (e as { used_desearch?: boolean }).used_desearch || false,
       })),
       allQueries: analyticsEvents.map(e => ({
         id: e.id,
@@ -178,6 +179,7 @@ export async function GET() {
         country: (e as { country?: string }).country,
         city: (e as { city?: string }).city,
         region: (e as { region?: string }).region,
+        usedDesearch: (e as { used_desearch?: boolean }).used_desearch || false,
       })),
     })
   } catch (error) {
