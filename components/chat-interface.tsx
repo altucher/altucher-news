@@ -804,11 +804,13 @@ export default function ChatInterface() {
                 variant="ghost" 
                 size="sm" 
                 onClick={() => {
-                  console.log('[v0] Briefing button clicked, setting showBriefingSetup to true')
                   setShowBriefingSetup(true)
                 }}
                 className="text-amber-500 hover:text-amber-400 flex"
               >
+                <Newspaper className="w-4 h-4 mr-1" />
+                Briefing
+              </Button>
                 <Newspaper className="w-4 h-4 mr-1" />
                 Briefing
               </Button>
@@ -981,7 +983,6 @@ export default function ChatInterface() {
                   {user && (
                     <button
                       onClick={() => {
-                        console.log('[v0] Morning Briefing chip clicked, setting showBriefingSetup to true')
                         setShowBriefingSetup(true)
                       }}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
