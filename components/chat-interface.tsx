@@ -161,8 +161,8 @@ export default function ChatInterface() {
         bufferRef.current = content
         
         // Start display interval if not already running and we have enough content
-        // Buffer 300 characters before starting to display for smoother experience
-        if (content.length > 300 && !hasStartedStreaming) {
+        // Buffer 600 characters before starting to display for smoother experience
+        if (content.length > 600 && !hasStartedStreaming) {
           setHasStartedStreaming(true)
           
           // Display content in chunks for smooth appearance
@@ -171,8 +171,8 @@ export default function ChatInterface() {
             displayIntervalRef.current = setInterval(() => {
               const targetLength = bufferRef.current.length
               if (displayIndex < targetLength) {
-                // Show 8-15 characters at a time for faster, smoother display
-                const chunkSize = Math.min(Math.floor(Math.random() * 8) + 8, targetLength - displayIndex)
+                // Show 15-25 characters at a time for faster, smoother display
+                const chunkSize = Math.min(Math.floor(Math.random() * 11) + 15, targetLength - displayIndex)
                 displayIndex = Math.min(displayIndex + chunkSize, targetLength)
                 setDisplayedContent(bufferRef.current.substring(0, displayIndex))
               } else {
