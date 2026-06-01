@@ -969,17 +969,15 @@ export default function ChatInterface() {
 
                 {/* Suggestion Pills */}
                 <div className="flex flex-wrap justify-center gap-3">
-                  {/* Debug: always show button to test */}
-                  <button
-                    onClick={() => {
-                      alert('Briefing button clicked! User: ' + (user ? user.email : 'null'))
-                      setShowBriefingSetup(true)
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
-                  >
-                    <Newspaper className="w-4 h-4" />
-                    My Morning Briefing
-                  </button>
+                  {user && (
+                    <button
+                      onClick={() => setShowBriefingSetup(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 backdrop-blur-sm text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:border-amber-500 transition-all text-sm font-medium"
+                    >
+                      <Newspaper className="w-4 h-4" />
+                      My Morning Briefing
+                    </button>
+                  )}
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
