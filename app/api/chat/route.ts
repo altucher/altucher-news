@@ -545,60 +545,28 @@ When answering questions, refer to this document content. You can summarize it, 
     })
   } catch (error) {
     const errorMessage = String(error)
+    console.log('[v0] Primary model error:', errorMessage)
     
-    // If Chutes is unavailable (503, 429, capacity, etc.), fall back to Kimi, then OpenAI
+    // If Chutes is unavailable (503, 429, capacity, etc.), fall back directly to OpenAI
     if (errorMessage.includes('503') || 
         errorMessage.includes('429') ||
         errorMessage.includes('Too Many Requests') ||
         errorMessage.includes('Service Unavailable') || 
         errorMessage.includes('capacity') ||
         errorMessage.includes('maximum capacity') ||
-        errorMessage.includes('No instances available')) {
+        errorMessage.includes('No instances available') ||
+        errorMessage.includes('AI_RetryError')) {
       
-      // Try Kimi as first fallback (still on Chutes)
-      const kimiModel = 'moonshotai/Kimi-K2.6-TEE'
-      console.log('[v0] DeepSeek unavailable, trying Kimi on Chutes...')
+      console.log('[v0] Chutes unavailable, falling back to OpenAI GPT-4o-mini')
       
+      // Final fallback to OpenAI - use saved data from request
       try {
-        const { messages: retryMessages, fileContext: retryFileContext } = await req.clone().json()
+        const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
         
-        // Get the last user message for analytics
-        const lastUserMessage = retryMessages.filter((m: UIMessage) => m.role === 'user').pop()
-        const retryLastMessage = typeof lastUserMessage?.content === 'string' 
-          ? lastUserMessage.content 
-          : (lastUserMessage?.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
-        
-        let retryFileContextSection = ''
-        if (retryFileContext && retryFileContext.content) {
-          retryFileContextSection = `\n\nUPLOADED DOCUMENT:\nThe user has uploaded a file called "${retryFileContext.name}". Here is the content:\n\n---BEGIN DOCUMENT---\n${retryFileContext.content}\n---END DOCUMENT---\n\nRefer to this document when answering questions.`
-        }
-        
-        const retryModelMessages = retryMessages.map((msg: UIMessage) => ({
-          role: msg.role as 'user' | 'assistant' | 'system',
-          content: typeof msg.content === 'string' 
-            ? msg.content 
-            : (msg.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
-        }))
-        
-        const kimiResult = streamText({
-          model: chutes.chatModel(kimiModel),
-          system: systemPrompt + retryFileContextSection,
-          messages: retryModelMessages,
-        })
-        
-        trackAnalyticsEvent('chat_query', retryLastMessage, kimiModel, 0.002, location, usedDesearch)
-        
-        return kimiResult.toUIMessageStreamResponse({
-          originalMessages: retryMessages,
-          consumeSseStream: consumeStream,
-        })
-      } catch (kimiError) {
-        console.log('[v0] Kimi also unavailable, falling back to OpenAI GPT-4o-mini')
-      }
-      
-      // Final fallback to OpenAI
-      try {
-        const { messages: fallbackMessages, fileContext: fallbackFileContext } = await req.clone().json()
+        // Re-parse the request body
+        const reqBody = await req.clone().json()
+        const fallbackMessages = reqBody.messages
+        const fallbackFileContext = reqBody.fileContext
         
         // Get the last user message for analytics
         const lastFallbackUserMessage = fallbackMessages.filter((m: UIMessage) => m.role === 'user').pop()
@@ -621,18 +589,22 @@ When answering questions, refer to this document content. You can summarize it, 
         
         const fallbackResult = streamText({
           model: gateway(FALLBACK_MODEL),
-          system: `You are BlueTAO, a helpful AI assistant. Answer questions thoughtfully and concisely.${fallbackFileContextSection}`,
+          system: `You are BlueTAO, a helpful AI assistant. Today's date is ${currentDate}. Answer questions thoughtfully and concisely.${fallbackFileContextSection}`,
           messages: fallbackModelMessages,
         })
         
-        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001, location, usedDesearch)
+        // Extract location from headers
+        const country = req.headers.get('x-vercel-ip-country') || undefined
+        const city = req.headers.get('x-vercel-ip-city') || undefined
+        const region = req.headers.get('x-vercel-ip-country-region') || undefined
+        trackAnalyticsEvent('chat_query', fallbackLastMessage, FALLBACK_MODEL, 0.001, { country, city, region }, false)
         
         return fallbackResult.toUIMessageStreamResponse({
           originalMessages: fallbackMessages,
           consumeSseStream: consumeStream,
         })
       } catch (fallbackError) {
-        console.error('[v0] Fallback also failed:', fallbackError)
+        console.error('[v0] OpenAI fallback also failed:', fallbackError)
       }
     }
     
