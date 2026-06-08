@@ -397,7 +397,18 @@ export default function ChatInterface() {
     
     const userMessage = input
     setInput('')
-    
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+
+    // If the user is asking for an image, route to image generation even
+    // if they pressed the text/send button instead of the image button.
+    if (isImageRequest(userMessage)) {
+      handleGenerateImage(userMessage)
+      return
+    }
+
     // Create a new chat if we don't have one AND user is logged in
     let chatId = currentChatId
     if (!chatId && user) {
@@ -439,10 +450,6 @@ export default function ChatInterface() {
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
-    
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
@@ -533,13 +540,29 @@ export default function ChatInterface() {
 
   // Check if message is an image generation request
   const isImageRequest = (text: string) => {
-    const lowerText = text.toLowerCase()
-    return lowerText.includes('generate image') || 
+    const lowerText = text.toLowerCase().trim()
+    return /\b(draw|sketch|paint|illustrate)\b/.test(lowerText) ||
+           lowerText.includes('generate image') ||
+           lowerText.includes('generate an image') ||
+           lowerText.includes('generate a image') ||
            lowerText.includes('create image') ||
+           lowerText.includes('create an image') ||
+           lowerText.includes('make image') ||
            lowerText.includes('make an image') ||
+           lowerText.includes('make me an image') ||
            lowerText.includes('draw me') ||
+           lowerText.includes('generate picture') ||
            lowerText.includes('generate a picture') ||
-           lowerText.includes('create a picture')
+           lowerText.includes('create picture') ||
+           lowerText.includes('create a picture') ||
+           lowerText.includes('make a picture') ||
+           lowerText.includes('picture of') ||
+           lowerText.includes('image of') ||
+           lowerText.includes('photo of') ||
+           lowerText.includes('a photo of') ||
+           lowerText.includes('render an image') ||
+           lowerText.includes('show me a picture') ||
+           lowerText.includes('show me an image')
   }
 
   const suggestions = [
