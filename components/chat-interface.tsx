@@ -3,11 +3,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { MemoryPanel } from '@/components/memory-panel'
@@ -56,6 +56,13 @@ function isNewsQuery(text: string): boolean {
     (lowerText.includes('today') || lowerText.includes('latest') || lowerText.includes('current') || lowerText.includes('what'))
 }
 
+// Mining-as-a-Service: kickoff prompts for each supported subnet
+const MINING_PROMPTS: Record<string, string> = {
+  '33': "I want to start mining Bittensor Subnet 33 (Conversense). Act as my hands-on mining guide. Walk me through it step by step: (1) what Conversense rewards miners for, (2) the exact hardware/VPS I need (no GPU), (3) installing bittensor and setting up a wallet/hotkey, (4) registering on netuid 33 and what it costs in TAO, (5) running the adapter/miner, and (6) how to check my miner is scoring. Start with step 1 and ask me what I already have set up.",
+  '88': "I want to start mining Bittensor Subnet 88 (Investing88). Act as my hands-on mining guide. Walk me through it step by step: (1) how Investing88 scores miners and what strategies are rewarded, (2) the basic server/setup I need, (3) creating a wallet/hotkey and registering on netuid 88 including TAO cost, (4) how to submit and iterate on investment strategies, and (5) how to track my performance. Start with step 1 and ask about my markets/investing background.",
+  '126': "I want to start mining Bittensor Subnet 126 (Poker44). Act as my hands-on mining guide. Walk me through it step by step: (1) what Poker44 rewards miners for, (2) the Linux server setup I need, (3) installing bittensor, creating a wallet/hotkey, and registering on netuid 126 including TAO cost, (4) running the miner and improving model quality, and (5) how to confirm my miner is scoring well. Start with step 1 and ask about my experience level.",
+}
+
 export default function ChatInterface() {
   const [input, setInput] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -84,7 +91,9 @@ export default function ChatInterface() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
+  const miningTriggeredRef = useRef(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   const { messages, sendMessage, status, setMessages, error, stop, append } = useChat({
@@ -348,6 +357,22 @@ export default function ChatInterface() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
     }
   }, [input])
+
+  // Mining-as-a-Service deep link: /?mine=<subnetId> starts a guided mining chat
+  useEffect(() => {
+    if (checkingAuth || miningTriggeredRef.current) return
+    const mine = searchParams.get('mine')
+    if (!mine) return
+    const prompt = MINING_PROMPTS[mine]
+    if (!prompt) return
+
+    miningTriggeredRef.current = true
+    // Clean the URL so a refresh doesn't re-trigger the prompt
+    router.replace('/')
+    setNewsHeadlines([])
+    sendMessage({ text: prompt })
+    setTimeout(() => fetchUsage(), 1000)
+  }, [checkingAuth, searchParams])
 
   // Save assistant messages when streaming completes (only if logged in)
   useEffect(() => {
@@ -829,6 +854,12 @@ export default function ChatInterface() {
                 <Brain className="w-4 h-4 mr-1" />
                 Memory
               </Button>
+              <Link href="/mining">
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
+                  <Pickaxe className="w-4 h-4 mr-1" />
+                  Mining
+                </Button>
+              </Link>
               <Link href="/detect">
                 <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
                   <Sparkles className="w-4 h-4 mr-1.5" />
@@ -853,6 +884,12 @@ export default function ChatInterface() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              <Link href="/mining">
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
+                  <Pickaxe className="w-4 h-4 mr-1" />
+                  Mining
+                </Button>
+              </Link>
               <Link href="/detect">
                 <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
                   <Sparkles className="w-4 h-4 mr-1.5" />
