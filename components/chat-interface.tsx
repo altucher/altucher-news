@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { MemoryPanel } from '@/components/memory-panel'
+import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import Link from 'next/link'
 
 interface UsageInfo {
@@ -75,6 +76,10 @@ export default function ChatInterface() {
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const { speak, speakingId, loadingId: ttsLoadingId } = useTextToSpeech()
+  const { toggle: toggleMic, listening, supported: micSupported } = useSpeechToText((transcript) => {
+    setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1070,7 +1075,12 @@ export default function ChatInterface() {
                         
                         return (
                           <div key={message.id}>
-                            <MessageBubble message={displayMessage} />
+                            <MessageBubble 
+                              message={displayMessage} 
+                              onSpeak={speak}
+                              speakingId={speakingId}
+                              ttsLoadingId={ttsLoadingId}
+                            />
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
                              idx === messages.length - 1 && (
@@ -1219,6 +1229,23 @@ export default function ChatInterface() {
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
                   />
+                  {micSupported && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={toggleMic}
+                      disabled={isLoading}
+                      title={listening ? 'Stop listening' : 'Speak your message'}
+                      className={cn(
+                        'h-9 w-9 rounded-full transition-all',
+                        listening
+                          ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                          : 'bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground'
+                      )}
+                    >
+                      <Mic className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     size="icon"
@@ -1331,9 +1358,29 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
   )
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
+function MessageBubble({ 
+  message, 
+  onSpeak, 
+  speakingId, 
+  ttsLoadingId 
+}: { 
+  message: UIMessage
+  onSpeak?: (text: string, id: string) => void
+  speakingId?: string | null
+  ttsLoadingId?: string | null
+}) {
   const isUser = message.role === 'user'
   const parts = message.parts || []
+
+  // Build the full plain-text of an assistant message for TTS
+  const messageText = parts
+    .filter((p) => p.type === 'text')
+    .map((p) => (p as { text?: string }).text || '')
+    .join(' ')
+    .trim()
+
+  const isSpeaking = speakingId === message.id
+  const isTtsLoading = ttsLoadingId === message.id
 
   return (
     <div className={cn('flex gap-4', isUser && 'flex-row-reverse')}>
@@ -1564,6 +1611,22 @@ function MessageBubble({ message }: { message: UIMessage }) {
 
           return null
         })}
+        {!isUser && messageText && onSpeak && (
+          <button
+            onClick={() => onSpeak(messageText, message.id)}
+            title={isSpeaking ? 'Stop' : 'Read aloud'}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-sky-600 transition-colors mt-1 px-1"
+          >
+            {isTtsLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : isSpeaking ? (
+              <VolumeX className="w-3.5 h-3.5" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" />
+            )}
+            <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
+          </button>
+        )}
       </div>
     </div>
   )
