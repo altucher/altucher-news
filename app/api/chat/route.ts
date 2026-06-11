@@ -341,6 +341,13 @@ export async function POST(req: Request) {
       customContext?: { company: string; context: string } | null;
     } = await req.json()
 
+    // Kick off the user-memory fetch immediately so it runs in parallel
+    // with the usage/subscription check and (potentially) the web search,
+    // instead of adding a second sequential round-trip before streaming.
+    const memoriesPromise: Promise<string[]> = userId
+      ? getUserMemories(userId)
+      : Promise.resolve([])
+
     // Check usage limits if user is provided
     if (userId) {
       const supabaseAdmin = getSupabaseAdmin()
@@ -420,15 +427,18 @@ export async function POST(req: Request) {
     const lastMessage = getLastUserMessage(messages)
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     
-    // Fetch user memories if logged in
+    // Fetch user memories if logged in (awaits the parallel fetch started above)
     let userMemories: string[] = []
     if (userId) {
-      userMemories = await getUserMemories(userId)
+      userMemories = await memoriesPromise
       
-      // Check if user wants to save a memory
+      // Check if user wants to save a memory — fire-and-forget so it never
+      // delays time-to-first-token.
       const memoryToSave = extractMemoryFromMessage(lastMessage)
       if (memoryToSave) {
-        await saveUserMemory(userId, memoryToSave)
+        saveUserMemory(userId, memoryToSave).catch(err =>
+          console.error('[v0] Memory save failed:', err)
+        )
       }
     }
     
