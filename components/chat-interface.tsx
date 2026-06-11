@@ -3,14 +3,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { MemoryPanel } from '@/components/memory-panel'
+import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import Link from 'next/link'
 
 interface UsageInfo {
@@ -55,6 +56,13 @@ function isNewsQuery(text: string): boolean {
     (lowerText.includes('today') || lowerText.includes('latest') || lowerText.includes('current') || lowerText.includes('what'))
 }
 
+// Mining-as-a-Service: kickoff prompts for each supported subnet
+const MINING_PROMPTS: Record<string, string> = {
+  '33': "I want to start mining Bittensor Subnet 33 (Conversense). Act as my hands-on mining guide. Walk me through it step by step: (1) what Conversense rewards miners for, (2) the exact hardware/VPS I need (no GPU), (3) installing bittensor and setting up a wallet/hotkey, (4) registering on netuid 33 and what it costs in TAO, (5) running the adapter/miner, and (6) how to check my miner is scoring. Start with step 1 and ask me what I already have set up.",
+  '88': "I want to start mining Bittensor Subnet 88 (Investing88). Act as my hands-on mining guide. Walk me through it step by step: (1) how Investing88 scores miners and what strategies are rewarded, (2) the basic server/setup I need, (3) creating a wallet/hotkey and registering on netuid 88 including TAO cost, (4) how to submit and iterate on investment strategies, and (5) how to track my performance. Start with step 1 and ask about my markets/investing background.",
+  '126': "I want to start mining Bittensor Subnet 126 (Poker44). Act as my hands-on mining guide. Walk me through it step by step: (1) what Poker44 rewards miners for, (2) the Linux server setup I need, (3) installing bittensor, creating a wallet/hotkey, and registering on netuid 126 including TAO cost, (4) running the miner and improving model quality, and (5) how to confirm my miner is scoring well. Start with step 1 and ask about my experience level.",
+}
+
 export default function ChatInterface() {
   const [input, setInput] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -75,11 +83,17 @@ export default function ChatInterface() {
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const { speak, speakingId, loadingId: ttsLoadingId } = useTextToSpeech()
+  const { toggle: toggleMic, listening, supported: micSupported } = useSpeechToText((transcript) => {
+    setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
+  const miningTriggeredRef = useRef(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   const { messages, sendMessage, status, setMessages, error, stop, append } = useChat({
@@ -344,6 +358,22 @@ export default function ChatInterface() {
     }
   }, [input])
 
+  // Mining-as-a-Service deep link: /?mine=<subnetId> starts a guided mining chat
+  useEffect(() => {
+    if (checkingAuth || miningTriggeredRef.current) return
+    const mine = searchParams.get('mine')
+    if (!mine) return
+    const prompt = MINING_PROMPTS[mine]
+    if (!prompt) return
+
+    miningTriggeredRef.current = true
+    // Clean the URL so a refresh doesn't re-trigger the prompt
+    router.replace('/')
+    setNewsHeadlines([])
+    sendMessage({ text: prompt })
+    setTimeout(() => fetchUsage(), 1000)
+  }, [checkingAuth, searchParams])
+
   // Save assistant messages when streaming completes (only if logged in)
   useEffect(() => {
     if (status === 'ready' && messages.length > 0 && currentChatId && user) {
@@ -397,7 +427,18 @@ export default function ChatInterface() {
     
     const userMessage = input
     setInput('')
-    
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+
+    // If the user is asking for an image, route to image generation even
+    // if they pressed the text/send button instead of the image button.
+    if (isImageRequest(userMessage)) {
+      handleGenerateImage(userMessage)
+      return
+    }
+
     // Create a new chat if we don't have one AND user is logged in
     let chatId = currentChatId
     if (!chatId && user) {
@@ -439,10 +480,6 @@ export default function ChatInterface() {
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
-    
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
@@ -533,13 +570,29 @@ export default function ChatInterface() {
 
   // Check if message is an image generation request
   const isImageRequest = (text: string) => {
-    const lowerText = text.toLowerCase()
-    return lowerText.includes('generate image') || 
+    const lowerText = text.toLowerCase().trim()
+    return /\b(draw|sketch|paint|illustrate)\b/.test(lowerText) ||
+           lowerText.includes('generate image') ||
+           lowerText.includes('generate an image') ||
+           lowerText.includes('generate a image') ||
            lowerText.includes('create image') ||
+           lowerText.includes('create an image') ||
+           lowerText.includes('make image') ||
            lowerText.includes('make an image') ||
+           lowerText.includes('make me an image') ||
            lowerText.includes('draw me') ||
+           lowerText.includes('generate picture') ||
            lowerText.includes('generate a picture') ||
-           lowerText.includes('create a picture')
+           lowerText.includes('create picture') ||
+           lowerText.includes('create a picture') ||
+           lowerText.includes('make a picture') ||
+           lowerText.includes('picture of') ||
+           lowerText.includes('image of') ||
+           lowerText.includes('photo of') ||
+           lowerText.includes('a photo of') ||
+           lowerText.includes('render an image') ||
+           lowerText.includes('show me a picture') ||
+           lowerText.includes('show me an image')
   }
 
   const suggestions = [
@@ -801,6 +854,12 @@ export default function ChatInterface() {
                 <Brain className="w-4 h-4 mr-1" />
                 Memory
               </Button>
+              <Link href="/mining">
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
+                  <Pickaxe className="w-4 h-4 mr-1" />
+                  Mining
+                </Button>
+              </Link>
               <Link href="/detect">
                 <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
                   <Sparkles className="w-4 h-4 mr-1.5" />
@@ -825,6 +884,12 @@ export default function ChatInterface() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              <Link href="/mining">
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
+                  <Pickaxe className="w-4 h-4 mr-1" />
+                  Mining
+                </Button>
+              </Link>
               <Link href="/detect">
                 <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
                   <Sparkles className="w-4 h-4 mr-1.5" />
@@ -1047,7 +1112,12 @@ export default function ChatInterface() {
                         
                         return (
                           <div key={message.id}>
-                            <MessageBubble message={displayMessage} />
+                            <MessageBubble 
+                              message={displayMessage} 
+                              onSpeak={speak}
+                              speakingId={speakingId}
+                              ttsLoadingId={ttsLoadingId}
+                            />
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
                              idx === messages.length - 1 && (
@@ -1196,6 +1266,23 @@ export default function ChatInterface() {
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
                   />
+                  {micSupported && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={toggleMic}
+                      disabled={isLoading}
+                      title={listening ? 'Stop listening' : 'Speak your message'}
+                      className={cn(
+                        'h-9 w-9 rounded-full transition-all',
+                        listening
+                          ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                          : 'bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground'
+                      )}
+                    >
+                      <Mic className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     size="icon"
@@ -1308,9 +1395,29 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
   )
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
+function MessageBubble({ 
+  message, 
+  onSpeak, 
+  speakingId, 
+  ttsLoadingId 
+}: { 
+  message: UIMessage
+  onSpeak?: (text: string, id: string) => void
+  speakingId?: string | null
+  ttsLoadingId?: string | null
+}) {
   const isUser = message.role === 'user'
   const parts = message.parts || []
+
+  // Build the full plain-text of an assistant message for TTS
+  const messageText = parts
+    .filter((p) => p.type === 'text')
+    .map((p) => (p as { text?: string }).text || '')
+    .join(' ')
+    .trim()
+
+  const isSpeaking = speakingId === message.id
+  const isTtsLoading = ttsLoadingId === message.id
 
   return (
     <div className={cn('flex gap-4', isUser && 'flex-row-reverse')}>
@@ -1541,6 +1648,22 @@ function MessageBubble({ message }: { message: UIMessage }) {
 
           return null
         })}
+        {!isUser && messageText && onSpeak && (
+          <button
+            onClick={() => onSpeak(messageText, message.id)}
+            title={isSpeaking ? 'Stop' : 'Read aloud'}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-sky-600 transition-colors mt-1 px-1"
+          >
+            {isTtsLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : isSpeaking ? (
+              <VolumeX className="w-3.5 h-3.5" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" />
+            )}
+            <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
+          </button>
+        )}
       </div>
     </div>
   )
