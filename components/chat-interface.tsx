@@ -1723,48 +1723,99 @@ function MessageBubble({
                 return formatInlineMarkdown(line)
               }
               
-  // Format inline markdown (bold **text** and italic *text*)
+  // Format inline markdown: clickable links, bold **text**, and italic *text*
   const formatInlineMarkdown = (text: string): React.ReactNode => {
-    // First handle bold **text**, then italic *text* (order matters to avoid conflicts)
     const parts: React.ReactNode[] = []
     let remaining = text
-    let localKeyIndex = 0
-    
-    // Process the text character by character to handle both ** and *
+
+    // Renders an <a> that is clickable in the browser and opens in a new tab
+    const renderLink = (label: string, url: string) => {
+      // Trim trailing punctuation that commonly clings to bare URLs
+      let href = url
+      let trailing = ''
+      const punctMatch = href.match(/[).,!?;:]+$/)
+      if (punctMatch && !href.startsWith('[')) {
+        trailing = punctMatch[0]
+        href = href.slice(0, href.length - trailing.length)
+      }
+      const fullHref = href.startsWith('www.') ? `https://${href}` : href
+      return { node: (
+        <a
+          key={keyIndex++}
+          href={fullHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sky-600 dark:text-sky-400 underline underline-offset-2 hover:text-sky-700 dark:hover:text-sky-300 break-words"
+        >
+          {label}
+        </a>
+      ), trailing }
+    }
+
+    // Matches markdown links [text](url) and bare http(s)/www URLs
+    const urlRegex = /(https?:\/\/[^\s)]+|www\.[^\s)]+)/
+
     while (remaining.length > 0) {
-      // Check for bold **text**
+      // Markdown link: [label](url)
+      const mdLink = remaining.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/)
+      if (mdLink) {
+        const { node } = renderLink(mdLink[1], mdLink[2])
+        parts.push(node)
+        remaining = remaining.slice(mdLink[0].length)
+        continue
+      }
+
+      // Bare URL at the start
+      const bareUrl = remaining.match(/^(https?:\/\/[^\s)]+|www\.[^\s)]+)/)
+      if (bareUrl) {
+        const { node, trailing } = renderLink(bareUrl[1], bareUrl[1])
+        parts.push(node)
+        remaining = remaining.slice(bareUrl[0].length)
+        if (trailing) remaining = trailing + remaining
+        continue
+      }
+
+      // Bold **text**
       const boldMatch = remaining.match(/^\*\*(.+?)\*\*/)
       if (boldMatch) {
         parts.push(<strong key={keyIndex++} className="font-semibold">{boldMatch[1]}</strong>)
         remaining = remaining.slice(boldMatch[0].length)
         continue
       }
-      
-      // Check for italic *text* (but not **)
+
+      // Italic *text* (but not **)
       const italicMatch = remaining.match(/^\*([^*]+?)\*/)
       if (italicMatch) {
         parts.push(<em key={keyIndex++} className="italic">{italicMatch[1]}</em>)
         remaining = remaining.slice(italicMatch[0].length)
         continue
       }
-      
-      // Find the next * to know how much plain text to consume
-      const nextStar = remaining.indexOf('*', 0)
-      if (nextStar === -1) {
-        // No more stars, push the rest as plain text
+
+      // Find the next special character (star or link start) to consume plain text up to it
+      const nextSpecial = (() => {
+        const candidates: number[] = []
+        const star = remaining.indexOf('*')
+        if (star !== -1) candidates.push(star)
+        const bracket = remaining.indexOf('[')
+        if (bracket !== -1) candidates.push(bracket)
+        const urlIdx = remaining.search(urlRegex)
+        if (urlIdx !== -1) candidates.push(urlIdx)
+        return candidates.length > 0 ? Math.min(...candidates) : -1
+      })()
+
+      if (nextSpecial === -1) {
         parts.push(remaining)
         break
-      } else if (nextStar === 0) {
-        // Star at start but didn't match bold or italic, push it as plain text
-        parts.push('*')
+      } else if (nextSpecial === 0) {
+        // Special char at start but didn't match any pattern; emit it as plain text
+        parts.push(remaining[0])
         remaining = remaining.slice(1)
       } else {
-        // Push plain text up to the star
-        parts.push(remaining.slice(0, nextStar))
-        remaining = remaining.slice(nextStar)
+        parts.push(remaining.slice(0, nextSpecial))
+        remaining = remaining.slice(nextSpecial)
       }
     }
-    
+
     return parts.length > 0 ? parts : text
   }
               
