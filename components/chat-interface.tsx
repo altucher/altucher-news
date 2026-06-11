@@ -61,6 +61,9 @@ const MINING_PROMPTS: Record<string, string> = {
   '33': "I want to start mining Bittensor Subnet 33 (Conversense). Act as my hands-on mining guide. Walk me through it step by step: (1) what Conversense rewards miners for, (2) the exact hardware/VPS I need (no GPU), (3) installing bittensor and setting up a wallet/hotkey, (4) registering on netuid 33 and what it costs in TAO, (5) running the adapter/miner, and (6) how to check my miner is scoring. Start with step 1 and ask me what I already have set up.",
   '88': "I want to start mining Bittensor Subnet 88 (Investing88). Act as my hands-on mining guide. Walk me through it step by step: (1) how Investing88 scores miners and what strategies are rewarded, (2) the basic server/setup I need, (3) creating a wallet/hotkey and registering on netuid 88 including TAO cost, (4) how to submit and iterate on investment strategies, and (5) how to track my performance. Start with step 1 and ask about my markets/investing background.",
   '126': "I want to start mining Bittensor Subnet 126 (Poker44). Act as my hands-on mining guide. Walk me through it step by step: (1) what Poker44 rewards miners for, (2) the Linux server setup I need, (3) installing bittensor, creating a wallet/hotkey, and registering on netuid 126 including TAO cost, (4) running the miner and improving model quality, and (5) how to confirm my miner is scoring well. Start with step 1 and ask about my experience level.",
+  '64': "I want to start mining Bittensor Subnet 64 (Chutes). Act as my hands-on mining guide, and be honest that this is an advanced, GPU-intensive subnet. Walk me through it step by step: (1) what Chutes rewards miners for (serverless GPU inference), (2) the GPU hardware I realistically need (A100/H100-class) and the costs involved, (3) installing bittensor, creating a wallet/hotkey, and registering on netuid 64 including TAO cost, (4) deploying the Chutes miner and serving inference, and (5) how to monitor uptime and scoring. Start with step 1 and ask what GPU capacity I have access to.",
+  '4': "I want to start mining Bittensor Subnet 4 (Targon). Act as my hands-on mining guide, and be upfront that Targon is a large, highly competitive inference subnet. Walk me through it step by step: (1) what Targon rewards miners for (deterministic verified, low-latency LLM inference), (2) the data-center GPU hardware and scale I realistically need, (3) installing bittensor, creating a wallet/hotkey, and registering on netuid 4 including TAO cost, (4) deploying and optimizing the Targon miner for speed and uptime, and (5) how to track verified outputs and scoring. Start with step 1 and ask about my GPU resources and experience.",
+  '107': "I want to start mining Bittensor Subnet 107 (Minos). Act as my hands-on mining guide, and be clear this is an advanced subnet best suited to experienced operators. Walk me through it step by step: (1) what Minos rewards miners for (verification and validation of AI outputs), (2) the GPU server and reliability requirements, (3) installing bittensor, creating a wallet/hotkey, and registering on netuid 107 including TAO cost, (4) running the miner and maximizing accuracy/consistency, and (5) how to confirm my miner is scoring well. Start with step 1 and ask about my experience level.",
 }
 
 export default function ChatInterface() {
@@ -134,19 +137,70 @@ export default function ChatInterface() {
       // Extract key topics for personalized messages
       const topics = userText.match(/\b(?:about|on|for|regarding)\s+([^?.!,]+)/i)?.[1]?.trim() || 
                      userText.split(' ').slice(0, 5).join(' ')
-      
-      // More detailed thinking phases with sub-details
+      const shortTopic = topics.substring(0, 40) + (topics.length > 40 ? '...' : '')
+
+      // Detect the kind of question so the "thinking out loud" reflects it
+      const isNews = lowerText.includes('news') || lowerText.includes('today') || lowerText.includes('latest') || lowerText.includes('current')
+      const isSocial = lowerText.includes('twitter') || lowerText.includes('tweet') || lowerText.includes(' x ')
+      const isCode = lowerText.includes('code') || lowerText.includes('function') || lowerText.includes('bug') || lowerText.includes('error') || lowerText.includes('script')
+      const isHow = lowerText.startsWith('how') || lowerText.includes('step by step') || lowerText.includes('guide') || lowerText.includes('mine')
+      const isWhy = lowerText.startsWith('why') || lowerText.includes('explain') || lowerText.includes('reason')
+      const isCompare = lowerText.includes('vs') || lowerText.includes('versus') || lowerText.includes('compare') || lowerText.includes('better') || lowerText.includes('difference')
+      const isOpinion = lowerText.includes('should i') || lowerText.includes('think') || lowerText.includes('opinion') || lowerText.includes('best')
+
+      // A longer, more reflective "thinking out loud" stream of consciousness.
+      // Phases are richer and adapt to the type of question being asked.
       const phases = [
-        { status: 'Initializing...', details: ['Connecting to Bittensor network', 'Routing to optimal miner'] },
-        { status: 'Understanding your question...', details: [`Analyzing: "${topics.substring(0, 40)}${topics.length > 40 ? '...' : ''}"`, 'Identifying key concepts'] },
-        lowerText.includes('news') || lowerText.includes('today') || lowerText.includes('latest') 
-          ? { status: 'Searching the web...', details: [`Querying Desearch (SN22) for: ${topics.substring(0, 30)}`, 'Gathering recent sources'] }
-          : { status: 'Processing with DeepSeek V3.2...', details: ['Running inference on Chutes (SN64)', 'Generating response'] },
-        lowerText.includes('twitter') || lowerText.includes('tweet')
-          ? { status: 'Searching Twitter/X...', details: [`Looking for tweets about ${topics.substring(0, 25)}`, 'Analyzing social sentiment'] }
-          : { status: 'Synthesizing information...', details: ['Cross-referencing data', 'Formulating comprehensive answer'] },
-        { status: 'Preparing response...', details: ['Formatting output', 'Almost ready...'] }
+        { status: 'Reading your message...', details: [`You asked about: "${shortTopic}"`, 'Letting it sink in for a second'] },
+        { status: 'Connecting to Bittensor...', details: ['Reaching the decentralized network', 'Routing to the best available miner'] },
+        { status: 'Thinking it through...', details: ['Breaking the question into parts', 'Working out what you actually need'] },
       ]
+
+      // Question-type specific reasoning steps
+      if (isNews) {
+        phases.push(
+          { status: 'This needs fresh info...', details: ['Deciding it is worth a web search', `Querying Desearch (SN22) for: ${shortTopic}`] },
+          { status: 'Reading the sources...', details: ['Skimming recent results', 'Keeping only what looks reliable'] },
+          { status: 'Checking the dates...', details: ['Filtering out stale articles', 'Prioritizing the most recent'] },
+        )
+      } else if (isSocial) {
+        phases.push(
+          { status: 'Checking social chatter...', details: [`Looking for posts about ${shortTopic}`, 'Gauging the overall sentiment'] },
+          { status: 'Separating signal from noise...', details: ['Ignoring the obvious spam', 'Weighing what people actually think'] },
+        )
+      } else if (isCode) {
+        phases.push(
+          { status: 'Looking at the code...', details: ['Tracing the logic path', 'Spotting where it could break'] },
+          { status: 'Considering approaches...', details: ['Weighing a couple of solutions', 'Picking the cleanest one'] },
+          { status: 'Double-checking edge cases...', details: ['What happens with empty input?', 'Making sure it actually compiles'] },
+        )
+      } else if (isCompare) {
+        phases.push(
+          { status: 'Lining up both sides...', details: ['Listing the trade-offs', 'Being fair to each option'] },
+          { status: 'Weighing the differences...', details: ['What matters most here?', 'Forming a clear verdict'] },
+        )
+      } else if (isHow) {
+        phases.push(
+          { status: 'Mapping out the steps...', details: ['Ordering things logically', 'Making sure nothing is skipped'] },
+          { status: 'Anticipating snags...', details: ['Where do people usually get stuck?', 'Adding the gotchas to watch for'] },
+        )
+      } else if (isWhy || isOpinion) {
+        phases.push(
+          { status: 'Reasoning it out...', details: ['Following the cause and effect', 'Pressure-testing the logic'] },
+          { status: 'Forming a clear take...', details: ['Deciding what is actually true', 'Avoiding wishy-washy answers'] },
+        )
+      } else {
+        phases.push(
+          { status: 'Processing with DeepSeek V3.2...', details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
+          { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
+        )
+      }
+
+      // Common closing reasoning steps
+      phases.push(
+        { status: 'Structuring the answer...', details: ['Deciding what to lead with', 'Cutting anything that does not help'] },
+        { status: 'Almost there...', details: ['Tightening up the wording', 'Putting the finishing touches on it'] },
+      )
       
       let phaseIndex = 0
       setThinkingStatus(phases[0].status)
@@ -1035,8 +1089,19 @@ export default function ChatInterface() {
                   ))}
                 </div>
 
-                {/* Footer Link */}
+                {/* Mining CTA */}
                 <div className="mt-16">
+                  <Link
+                    href="/mining"
+                    className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium flex items-center gap-1.5 transition-colors"
+                  >
+                    <Pickaxe className="w-4 h-4" />
+                    Make money Mining TAO Subnets
+                  </Link>
+                </div>
+
+                {/* Footer Link */}
+                <div className="mt-4">
                   <button className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 transition-colors">
                     Learn more about BlueTAO
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
