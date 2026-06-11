@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -82,6 +82,7 @@ export default function ChatInterface() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
+  const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
@@ -567,6 +568,48 @@ export default function ChatInterface() {
       const form = document.querySelector('form')
       form?.requestSubmit()
     }, 100)
+  }
+
+  // Weather button: get the user's location, fetch weather (Zeus SN18 with
+  // Open-Meteo fallback), then ask BlueTAO to summarize it conversationally.
+  const handleWeather = () => {
+    if (fetchingWeather || isLoading) return
+
+    if (!('geolocation' in navigator)) {
+      sendMessage({ text: "I tried to check the weather but my browser doesn't support location access. Can you tell me what city you're in so I can give you the weather?" })
+      return
+    }
+
+    setFetchingWeather(true)
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords
+          const res = await fetch('/api/weather', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude, longitude }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Weather lookup failed')
+
+          const sourceLabel = data.source === 'zeus' ? 'the Zeus weather subnet (Bittensor SN18)' : 'live weather data'
+          const summary = `Here is the current weather data from ${sourceLabel} for my location (lat ${latitude.toFixed(2)}, lon ${longitude.toFixed(2)}): ${JSON.stringify(data)}. Please give me a friendly, concise summary of the current weather and today's high/low. Mention it came from the Zeus subnet if the source is zeus.`
+          sendMessage({ text: summary })
+        } catch (err) {
+          console.log('[v0] Weather error:', err)
+          sendMessage({ text: "I couldn't fetch the weather just now. Want me to try again, or tell me your city and I'll look it up?" })
+        } finally {
+          setFetchingWeather(false)
+        }
+      },
+      (geoErr) => {
+        console.log('[v0] Geolocation denied/failed:', geoErr)
+        setFetchingWeather(false)
+        sendMessage({ text: "I wasn't able to access your location for the weather. What city are you in? I'll grab the forecast for you." })
+      },
+      { timeout: 10000 }
+    )
   }
 
   // Re-ask the previous question with web search enabled
@@ -1077,6 +1120,18 @@ export default function ChatInterface() {
 
                 {/* Suggestion Pills */}
                 <div className="flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={handleWeather}
+                    disabled={fetchingWeather || isLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border/50 bg-card/80 backdrop-blur-sm text-muted-foreground hover:bg-accent hover:text-foreground hover:border-primary/30 transition-all text-sm disabled:opacity-60"
+                  >
+                    {fetchingWeather ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CloudSun className="w-4 h-4 text-sky-500" />
+                    )}
+                    Weather
+                  </button>
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
