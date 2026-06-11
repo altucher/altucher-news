@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Server, TrendingUp, Spade, Cpu, ArrowRight, CheckCircle2, Bot } from 'lucide-react'
+import { Server, TrendingUp, Spade, Cpu, ArrowRight, CheckCircle2, Bot, Zap, Network, ShieldCheck } from 'lucide-react'
 
 type Subnet = {
   id: number
@@ -7,7 +7,7 @@ type Subnet = {
   netuid: string
   tagline: string
   icon: typeof Server
-  difficulty: 'Beginner' | 'Intermediate'
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced'
   hardware: string
   highlights: string[]
 }
@@ -55,6 +55,48 @@ const SUBNETS: Subnet[] = [
       'Active community support',
     ],
   },
+  {
+    id: 64,
+    name: 'Chutes',
+    netuid: 'SN64',
+    tagline: 'Serverless GPU compute — host AI models and serve inference at scale.',
+    icon: Zap,
+    difficulty: 'Advanced',
+    hardware: 'High-end GPUs (A100/H100 class)',
+    highlights: [
+      'Powers the AI models behind BlueTAO',
+      'Earn by serving real inference demand',
+      'Requires serious GPU capacity and uptime',
+    ],
+  },
+  {
+    id: 4,
+    name: 'Targon',
+    netuid: 'SN4',
+    tagline: 'Deterministic verified inference — fast, low-latency LLM serving.',
+    icon: Network,
+    difficulty: 'Advanced',
+    hardware: 'Multiple data-center GPUs',
+    highlights: [
+      'One of the largest inference subnets',
+      'Rewards speed, uptime, and verified outputs',
+      'Highly competitive — scale matters',
+    ],
+  },
+  {
+    id: 107,
+    name: 'Minos',
+    netuid: 'SN107',
+    tagline: 'Verification and validation of AI outputs across the network.',
+    icon: ShieldCheck,
+    difficulty: 'Advanced',
+    hardware: 'GPU server with strong reliability',
+    highlights: [
+      'Focuses on verifying model outputs',
+      'Rewards accuracy and consistency',
+      'Best for experienced operators',
+    ],
+  },
 ]
 
 export default function MiningPage() {
@@ -91,8 +133,8 @@ export default function MiningPage() {
             Start mining Bittensor with BlueTAO by your side
           </h1>
           <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto text-pretty">
-            Pick one of the beginner-friendly subnets below. BlueTAO will walk you through setup,
-            hardware, registration, and getting your miner scoring — step by step.
+            Pick a subnet below — from beginner-friendly options to advanced GPU compute. BlueTAO will
+            walk you through setup, hardware, registration, and getting your miner scoring — step by step.
           </p>
         </div>
 
@@ -113,7 +155,9 @@ export default function MiningPage() {
                     className={
                       subnet.difficulty === 'Beginner'
                         ? 'text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : subnet.difficulty === 'Intermediate'
+                        ? 'text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'text-xs font-medium px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400'
                     }
                   >
                     {subnet.difficulty}
