@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -117,6 +117,7 @@ export default function ChatInterface() {
   const isLoading = status === 'streaming' || status === 'submitted'
   const [thinkingStatus, setThinkingStatus] = useState<string>('Thinking...')
   const [thinkingDetails, setThinkingDetails] = useState<string[]>([])
+  const [thinkingLog, setThinkingLog] = useState<string[]>([])
   const [hasStartedStreaming, setHasStartedStreaming] = useState(false)
   const [bufferedContent, setBufferedContent] = useState<string>('')
   const [displayedContent, setDisplayedContent] = useState<string>('')
@@ -129,6 +130,7 @@ export default function ChatInterface() {
       setHasStartedStreaming(false)
       setBufferedContent('')
       setDisplayedContent('')
+      setThinkingLog([])
       bufferRef.current = ''
       
       const lastUserMsg = messages.filter(m => m.role === 'user').pop()
@@ -206,12 +208,18 @@ export default function ChatInterface() {
       let phaseIndex = 0
       setThinkingStatus(phases[0].status)
       setThinkingDetails(phases[0].details)
+      setThinkingLog([phases[0].status])
       
       const interval = setInterval(() => {
-        phaseIndex = (phaseIndex + 1) % phases.length
+        // Hold on the final phase instead of looping back to the start,
+        // so the reasoning reads as a continuous progression.
+        if (phaseIndex >= phases.length - 1) return
+        phaseIndex += 1
         setThinkingStatus(phases[phaseIndex].status)
         setThinkingDetails(phases[phaseIndex].details)
-      }, 2000)
+        // Keep every step that has happened so far visible as a growing log.
+        setThinkingLog((prev) => [...prev, phases[phaseIndex].status])
+      }, 1300)
       
       return () => clearInterval(interval)
     }
@@ -1296,6 +1304,20 @@ export default function ChatInterface() {
                     <Bot className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 rounded-2xl p-4 border border-sky-100 dark:border-sky-800/50">
+                    {/* Completed reasoning steps stay visible as a growing log */}
+                    {thinkingLog.length > 1 && (
+                      <div className="space-y-1.5 mb-3">
+                        {thinkingLog.slice(0, -1).map((step, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 text-xs text-muted-foreground/80 animate-in fade-in slide-in-from-left-1 duration-300"
+                          >
+                            <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
+                            <span>{step}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="relative">
                         <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping absolute" />
