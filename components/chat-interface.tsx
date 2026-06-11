@@ -1089,8 +1089,19 @@ export default function ChatInterface() {
                   ))}
                 </div>
 
-                {/* Footer Link */}
+                {/* Mining CTA */}
                 <div className="mt-16">
+                  <Link
+                    href="/mining"
+                    className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium flex items-center gap-1.5 transition-colors"
+                  >
+                    <Pickaxe className="w-4 h-4" />
+                    Make money Mining TAO Subnets
+                  </Link>
+                </div>
+
+                {/* Footer Link */}
+                <div className="mt-4">
                   <button className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 transition-colors">
                     Learn more about BlueTAO
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
