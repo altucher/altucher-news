@@ -123,14 +123,27 @@ export default function ChatInterface() {
   const [displayedContent, setDisplayedContent] = useState<string>('')
   const bufferRef = useRef<string>('')
   const displayIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // When thinking began, used to keep the reasoning visible for a minimum time
+  const thinkingStartRef = useRef<number>(0)
+  // Guards against scheduling the stream-start more than once during the wait
+  const streamingScheduledRef = useRef<boolean>(false)
+  // Holds the phase-advancing interval so it survives re-renders during streaming
+  const phaseIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // Ensures the thinking phases are only set up once per turn
+  const phaseSetupDoneRef = useRef<boolean>(false)
+  // Minimum time (ms) to show the "thinking out loud" panel before the answer
+  const MIN_THINKING_MS = 5200
 
   // Dynamic thinking status messages based on user input
   useEffect(() => {
-    if (status === 'submitted') {
+    if (status === 'submitted' && !phaseSetupDoneRef.current) {
+      phaseSetupDoneRef.current = true
       setHasStartedStreaming(false)
       setBufferedContent('')
       setDisplayedContent('')
       setThinkingLog([])
+      thinkingStartRef.current = Date.now()
+      streamingScheduledRef.current = false
       bufferRef.current = ''
       
       const lastUserMsg = messages.filter(m => m.role === 'user').pop()
@@ -220,10 +233,21 @@ export default function ChatInterface() {
         // Keep every step that has happened so far visible as a growing log.
         setThinkingLog((prev) => [...prev, phases[phaseIndex].status])
       }, 1300)
-      
-      return () => clearInterval(interval)
+      phaseIntervalRef.current = interval
     }
-  }, [status, messages])
+
+    // Once the answer actually begins displaying, stop advancing the phases
+    // and reset so the next turn starts fresh.
+    if (hasStartedStreaming || status === 'ready' || status === 'error') {
+      if (phaseIntervalRef.current) {
+        clearInterval(phaseIntervalRef.current)
+        phaseIntervalRef.current = null
+      }
+      if (status === 'ready' || status === 'error') {
+        phaseSetupDoneRef.current = false
+      }
+    }
+  }, [status, messages, hasStartedStreaming])
 
   // Buffer incoming content and display smoothly
   useEffect(() => {
@@ -237,26 +261,39 @@ export default function ChatInterface() {
         // Update buffer with new content
         bufferRef.current = content
         
-        // Start display interval if not already running and we have enough content
-        // Buffer 600 characters before starting to display for smoother experience
-        if (content.length > 600 && !hasStartedStreaming) {
-          setHasStartedStreaming(true)
-          
-          // Display content in chunks for smooth appearance
-          if (!displayIntervalRef.current) {
-            let displayIndex = 0
-            displayIntervalRef.current = setInterval(() => {
-              const targetLength = bufferRef.current.length
-              if (displayIndex < targetLength) {
-                // Show 15-25 characters at a time for faster, smoother display
-                const chunkSize = Math.min(Math.floor(Math.random() * 11) + 15, targetLength - displayIndex)
-                displayIndex = Math.min(displayIndex + chunkSize, targetLength)
-                setDisplayedContent(bufferRef.current.substring(0, displayIndex))
-              } else {
-                // Keep syncing with buffer
-                setDisplayedContent(bufferRef.current)
-              }
-            }, 16) // ~60fps for very smooth display
+        // Start display interval if not already running and we have enough content.
+        // We also enforce a minimum "thinking" window so the behind-the-scenes
+        // reasoning steps are actually visible even when the model responds fast.
+        const elapsed = Date.now() - thinkingStartRef.current
+        const remaining = MIN_THINKING_MS - elapsed
+        if (content.length > 600 && !hasStartedStreaming && !streamingScheduledRef.current) {
+          streamingScheduledRef.current = true
+          const beginStreaming = () => {
+            setHasStartedStreaming(true)
+            
+            // Display content in chunks for smooth appearance
+            if (!displayIntervalRef.current) {
+              let displayIndex = 0
+              displayIntervalRef.current = setInterval(() => {
+                const targetLength = bufferRef.current.length
+                if (displayIndex < targetLength) {
+                  // Show 15-25 characters at a time for faster, smoother display
+                  const chunkSize = Math.min(Math.floor(Math.random() * 11) + 15, targetLength - displayIndex)
+                  displayIndex = Math.min(displayIndex + chunkSize, targetLength)
+                  setDisplayedContent(bufferRef.current.substring(0, displayIndex))
+                } else {
+                  // Keep syncing with buffer
+                  setDisplayedContent(bufferRef.current)
+                }
+              }, 16) // ~60fps for very smooth display
+            }
+          }
+
+          if (remaining > 0) {
+            // Hold the thinking panel a little longer so more steps show
+            setTimeout(beginStreaming, remaining)
+          } else {
+            beginStreaming()
           }
         }
       }
