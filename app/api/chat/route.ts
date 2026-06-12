@@ -423,6 +423,18 @@ export async function POST(req: Request) {
       },
     })
 
+    // Targon (Bittensor SN4) — second decentralized inference provider, used as
+    // a failover when Chutes is at capacity. OpenAI-compatible endpoint.
+    const targonApiKey = process.env.TARGON_API_KEY
+    // Map our model ids to equivalent open models served on Targon
+    const targonModelOptions: Record<string, string> = {
+      'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.1',
+      'kimi-k2.6': 'moonshotai/Kimi-K2-Instruct',
+      'kimi-k2.5': 'moonshotai/Kimi-K2-Instruct',
+      'qwen3-32b': 'Qwen/Qwen3-32B',
+    }
+    const targonModel = (model && targonModelOptions[model]) || 'deepseek-ai/DeepSeek-V3.1'
+
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -454,6 +466,7 @@ export async function POST(req: Request) {
 
 ABOUT YOU:
 - You are powered by DeepSeek V3.2, a large language model running on Bittensor Subnet 64 (Chutes)
+- If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
 - You are NOT ChatGPT, Claude, or any other centralized AI - you run on decentralized infrastructure
@@ -566,6 +579,38 @@ When answering questions, refer to this document content. You can summarize it, 
         errorMessage.includes('maximum capacity') ||
         errorMessage.includes('No instances available') ||
         errorMessage.includes('AI_RetryError')) {
+      
+      // First failover: Targon (Bittensor SN4) — keeps inference decentralized
+      // before resorting to the centralized OpenAI fallback.
+      if (targonApiKey) {
+        try {
+          console.log('[v0] Chutes unavailable, trying Targon (SN4)')
+          const targon = createOpenAICompatible({
+            name: 'targon',
+            baseURL: 'https://api.targon.com/v1',
+            headers: {
+              'Authorization': `Bearer ${targonApiKey}`,
+            },
+          })
+
+          const targonResult = streamText({
+            model: targon.chatModel(targonModel),
+            system: systemPrompt + fileContextSection,
+            messages: modelMessages,
+            abortSignal: req.signal,
+          })
+
+          trackAnalyticsEvent('chat_query', lastMessage, `targon/${targonModel}`, 0.002, location, usedDesearch)
+
+          return targonResult.toUIMessageStreamResponse({
+            originalMessages: messages,
+            consumeSseStream: consumeStream,
+          })
+        } catch (targonError) {
+          console.log('[v0] Targon failover also failed:', String(targonError))
+          // fall through to OpenAI fallback below
+        }
+      }
       
       console.log('[v0] Chutes unavailable, falling back to OpenAI GPT-4o-mini')
       
