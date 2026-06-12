@@ -228,19 +228,26 @@ export default function ChatInterface() {
         // Update buffer with new content
         bufferRef.current = content
         
-        // Start display interval if not already running and we have enough content
-        // Buffer 600 characters before starting to display for smoother experience
-        if (content.length > 600 && !hasStartedStreaming) {
+        // Start displaying almost immediately. We keep only a tiny smoothing
+        // buffer (a few characters) so the very first tokens appear right away
+        // instead of waiting for a large block to accumulate.
+        if (content.length > 8 && !hasStartedStreaming) {
           setHasStartedStreaming(true)
           
-          // Display content in chunks for smooth appearance
+          // Display content in chunks for smooth appearance. The chunk size
+          // scales with how far behind we are, so the display always catches
+          // up to the model instead of lagging on long answers.
           if (!displayIntervalRef.current) {
             let displayIndex = 0
             displayIntervalRef.current = setInterval(() => {
               const targetLength = bufferRef.current.length
               if (displayIndex < targetLength) {
-                // Show 15-25 characters at a time for faster, smoother display
-                const chunkSize = Math.min(Math.floor(Math.random() * 11) + 15, targetLength - displayIndex)
+                const remaining = targetLength - displayIndex
+                // Base smoothing chunk of ~10-18 chars, plus a catch-up factor
+                // (10% of the backlog) so we never fall behind a fast stream.
+                const base = Math.floor(Math.random() * 9) + 10
+                const catchUp = Math.floor(remaining * 0.1)
+                const chunkSize = Math.min(base + catchUp, remaining)
                 displayIndex = Math.min(displayIndex + chunkSize, targetLength)
                 setDisplayedContent(bufferRef.current.substring(0, displayIndex))
               } else {
