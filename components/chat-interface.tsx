@@ -927,6 +927,12 @@ export default function ChatInterface() {
                   Is it AI?
                 </Button>
               </Link>
+              <a href="https://xagram.me" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
+                  <User className="w-4 h-4 mr-1" />
+                  Analyze X
+                </Button>
+              </a>
               <Link href="/developers">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
@@ -957,6 +963,12 @@ export default function ChatInterface() {
                   Is it AI?
                 </Button>
               </Link>
+              <a href="https://xagram.me" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
+                  <User className="w-4 h-4 mr-1" />
+                  Analyze X
+                </Button>
+              </a>
               <Link href="/developers">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
