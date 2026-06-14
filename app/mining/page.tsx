@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Server, TrendingUp, Spade, Cpu, ArrowRight, CheckCircle2, Bot, Zap, Network, ShieldCheck } from 'lucide-react'
+import { Server, TrendingUp, Spade, Cpu, ArrowRight, CheckCircle2, Bot, Zap, Network, ShieldCheck, Search } from 'lucide-react'
 
 type Subnet = {
   id: number
@@ -53,6 +53,20 @@ const SUBNETS: Subnet[] = [
       'Clear, beginner-friendly onboarding docs',
       'Rewards strategy quality, not just hardware',
       'Active community support',
+    ],
+  },
+  {
+    id: 22,
+    name: 'Desearch',
+    netuid: 'SN22',
+    tagline: 'Decentralized AI search — scrape and structure real-time web and social data.',
+    icon: Search,
+    difficulty: 'Intermediate',
+    hardware: 'Mid-range server, reliable bandwidth',
+    highlights: [
+      'Powers real-time X and web data retrieval',
+      'Rewards fast, accurate, well-structured results',
+      'No high-end GPU required to get started',
     ],
   },
   {
