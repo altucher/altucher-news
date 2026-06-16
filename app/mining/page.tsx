@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Server, TrendingUp, Spade, Cpu, ArrowRight, CheckCircle2, Bot, Zap, Network, ShieldCheck, Search } from 'lucide-react'
+import { Server, TrendingUp, Spade, Cpu, ArrowRight, CheckCircle2, Bot, Zap, Network, ShieldCheck, Search, HardDrive } from 'lucide-react'
 
 type Subnet = {
   id: number
@@ -67,6 +67,20 @@ const SUBNETS: Subnet[] = [
       'Powers real-time X and web data retrieval',
       'Rewards fast, accurate, well-structured results',
       'No high-end GPU required to get started',
+    ],
+  },
+  {
+    id: 75,
+    name: 'Hippius',
+    netuid: 'SN75',
+    tagline: 'Decentralized cloud storage — contribute disk space, not GPUs.',
+    icon: HardDrive,
+    difficulty: 'Intermediate',
+    hardware: 'Server with ample disk and reliable bandwidth',
+    highlights: [
+      'IPFS-based and S3-compatible object storage',
+      'Rewards reliable storage and data availability',
+      'No GPU required — storage-focused mining',
     ],
   },
   {
