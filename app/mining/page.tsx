@@ -98,6 +98,20 @@ const SUBNETS: Subnet[] = [
     ],
   },
   {
+    id: 9,
+    name: 'IOTA',
+    netuid: 'SN9',
+    tagline: 'Incentivized decentralized pre-training of large language models.',
+    icon: Cpu,
+    difficulty: 'Advanced',
+    hardware: 'High-end GPUs with fast interconnect',
+    highlights: [
+      'Collaboratively pre-trains LLMs across the network',
+      'Rewards useful compute contributed to training',
+      'For serious operators with strong GPU capacity',
+    ],
+  },
+  {
     id: 107,
     name: 'Minos',
     netuid: 'SN107',
