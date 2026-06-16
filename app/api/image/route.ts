@@ -4,7 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 export const maxDuration = 120 // 2 minutes for image generation
 
 // Z Image Turbo on Chutes (Bittensor SN64) - Primary
-const CHUTES_Z_IMAGE_API = 'https://chutes-z-image-turbo.chutes.ai/generate'
+// Multiple chute deployments are tried in order so a single chute being
+// scaled-to-zero ("No instances available") doesn't break image generation.
+const CHUTES_Z_IMAGE_ENDPOINTS = [
+  'https://vonkaiser-z-image-turbo.chutes.ai/generate',
+  'https://chutes-z-image-turbo.chutes.ai/generate',
+]
 
 // Fal.ai FLUX schnell - Fallback
 const FAL_API_URL = 'https://fal.run/fal-ai/flux/schnell'
@@ -44,44 +49,54 @@ async function trackEvent(
   }
 }
 
-// Generate image using Chutes Z Image Turbo
+// Generate image using Chutes Z Image Turbo.
+// Tries each deployment in order; if one is scaled-to-zero (503) it moves
+// on to the next before giving up.
 async function generateWithChutes(prompt: string, apiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
-  try {
-    console.log('[Image Gen] Trying Chutes Z Image Turbo...')
-    
-    const response = await fetch(CHUTES_Z_IMAGE_API, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ prompt }),
-    })
+  let lastError = 'Unknown error'
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[Image Gen] Chutes API error:', response.status, errorText.substring(0, 200))
-      return { success: false, error: `Chutes error: ${response.status}` }
+  for (const endpoint of CHUTES_Z_IMAGE_ENDPOINTS) {
+    try {
+      console.log('[Image Gen] Trying Chutes Z Image Turbo:', endpoint)
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[Image Gen] Chutes API error:', response.status, errorText.substring(0, 200))
+        lastError = `Chutes error: ${response.status}`
+        continue
+      }
+
+      // Z Image Turbo returns PNG binary directly
+      const imageBuffer = await response.arrayBuffer()
+
+      if (imageBuffer.byteLength < 1000) {
+        console.error('[Image Gen] Chutes returned too small response, likely error')
+        lastError = 'Invalid image response'
+        continue
+      }
+
+      // Convert to base64 data URL
+      const base64 = Buffer.from(imageBuffer).toString('base64')
+      const imageUrl = `data:image/png;base64,${base64}`
+
+      console.log('[Image Gen] Chutes Z Image Turbo success, image size:', imageBuffer.byteLength)
+      return { success: true, imageUrl }
+    } catch (e) {
+      console.error('[Image Gen] Chutes error:', e)
+      lastError = e instanceof Error ? e.message : 'Unknown error'
     }
-
-    // Z Image Turbo returns PNG binary directly
-    const imageBuffer = await response.arrayBuffer()
-    
-    if (imageBuffer.byteLength < 1000) {
-      console.error('[Image Gen] Chutes returned too small response, likely error')
-      return { success: false, error: 'Invalid image response' }
-    }
-
-    // Convert to base64 data URL
-    const base64 = Buffer.from(imageBuffer).toString('base64')
-    const imageUrl = `data:image/png;base64,${base64}`
-    
-    console.log('[Image Gen] Chutes Z Image Turbo success, image size:', imageBuffer.byteLength)
-    return { success: true, imageUrl }
-  } catch (e) {
-    console.error('[Image Gen] Chutes error:', e)
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
   }
+
+  return { success: false, error: lastError }
 }
 
 // Generate image using Fal.ai FLUX (fallback)
