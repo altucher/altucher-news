@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, Music } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -85,6 +85,9 @@ export default function ChatInterface() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
+  const [generatingMusic, setGeneratingMusic] = useState(false)
+  const [generatedMusic, setGeneratedMusic] = useState<Array<{id: string, prompt: string, audioUrl: string, createdAt: number}>>([])
+  const [currentMusicPrompt, setCurrentMusicPrompt] = useState<string | null>(null)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
@@ -404,7 +407,7 @@ export default function ChatInterface() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, newsHeadlines, generatedImages, generatingImage])
+  }, [messages, newsHeadlines, generatedImages, generatingImage, generatedMusic, generatingMusic])
 
   // Track timestamps for new messages
   useEffect(() => {
@@ -494,6 +497,13 @@ export default function ChatInterface() {
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
+    }
+
+    // If the user is asking for music, route to music generation even
+    // if they pressed the text/send button instead of the music button.
+    if (isMusicRequest(userMessage)) {
+      handleGenerateMusic(userMessage)
+      return
     }
 
     // If the user is asking for an image, route to image generation even
@@ -630,6 +640,72 @@ export default function ChatInterface() {
       setGeneratingImage(false)
       setCurrentImagePrompt(null)
     }
+  }
+
+  // Generate music from prompt
+  const handleGenerateMusic = async (prompt: string) => {
+    if (!prompt.trim() || generatingMusic) return
+
+    setGeneratingMusic(true)
+    setCurrentMusicPrompt(prompt)
+
+    try {
+      const response = await fetch('/api/music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || 'Music generation failed'
+        throw new Error(errorMsg)
+      }
+
+      if (data.audioUrl) {
+        const newTrack = {
+          id: crypto.randomUUID(),
+          prompt: prompt,
+          audioUrl: data.audioUrl,
+          createdAt: Date.now()
+        }
+        setGeneratedMusic(prev => [...prev, newTrack])
+        // Force scroll after state update
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
+    } catch (error) {
+      console.error('[Music Gen] Error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to generate music')
+    } finally {
+      setGeneratingMusic(false)
+      setCurrentMusicPrompt(null)
+    }
+  }
+
+  // Check if message is a music generation request
+  const isMusicRequest = (text: string) => {
+    const lowerText = text.toLowerCase().trim()
+    return /\b(compose|hum)\b/.test(lowerText) ||
+           lowerText.includes('generate music') ||
+           lowerText.includes('generate a song') ||
+           lowerText.includes('generate song') ||
+           lowerText.includes('create music') ||
+           lowerText.includes('create a song') ||
+           lowerText.includes('make music') ||
+           lowerText.includes('make a song') ||
+           lowerText.includes('make me a song') ||
+           lowerText.includes('write a song') ||
+           lowerText.includes('write me a song') ||
+           lowerText.includes('a song about') ||
+           lowerText.includes('song about') ||
+           lowerText.includes('compose a song') ||
+           lowerText.includes('compose music') ||
+           lowerText.includes('create a track') ||
+           lowerText.includes('make a beat') ||
+           lowerText.includes('generate a beat')
   }
 
   // Check if message is an image generation request
@@ -993,7 +1069,7 @@ export default function ChatInterface() {
         {/* Main Content */}
         <main className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
-            {messages.length === 0 && generatedImages.length === 0 && !generatingImage ? (
+            {messages.length === 0 && generatedImages.length === 0 && !generatingImage && generatedMusic.length === 0 && !generatingMusic ? (
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
@@ -1049,6 +1125,33 @@ export default function ChatInterface() {
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
+                      <Button
+                        type="button"
+                        size="icon"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const prompt = input.trim()
+                          if (prompt) {
+                            setInput('') // Clear input immediately
+                            handleGenerateMusic(prompt)
+                          }
+                        }}
+                        disabled={!input.trim() || isLoading || generatingMusic}
+                        title="Generate Music"
+                        className={cn(
+                          'mr-1 h-10 w-10 rounded-full transition-all',
+                          input.trim() && !isLoading && !generatingMusic
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {generatingMusic ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Music className="w-5 h-5" />
+                        )}
+                      </Button>
                       <Button
                         type="button"
                         size="icon"
@@ -1139,7 +1242,7 @@ export default function ChatInterface() {
                   {/* Unified timeline: merge messages and images chronologically */}
                   {(() => {
                     // Create timeline items with timestamps
-                    const timelineItems: Array<{type: 'message' | 'image', data: typeof messages[0] | typeof generatedImages[0], timestamp: number, idx: number}> = []
+                    const timelineItems: Array<{type: 'message' | 'image' | 'music', data: typeof messages[0] | typeof generatedImages[0] | typeof generatedMusic[0], timestamp: number, idx: number}> = []
                     
                     messages.forEach((msg, idx) => {
                       // Use tracked timestamp or fallback to a very old time for existing messages
@@ -1149,6 +1252,10 @@ export default function ChatInterface() {
                     
                     generatedImages.forEach((img, idx) => {
                       timelineItems.push({ type: 'image', data: img, timestamp: img.createdAt, idx })
+                    })
+
+                    generatedMusic.forEach((track, idx) => {
+                      timelineItems.push({ type: 'music', data: track, timestamp: track.createdAt, idx })
                     })
                     
                     // Sort by timestamp
@@ -1176,6 +1283,40 @@ export default function ChatInterface() {
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      } else if (item.type === 'music') {
+                        const track = item.data as typeof generatedMusic[0]
+                        return (
+                          <div key={`music-${track.id}`} className="flex gap-4">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                              <Music className="w-5 h-5 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-muted-foreground mb-2">{track.prompt}</p>
+                              <div className="relative rounded-lg border border-border bg-card p-4 max-w-md">
+                                <audio
+                                  src={track.audioUrl}
+                                  controls
+                                  className="w-full"
+                                />
+                                <div className="mt-3 flex items-center justify-between">
+                                  <a
+                                    href={track.audioUrl}
+                                    download={`bluetao-music-${track.id}.mp3`}
+                                    className="text-xs text-primary hover:underline"
+                                  >
+                                    Download MP3
+                                  </a>
+                                  <button
+                                    onClick={() => setGeneratedMusic(prev => prev.filter(t => t.id !== track.id))}
+                                    className="text-xs text-muted-foreground hover:text-foreground"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1257,6 +1398,24 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
+                  {/* Music generating indicator */}
+                  {generatingMusic && (
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center animate-pulse">
+                        <Music className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground mb-2 font-medium">{currentMusicPrompt}</p>
+                        <div className="flex items-center gap-3 text-emerald-600 bg-emerald-50 rounded-lg px-4 py-3">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">Composing music...</span>
+                            <span className="text-xs text-emerald-400">This may take 20-40 seconds</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 {(status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
@@ -1311,7 +1470,7 @@ export default function ChatInterface() {
         </main>
 
         {/* Input Area - Chat Mode */}
-        {(messages.length > 0 || generatedImages.length > 0 || generatingImage) && (
+        {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
               {/* File upload indicator */}
@@ -1370,6 +1529,33 @@ export default function ChatInterface() {
                       <Mic className="w-4 h-4" />
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const prompt = input.trim()
+                      if (prompt) {
+                        setInput('') // Clear input immediately
+                        handleGenerateMusic(prompt)
+                      }
+                    }}
+                    disabled={!input.trim() || isLoading || generatingMusic}
+                    title="Generate Music"
+                    className={cn(
+                      'mr-1 h-9 w-9 rounded-full transition-all',
+                      input.trim() && !isLoading && !generatingMusic
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {generatingMusic ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Music className="w-4 h-4" />
+                    )}
+                  </Button>
                   <Button
                     type="button"
                     size="icon"
