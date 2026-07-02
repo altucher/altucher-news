@@ -164,6 +164,12 @@ async function searchWeb(query: string): Promise<string> {
   // Check if this is a Twitter/X specific query
   const isTwitterQuery = /twitter|tweet|x\.com|@\w+|#\w+|posts from/i.test(query)
   
+  // Cap the search so a slow Desearch response can't stall time-to-first-token.
+  // If it doesn't return within the window, we proceed with the model's own
+  // knowledge instead of blocking the stream.
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  
   try {
     // Use Desearch AI Search - with twitter tool if it's a social media query
     const response = await fetch('https://api.desearch.ai/desearch/ai/search', {
@@ -177,16 +183,19 @@ async function searchWeb(query: string): Promise<string> {
         model: 'NOVA',
         tools: isTwitterQuery ? ['twitter', 'web'] : ['web'],
         date_filter: 'PAST_WEEK'
-      })
+      }),
+      signal: controller.signal
     })
     
     if (!response.ok) {
+      clearTimeout(timeout)
       console.log('[v0] Desearch error:', response.status, await response.text())
       return results.join('\n\n')
     }
     
     // Desearch returns streaming data, parse it
     const text = await response.text()
+    clearTimeout(timeout)
     const lines = text.split('\n').filter(l => l.startsWith('data: '))
     
     let summary = ''
@@ -234,7 +243,12 @@ async function searchWeb(query: string): Promise<string> {
     
     return results.join('\n\n')
   } catch (e) {
-    console.log('[v0] Desearch error:', e)
+    clearTimeout(timeout)
+    if ((e as Error)?.name === 'AbortError') {
+      console.log('[v0] Desearch timed out, proceeding without search results')
+    } else {
+      console.log('[v0] Desearch error:', e)
+    }
     return results.join('\n\n')
   }
 }

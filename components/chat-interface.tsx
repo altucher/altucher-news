@@ -264,24 +264,30 @@ export default function ChatInterface() {
         // Update buffer with new content
         bufferRef.current = content
         
-        // Start display interval if not already running and we have enough content.
-        // We also enforce a minimum "thinking" window so the behind-the-scenes
-        // reasoning steps are actually visible even when the model responds fast.
+        // Enforce a minimum "thinking" window so the behind-the-scenes reasoning
+        // steps are actually visible, then stream. Once streaming begins we use a
+        // catch-up chunk algorithm so the display never lags behind a fast stream.
         const elapsed = Date.now() - thinkingStartRef.current
-        const remaining = MIN_THINKING_MS - elapsed
-        if (content.length > 600 && !hasStartedStreaming && !streamingScheduledRef.current) {
+        const remainingThink = MIN_THINKING_MS - elapsed
+        if (content.length > 8 && !hasStartedStreaming && !streamingScheduledRef.current) {
           streamingScheduledRef.current = true
           const beginStreaming = () => {
             setHasStartedStreaming(true)
             
-            // Display content in chunks for smooth appearance
+            // Display content in chunks for smooth appearance. The chunk size
+            // scales with how far behind we are, so the display always catches
+            // up to the model instead of lagging on long answers.
             if (!displayIntervalRef.current) {
               let displayIndex = 0
               displayIntervalRef.current = setInterval(() => {
                 const targetLength = bufferRef.current.length
                 if (displayIndex < targetLength) {
-                  // Show 15-25 characters at a time for faster, smoother display
-                  const chunkSize = Math.min(Math.floor(Math.random() * 11) + 15, targetLength - displayIndex)
+                  const backlog = targetLength - displayIndex
+                  // Base smoothing chunk of ~10-18 chars, plus a catch-up factor
+                  // (10% of the backlog) so we never fall behind a fast stream.
+                  const base = Math.floor(Math.random() * 9) + 10
+                  const catchUp = Math.floor(backlog * 0.1)
+                  const chunkSize = Math.min(base + catchUp, backlog)
                   displayIndex = Math.min(displayIndex + chunkSize, targetLength)
                   setDisplayedContent(bufferRef.current.substring(0, displayIndex))
                 } else {
@@ -292,9 +298,9 @@ export default function ChatInterface() {
             }
           }
 
-          if (remaining > 0) {
+          if (remainingThink > 0) {
             // Hold the thinking panel a little longer so more steps show
-            setTimeout(beginStreaming, remaining)
+            setTimeout(beginStreaming, remainingThink)
           } else {
             beginStreaming()
           }
