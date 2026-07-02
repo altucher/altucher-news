@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye, Search, Music } from 'lucide-react'
+import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye, Search, Music, Film } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -12,11 +12,13 @@ interface AnalyticsData {
     totalChatQueries: number
     totalAIDetections?: number
     totalMusicGenerations?: number
+    totalVideoGenerations?: number
     uniqueUsers: number
     activeDays: number
     estimatedChatCost: string
     estimatedImageCost: string
     estimatedMusicCost?: string
+    estimatedVideoCost?: string
     totalEstimatedCost: string
   }
   topCountries?: Array<{ country: string; count: number }>

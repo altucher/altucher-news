@@ -66,6 +66,11 @@ export async function GET() {
       .select('*', { count: 'exact', head: true })
       .eq('event_type', 'music_generation')
     
+    const { count: videoCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'video_generation')
+    
     const { data: events, error: eventsError } = await supabaseAdmin
       .from('analytics_events')
       .select('*')
@@ -85,6 +90,7 @@ export async function GET() {
     const totalChatQueries = chatCount || 0
     const totalAIDetections = detectCount || 0
     const totalMusicGenerations = musicCount || 0
+    const totalVideoGenerations = videoCount || 0
     const totalAllQueries = totalEventsCount || 0
     
     // Filter events for cost calculation (from fetched data)
@@ -92,6 +98,7 @@ export async function GET() {
     const chatEvents = analyticsEvents.filter(e => e.event_type === 'chat_query')
     const detectEvents = analyticsEvents.filter(e => e.event_type === 'ai_detection')
     const musicEvents = analyticsEvents.filter(e => e.event_type === 'music_generation')
+    const videoEvents = analyticsEvents.filter(e => e.event_type === 'video_generation')
     
     // Estimate costs (Chutes pricing approximations)
     // Chat: ~$0.001 per 1000 tokens
@@ -101,7 +108,8 @@ export async function GET() {
     const estimatedImageCost = imageEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.02), 0)
     const estimatedDetectCost = detectEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.01), 0)
     const estimatedMusicCost = musicEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.02), 0)
-    const totalEstimatedCost = estimatedChatCost + estimatedImageCost + estimatedDetectCost + estimatedMusicCost
+    const estimatedVideoCost = videoEvents.reduce((sum, e) => sum + (e.cost_estimate || 0.05), 0)
+    const totalEstimatedCost = estimatedChatCost + estimatedImageCost + estimatedDetectCost + estimatedMusicCost + estimatedVideoCost
 
     // Daily breakdown
     const dailyStats: Record<string, { queries: number; images: number; cost: number }> = {}
@@ -128,6 +136,9 @@ export async function GET() {
       if (event.event_type === 'music_generation') {
         dailyStats[date].cost += event.cost_estimate || 0.02
       }
+      if (event.event_type === 'video_generation') {
+        dailyStats[date].cost += event.cost_estimate || 0.05
+      }
     })
 
     // Calculate location stats
@@ -151,12 +162,14 @@ export async function GET() {
         totalChatQueries,
         totalAIDetections,
         totalMusicGenerations,
+        totalVideoGenerations,
         uniqueUsers,
         activeDays,
         estimatedChatCost: estimatedChatCost.toFixed(4),
         estimatedImageCost: estimatedImageCost.toFixed(4),
         estimatedDetectCost: estimatedDetectCost.toFixed(4),
         estimatedMusicCost: estimatedMusicCost.toFixed(4),
+        estimatedVideoCost: estimatedVideoCost.toFixed(4),
         totalEstimatedCost: totalEstimatedCost.toFixed(4),
       },
       topCountries,

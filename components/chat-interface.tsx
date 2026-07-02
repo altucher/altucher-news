@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -85,6 +85,9 @@ export default function ChatInterface() {
   const [generatingMusic, setGeneratingMusic] = useState(false)
   const [generatedMusic, setGeneratedMusic] = useState<Array<{id: string, prompt: string, audioUrl: string, createdAt: number}>>([])
   const [currentMusicPrompt, setCurrentMusicPrompt] = useState<string | null>(null)
+  const [generatingVideo, setGeneratingVideo] = useState(false)
+  const [generatedVideos, setGeneratedVideos] = useState<Array<{id: string, prompt: string, videoUrl: string, createdAt: number}>>([])
+  const [currentVideoPrompt, setCurrentVideoPrompt] = useState<string | null>(null)
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
@@ -548,6 +551,12 @@ export default function ChatInterface() {
       return
     }
 
+    // If the user is asking for a video, route to video generation.
+    if (isVideoRequest(userMessage)) {
+      handleGenerateVideo(userMessage)
+      return
+    }
+
     // If the user is asking for a song/music, route to music generation.
     if (isMusicRequest(userMessage)) {
       handleGenerateMusic(userMessage)
@@ -809,6 +818,59 @@ export default function ChatInterface() {
            lowerText.includes('a song about') ||
            lowerText.includes('write a jingle') ||
            lowerText.includes('make a jingle')
+  }
+
+  const handleGenerateVideo = async (prompt: string) => {
+    if (!prompt.trim() || generatingVideo) return
+
+    setGeneratingVideo(true)
+    setCurrentVideoPrompt(prompt)
+
+    try {
+      const response = await fetch('/api/video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || 'Video generation failed'
+        throw new Error(errorMsg)
+      }
+
+      if (data.videoUrl) {
+        const newVideo = {
+          id: crypto.randomUUID(),
+          prompt: prompt,
+          videoUrl: data.videoUrl,
+          createdAt: Date.now(),
+        }
+        setGeneratedVideos(prev => [...prev, newVideo])
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
+    } catch (error) {
+      console.error('[Video Gen] Error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to generate video')
+    } finally {
+      setGeneratingVideo(false)
+      setCurrentVideoPrompt(null)
+    }
+  }
+
+  // Check if message is a video generation request
+  const isVideoRequest = (text: string) => {
+    const lowerText = text.toLowerCase().trim()
+    return /\b(make|create|generate|produce|render)\s+(me\s+)?(a\s+)?(short\s+)?(video|clip|animation|movie)\b/.test(lowerText) ||
+           lowerText.includes('video of') ||
+           lowerText.includes('animate ') ||
+           lowerText.includes('text to video') ||
+           lowerText.includes('text-to-video') ||
+           lowerText.includes('make a gif') ||
+           lowerText.includes('video clip')
   }
 
   const suggestions = [
@@ -1133,7 +1195,7 @@ export default function ChatInterface() {
         {/* Main Content */}
         <main className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
-                {messages.length === 0 && generatedImages.length === 0 && !generatingImage && generatedMusic.length === 0 && !generatingMusic ? (
+                {messages.length === 0 && generatedImages.length === 0 && !generatingImage && generatedMusic.length === 0 && !generatingMusic && generatedVideos.length === 0 && !generatingVideo ? (
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
@@ -1189,6 +1251,33 @@ export default function ChatInterface() {
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
+                      <Button
+                        type="button"
+                        size="icon"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const prompt = input.trim()
+                          if (prompt) {
+                            setInput('') // Clear input immediately
+                            handleGenerateVideo(prompt)
+                          }
+                        }}
+                        disabled={!input.trim() || isLoading || generatingVideo}
+                        title="Generate Video"
+                        className={cn(
+                          'mr-1 h-10 w-10 rounded-full transition-all',
+                          input.trim() && !isLoading && !generatingVideo
+                            ? 'bg-rose-600 text-white hover:bg-rose-500'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {generatingVideo ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Film className="w-5 h-5" />
+                        )}
+                      </Button>
                       <Button
                         type="button"
                         size="icon"
@@ -1318,7 +1407,7 @@ export default function ChatInterface() {
                   {/* Unified timeline: merge messages and images chronologically */}
                   {(() => {
                     // Create timeline items with timestamps
-                    const timelineItems: Array<{type: 'message' | 'image' | 'music', data: typeof messages[0] | typeof generatedImages[0] | typeof generatedMusic[0], timestamp: number, idx: number}> = []
+                    const timelineItems: Array<{type: 'message' | 'image' | 'music' | 'video', data: typeof messages[0] | typeof generatedImages[0] | typeof generatedMusic[0] | typeof generatedVideos[0], timestamp: number, idx: number}> = []
                     
                     messages.forEach((msg, idx) => {
                       // Use tracked timestamp or fallback to a very old time for existing messages
@@ -1332,6 +1421,10 @@ export default function ChatInterface() {
 
                     generatedMusic.forEach((track, idx) => {
                       timelineItems.push({ type: 'music', data: track, timestamp: track.createdAt, idx })
+                    })
+
+                    generatedVideos.forEach((vid, idx) => {
+                      timelineItems.push({ type: 'video', data: vid, timestamp: vid.createdAt, idx })
                     })
                     
                     // Sort by timestamp
@@ -1390,6 +1483,50 @@ export default function ChatInterface() {
                                   </a>
                                   <button
                                     onClick={() => setGeneratedMusic(prev => prev.filter(t => t.id !== track.id))}
+                                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      } else if (item.type === 'video') {
+                        const vid = item.data as typeof generatedVideos[0]
+                        return (
+                          <div key={`video-${vid.id}`} className="flex gap-4">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                              <Film className="w-5 h-5 text-rose-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-muted-foreground mb-2">{vid.prompt}</p>
+                              <div className="relative rounded-lg border border-border bg-card p-4 max-w-md">
+                                <div className="flex items-center gap-2 mb-3 text-rose-600">
+                                  <Film className="w-4 h-4" />
+                                  <span className="text-xs font-medium">Generated with LTX-Video on Bittensor SN64</span>
+                                </div>
+                                <video
+                                  controls
+                                  autoPlay
+                                  loop
+                                  muted
+                                  playsInline
+                                  src={vid.videoUrl}
+                                  className="w-full rounded-md"
+                                >
+                                  Your browser does not support the video element.
+                                </video>
+                                <div className="flex items-center justify-between mt-3">
+                                  <a
+                                    href={vid.videoUrl}
+                                    download={`bluetao-video-${vid.id.slice(0, 8)}.mp4`}
+                                    className="text-xs text-sky-600 dark:text-sky-400 hover:underline"
+                                  >
+                                    Download MP4
+                                  </a>
+                                  <button
+                                    onClick={() => setGeneratedVideos(prev => prev.filter(v => v.id !== vid.id))}
                                     className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                                   >
                                     Remove
@@ -1494,6 +1631,24 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
+                  {/* Video generating indicator */}
+                  {generatingVideo && (
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center animate-pulse">
+                        <Film className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground mb-2 font-medium">{currentVideoPrompt}</p>
+                        <div className="flex items-center gap-3 text-rose-600 bg-rose-50 rounded-lg px-4 py-3">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">Generating video...</span>
+                            <span className="text-xs text-rose-500">This may take 1-3 minutes</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 {(status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
@@ -1562,7 +1717,7 @@ export default function ChatInterface() {
         </main>
 
         {/* Input Area - Chat Mode */}
-                {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic) && (
+                {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic || generatedVideos.length > 0 || generatingVideo) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
               {/* File upload indicator */}
@@ -1621,6 +1776,33 @@ export default function ChatInterface() {
                       <Mic className="w-4 h-4" />
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const prompt = input.trim()
+                      if (prompt) {
+                        setInput('') // Clear input immediately
+                        handleGenerateVideo(prompt)
+                      }
+                    }}
+                    disabled={!input.trim() || isLoading || generatingVideo}
+                    title="Generate Video"
+                    className={cn(
+                      'mr-1 h-9 w-9 rounded-full transition-all',
+                      input.trim() && !isLoading && !generatingVideo
+                        ? 'bg-rose-600 text-white hover:bg-rose-500'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {generatingVideo ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Film className="w-4 h-4" />
+                    )}
+                  </Button>
                   <Button
                     type="button"
                     size="icon"
