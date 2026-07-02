@@ -14,6 +14,22 @@ import { MemoryPanel } from '@/components/memory-panel'
 import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import Link from 'next/link'
 
+// Lightweight hover tooltip. Wrapping span catches the hover so the label
+// still appears even when the wrapped button is disabled.
+function Tip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="relative inline-flex group/tip">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute -top-9 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
+  )
+}
+
 interface UsageInfo {
   tier: string
   messageCount: number
@@ -1251,87 +1267,91 @@ export default function ChatInterface() {
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
-                      <Button
-                        type="button"
-                        size="icon"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          const prompt = input.trim()
-                          if (prompt) {
-                            setInput('') // Clear input immediately
-                            handleGenerateVideo(prompt)
-                          }
-                        }}
-                        disabled={!input.trim() || isLoading || generatingVideo}
-                        title="Generate Video"
-                        className={cn(
-                          'mr-1 h-10 w-10 rounded-full transition-all',
-                          input.trim() && !isLoading && !generatingVideo
-                            ? 'bg-rose-600 text-white hover:bg-rose-500'
-                            : 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {generatingVideo ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <Film className="w-5 h-5" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          const prompt = input.trim()
-                          if (prompt) {
-                            setInput('') // Clear input immediately
-                            handleGenerateMusic(prompt)
-                          }
-                        }}
-                        disabled={!input.trim() || isLoading || generatingMusic}
-                        title="Generate Music"
-                        className={cn(
-                          'mr-1 h-10 w-10 rounded-full transition-all',
-                          input.trim() && !isLoading && !generatingMusic
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                            : 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {generatingMusic ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <Music className="w-5 h-5" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          const prompt = input.trim()
-                          if (prompt) {
-                            setInput('') // Clear input immediately
-                            handleGenerateImage(prompt)
-                          }
-                        }}
-                        disabled={!input.trim() || isLoading || generatingImage}
-                        title="Generate Image"
-                        className={cn(
-                          'mr-1 h-10 w-10 rounded-full transition-all',
-                          input.trim() && !isLoading && !generatingImage
-                            ? 'bg-violet-600 text-white hover:bg-violet-500'
-                            : 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {generatingImage ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <ImageIcon className="w-5 h-5" />
-                        )}
-                      </Button>
+                      <Tip label="Video">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const prompt = input.trim()
+                            if (prompt) {
+                              setInput('') // Clear input immediately
+                              handleGenerateVideo(prompt)
+                            }
+                          }}
+                          disabled={!input.trim() || isLoading || generatingVideo}
+                          className={cn(
+                            'mr-1 h-10 w-10 rounded-full transition-all',
+                            input.trim() && !isLoading && !generatingVideo
+                              ? 'bg-rose-600 text-white hover:bg-rose-500'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {generatingVideo ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Film className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </Tip>
+                      <Tip label="Music">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const prompt = input.trim()
+                            if (prompt) {
+                              setInput('') // Clear input immediately
+                              handleGenerateMusic(prompt)
+                            }
+                          }}
+                          disabled={!input.trim() || isLoading || generatingMusic}
+                          className={cn(
+                            'mr-1 h-10 w-10 rounded-full transition-all',
+                            input.trim() && !isLoading && !generatingMusic
+                              ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {generatingMusic ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Music className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </Tip>
+                      <Tip label="Image">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const prompt = input.trim()
+                            if (prompt) {
+                              setInput('') // Clear input immediately
+                              handleGenerateImage(prompt)
+                            }
+                          }}
+                          disabled={!input.trim() || isLoading || generatingImage}
+                          className={cn(
+                            'mr-1 h-10 w-10 rounded-full transition-all',
+                            input.trim() && !isLoading && !generatingImage
+                              ? 'bg-violet-600 text-white hover:bg-violet-500'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {generatingImage ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <ImageIcon className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </Tip>
+                      <Tip label="Text">
                       <Button
                         type="submit"
                         size="icon"
@@ -1349,6 +1369,7 @@ export default function ChatInterface() {
                           <Send className="w-5 h-5" />
                         )}
                       </Button>
+                      </Tip>
                     </div>
                   </form>
                 </div>
@@ -1776,104 +1797,109 @@ export default function ChatInterface() {
                       <Mic className="w-4 h-4" />
                     </Button>
                   )}
-                  <Button
-                    type="button"
-                    size="icon"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const prompt = input.trim()
-                      if (prompt) {
-                        setInput('') // Clear input immediately
-                        handleGenerateVideo(prompt)
-                      }
-                    }}
-                    disabled={!input.trim() || isLoading || generatingVideo}
-                    title="Generate Video"
-                    className={cn(
-                      'mr-1 h-9 w-9 rounded-full transition-all',
-                      input.trim() && !isLoading && !generatingVideo
-                        ? 'bg-rose-600 text-white hover:bg-rose-500'
-                        : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {generatingVideo ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Film className="w-4 h-4" />
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const prompt = input.trim()
-                      if (prompt) {
-                        setInput('') // Clear input immediately
-                        handleGenerateMusic(prompt)
-                      }
-                    }}
-                    disabled={!input.trim() || isLoading || generatingMusic}
-                    title="Generate Music"
-                    className={cn(
-                      'mr-1 h-9 w-9 rounded-full transition-all',
-                      input.trim() && !isLoading && !generatingMusic
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                        : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {generatingMusic ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Music className="w-4 h-4" />
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const prompt = input.trim()
-                      if (prompt) {
-                        setInput('') // Clear input immediately
-                        handleGenerateImage(prompt)
-                      }
-                    }}
-                    disabled={!input.trim() || isLoading || generatingImage}
-                    title="Generate Image"
-                    className={cn(
-                      'mr-1 h-9 w-9 rounded-full transition-all',
-                      input.trim() && !isLoading && !generatingImage
-                        ? 'bg-violet-600 text-white hover:bg-violet-500'
-                        : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {generatingImage ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <ImageIcon className="w-4 h-4" />
-                    )}
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={!input.trim() || isLoading}
-                    className={cn(
-                      'mr-2 h-9 w-9 rounded-full transition-all',
-                      input.trim() && !isLoading
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                        : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                  </Button>
+                  <Tip label="Video">
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const prompt = input.trim()
+                        if (prompt) {
+                          setInput('') // Clear input immediately
+                          handleGenerateVideo(prompt)
+                        }
+                      }}
+                      disabled={!input.trim() || isLoading || generatingVideo}
+                      className={cn(
+                        'mr-1 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading && !generatingVideo
+                          ? 'bg-rose-600 text-white hover:bg-rose-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {generatingVideo ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Film className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
+                  <Tip label="Music">
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const prompt = input.trim()
+                        if (prompt) {
+                          setInput('') // Clear input immediately
+                          handleGenerateMusic(prompt)
+                        }
+                      }}
+                      disabled={!input.trim() || isLoading || generatingMusic}
+                      className={cn(
+                        'mr-1 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading && !generatingMusic
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {generatingMusic ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Music className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
+                  <Tip label="Image">
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const prompt = input.trim()
+                        if (prompt) {
+                          setInput('') // Clear input immediately
+                          handleGenerateImage(prompt)
+                        }
+                      }}
+                      disabled={!input.trim() || isLoading || generatingImage}
+                      className={cn(
+                        'mr-1 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading && !generatingImage
+                          ? 'bg-violet-600 text-white hover:bg-violet-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {generatingImage ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
+                  <Tip label="Text">
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={!input.trim() || isLoading}
+                      className={cn(
+                        'mr-2 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
                 </div>
               </form>
             </div>
