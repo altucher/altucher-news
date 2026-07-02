@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -82,6 +82,10 @@ export default function ChatInterface() {
   const [generatingImage, setGeneratingImage] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<Array<{id: string, prompt: string, imageUrl: string, createdAt: number}>>([])
   const [currentImagePrompt, setCurrentImagePrompt] = useState<string | null>(null)
+  const [generatingMusic, setGeneratingMusic] = useState(false)
+  const [generatedMusic, setGeneratedMusic] = useState<Array<{id: string, prompt: string, audioUrl: string, createdAt: number}>>([])
+  const [currentMusicPrompt, setCurrentMusicPrompt] = useState<string | null>(null)
+  const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
@@ -116,18 +120,33 @@ export default function ChatInterface() {
   const isLoading = status === 'streaming' || status === 'submitted'
   const [thinkingStatus, setThinkingStatus] = useState<string>('Thinking...')
   const [thinkingDetails, setThinkingDetails] = useState<string[]>([])
+  const [thinkingLog, setThinkingLog] = useState<string[]>([])
   const [hasStartedStreaming, setHasStartedStreaming] = useState(false)
   const [bufferedContent, setBufferedContent] = useState<string>('')
   const [displayedContent, setDisplayedContent] = useState<string>('')
   const bufferRef = useRef<string>('')
   const displayIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // When thinking began, used to keep the reasoning visible for a minimum time
+  const thinkingStartRef = useRef<number>(0)
+  // Guards against scheduling the stream-start more than once during the wait
+  const streamingScheduledRef = useRef<boolean>(false)
+  // Holds the phase-advancing interval so it survives re-renders during streaming
+  const phaseIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // Ensures the thinking phases are only set up once per turn
+  const phaseSetupDoneRef = useRef<boolean>(false)
+  // Minimum time (ms) to show the "thinking out loud" panel before the answer
+  const MIN_THINKING_MS = 5200
 
   // Dynamic thinking status messages based on user input
   useEffect(() => {
-    if (status === 'submitted') {
+    if (status === 'submitted' && !phaseSetupDoneRef.current) {
+      phaseSetupDoneRef.current = true
       setHasStartedStreaming(false)
       setBufferedContent('')
       setDisplayedContent('')
+      setThinkingLog([])
+      thinkingStartRef.current = Date.now()
+      streamingScheduledRef.current = false
       bufferRef.current = ''
       
       const lastUserMsg = messages.filter(m => m.role === 'user').pop()
@@ -205,16 +224,33 @@ export default function ChatInterface() {
       let phaseIndex = 0
       setThinkingStatus(phases[0].status)
       setThinkingDetails(phases[0].details)
+      setThinkingLog([phases[0].status])
       
       const interval = setInterval(() => {
-        phaseIndex = (phaseIndex + 1) % phases.length
+        // Hold on the final phase instead of looping back to the start,
+        // so the reasoning reads as a continuous progression.
+        if (phaseIndex >= phases.length - 1) return
+        phaseIndex += 1
         setThinkingStatus(phases[phaseIndex].status)
         setThinkingDetails(phases[phaseIndex].details)
-      }, 2000)
-      
-      return () => clearInterval(interval)
+        // Keep every step that has happened so far visible as a growing log.
+        setThinkingLog((prev) => [...prev, phases[phaseIndex].status])
+      }, 1300)
+      phaseIntervalRef.current = interval
     }
-  }, [status, messages])
+
+    // Once the answer actually begins displaying, stop advancing the phases
+    // and reset so the next turn starts fresh.
+    if (hasStartedStreaming || status === 'ready' || status === 'error') {
+      if (phaseIntervalRef.current) {
+        clearInterval(phaseIntervalRef.current)
+        phaseIntervalRef.current = null
+      }
+      if (status === 'ready' || status === 'error') {
+        phaseSetupDoneRef.current = false
+      }
+    }
+  }, [status, messages, hasStartedStreaming])
 
   // Buffer incoming content and display smoothly
   useEffect(() => {
@@ -228,33 +264,45 @@ export default function ChatInterface() {
         // Update buffer with new content
         bufferRef.current = content
         
-        // Start displaying almost immediately. We keep only a tiny smoothing
-        // buffer (a few characters) so the very first tokens appear right away
-        // instead of waiting for a large block to accumulate.
-        if (content.length > 8 && !hasStartedStreaming) {
-          setHasStartedStreaming(true)
-          
-          // Display content in chunks for smooth appearance. The chunk size
-          // scales with how far behind we are, so the display always catches
-          // up to the model instead of lagging on long answers.
-          if (!displayIntervalRef.current) {
-            let displayIndex = 0
-            displayIntervalRef.current = setInterval(() => {
-              const targetLength = bufferRef.current.length
-              if (displayIndex < targetLength) {
-                const remaining = targetLength - displayIndex
-                // Base smoothing chunk of ~10-18 chars, plus a catch-up factor
-                // (10% of the backlog) so we never fall behind a fast stream.
-                const base = Math.floor(Math.random() * 9) + 10
-                const catchUp = Math.floor(remaining * 0.1)
-                const chunkSize = Math.min(base + catchUp, remaining)
-                displayIndex = Math.min(displayIndex + chunkSize, targetLength)
-                setDisplayedContent(bufferRef.current.substring(0, displayIndex))
-              } else {
-                // Keep syncing with buffer
-                setDisplayedContent(bufferRef.current)
-              }
-            }, 16) // ~60fps for very smooth display
+        // Enforce a minimum "thinking" window so the behind-the-scenes reasoning
+        // steps are actually visible, then stream. Once streaming begins we use a
+        // catch-up chunk algorithm so the display never lags behind a fast stream.
+        const elapsed = Date.now() - thinkingStartRef.current
+        const remainingThink = MIN_THINKING_MS - elapsed
+        if (content.length > 8 && !hasStartedStreaming && !streamingScheduledRef.current) {
+          streamingScheduledRef.current = true
+          const beginStreaming = () => {
+            setHasStartedStreaming(true)
+            
+            // Display content in chunks for smooth appearance. The chunk size
+            // scales with how far behind we are, so the display always catches
+            // up to the model instead of lagging on long answers.
+            if (!displayIntervalRef.current) {
+              let displayIndex = 0
+              displayIntervalRef.current = setInterval(() => {
+                const targetLength = bufferRef.current.length
+                if (displayIndex < targetLength) {
+                  const backlog = targetLength - displayIndex
+                  // Base smoothing chunk of ~10-18 chars, plus a catch-up factor
+                  // (10% of the backlog) so we never fall behind a fast stream.
+                  const base = Math.floor(Math.random() * 9) + 10
+                  const catchUp = Math.floor(backlog * 0.1)
+                  const chunkSize = Math.min(base + catchUp, backlog)
+                  displayIndex = Math.min(displayIndex + chunkSize, targetLength)
+                  setDisplayedContent(bufferRef.current.substring(0, displayIndex))
+                } else {
+                  // Keep syncing with buffer
+                  setDisplayedContent(bufferRef.current)
+                }
+              }, 16) // ~60fps for very smooth display
+            }
+          }
+
+          if (remainingThink > 0) {
+            // Hold the thinking panel a little longer so more steps show
+            setTimeout(beginStreaming, remainingThink)
+          } else {
+            beginStreaming()
           }
         }
       }
@@ -500,6 +548,12 @@ export default function ChatInterface() {
       return
     }
 
+    // If the user is asking for a song/music, route to music generation.
+    if (isMusicRequest(userMessage)) {
+      handleGenerateMusic(userMessage)
+      return
+    }
+
     // Create a new chat if we don't have one AND user is logged in
     let chatId = currentChatId
     if (!chatId && user) {
@@ -574,6 +628,48 @@ export default function ChatInterface() {
       const form = document.querySelector('form')
       form?.requestSubmit()
     }, 100)
+  }
+
+  // Weather button: get the user's location, fetch weather (Zeus SN18 with
+  // Open-Meteo fallback), then ask BlueTAO to summarize it conversationally.
+  const handleWeather = () => {
+    if (fetchingWeather || isLoading) return
+
+    if (!('geolocation' in navigator)) {
+      sendMessage({ text: "I tried to check the weather but my browser doesn't support location access. Can you tell me what city you're in so I can give you the weather?" })
+      return
+    }
+
+    setFetchingWeather(true)
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords
+          const res = await fetch('/api/weather', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude, longitude }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Weather lookup failed')
+
+          const sourceLabel = data.source === 'zeus' ? 'the Zeus weather subnet (Bittensor SN18)' : 'live weather data'
+          const summary = `Here is the current weather data from ${sourceLabel} for my location (lat ${latitude.toFixed(2)}, lon ${longitude.toFixed(2)}): ${JSON.stringify(data)}. Please give me a friendly, concise summary of the current weather and today's high/low. Mention it came from the Zeus subnet if the source is zeus.`
+          sendMessage({ text: summary })
+        } catch (err) {
+          console.log('[v0] Weather error:', err)
+          sendMessage({ text: "I couldn't fetch the weather just now. Want me to try again, or tell me your city and I'll look it up?" })
+        } finally {
+          setFetchingWeather(false)
+        }
+      },
+      (geoErr) => {
+        console.log('[v0] Geolocation denied/failed:', geoErr)
+        setFetchingWeather(false)
+        sendMessage({ text: "I wasn't able to access your location for the weather. What city are you in? I'll grab the forecast for you." })
+      },
+      { timeout: 10000 }
+    )
   }
 
   // Re-ask the previous question with web search enabled
@@ -654,6 +750,65 @@ export default function ChatInterface() {
            lowerText.includes('render an image') ||
            lowerText.includes('show me a picture') ||
            lowerText.includes('show me an image')
+  }
+
+  const handleGenerateMusic = async (prompt: string) => {
+    if (!prompt.trim() || generatingMusic) return
+
+    setGeneratingMusic(true)
+    setCurrentMusicPrompt(prompt)
+
+    try {
+      const response = await fetch('/api/music', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error) || 'Music generation failed'
+        throw new Error(errorMsg)
+      }
+
+      if (data.audioUrl) {
+        const newTrack = {
+          id: crypto.randomUUID(),
+          prompt: prompt,
+          audioUrl: data.audioUrl,
+          createdAt: Date.now(),
+        }
+        setGeneratedMusic(prev => [...prev, newTrack])
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
+    } catch (error) {
+      console.error('[Music Gen] Error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to generate music')
+    } finally {
+      setGeneratingMusic(false)
+      setCurrentMusicPrompt(null)
+    }
+  }
+
+  // Check if message is a music generation request
+  const isMusicRequest = (text: string) => {
+    const lowerText = text.toLowerCase().trim()
+    return /\b(compose|write me a song|make me a song|create a song|generate a song|write a song|make a song)\b/.test(lowerText) ||
+           lowerText.includes('write a tune') ||
+           lowerText.includes('make music') ||
+           lowerText.includes('generate music') ||
+           lowerText.includes('create music') ||
+           lowerText.includes('make a beat') ||
+           lowerText.includes('make a track') ||
+           lowerText.includes('generate a track') ||
+           lowerText.includes('compose music') ||
+           lowerText.includes('song about') ||
+           lowerText.includes('a song about') ||
+           lowerText.includes('write a jingle') ||
+           lowerText.includes('make a jingle')
   }
 
   const suggestions = [
@@ -978,7 +1133,7 @@ export default function ChatInterface() {
         {/* Main Content */}
         <main className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
-            {messages.length === 0 && generatedImages.length === 0 && !generatingImage ? (
+                {messages.length === 0 && generatedImages.length === 0 && !generatingImage && generatedMusic.length === 0 && !generatingMusic ? (
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
@@ -1043,6 +1198,33 @@ export default function ChatInterface() {
                           const prompt = input.trim()
                           if (prompt) {
                             setInput('') // Clear input immediately
+                            handleGenerateMusic(prompt)
+                          }
+                        }}
+                        disabled={!input.trim() || isLoading || generatingMusic}
+                        title="Generate Music"
+                        className={cn(
+                          'mr-1 h-10 w-10 rounded-full transition-all',
+                          input.trim() && !isLoading && !generatingMusic
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                            : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {generatingMusic ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Music className="w-5 h-5" />
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const prompt = input.trim()
+                          if (prompt) {
+                            setInput('') // Clear input immediately
                             handleGenerateImage(prompt)
                           }
                         }}
@@ -1084,6 +1266,18 @@ export default function ChatInterface() {
 
                 {/* Suggestion Pills */}
                 <div className="flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={handleWeather}
+                    disabled={fetchingWeather || isLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border/50 bg-card/80 backdrop-blur-sm text-muted-foreground hover:bg-accent hover:text-foreground hover:border-primary/30 transition-all text-sm disabled:opacity-60"
+                  >
+                    {fetchingWeather ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CloudSun className="w-4 h-4 text-sky-500" />
+                    )}
+                    Weather
+                  </button>
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion.label}
@@ -1124,7 +1318,7 @@ export default function ChatInterface() {
                   {/* Unified timeline: merge messages and images chronologically */}
                   {(() => {
                     // Create timeline items with timestamps
-                    const timelineItems: Array<{type: 'message' | 'image', data: typeof messages[0] | typeof generatedImages[0], timestamp: number, idx: number}> = []
+                    const timelineItems: Array<{type: 'message' | 'image' | 'music', data: typeof messages[0] | typeof generatedImages[0] | typeof generatedMusic[0], timestamp: number, idx: number}> = []
                     
                     messages.forEach((msg, idx) => {
                       // Use tracked timestamp or fallback to a very old time for existing messages
@@ -1134,6 +1328,10 @@ export default function ChatInterface() {
                     
                     generatedImages.forEach((img, idx) => {
                       timelineItems.push({ type: 'image', data: img, timestamp: img.createdAt, idx })
+                    })
+
+                    generatedMusic.forEach((track, idx) => {
+                      timelineItems.push({ type: 'music', data: track, timestamp: track.createdAt, idx })
                     })
                     
                     // Sort by timestamp
@@ -1161,6 +1359,42 @@ export default function ChatInterface() {
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      } else if (item.type === 'music') {
+                        const track = item.data as typeof generatedMusic[0]
+                        return (
+                          <div key={`music-${track.id}`} className="flex gap-4">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                              <Music className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-muted-foreground mb-2">{track.prompt}</p>
+                              <div className="relative rounded-lg border border-border bg-card p-4 max-w-md">
+                                <div className="flex items-center gap-2 mb-3 text-emerald-600">
+                                  <Music className="w-4 h-4" />
+                                  <span className="text-xs font-medium">Generated with ACE-Step on Bittensor SN64</span>
+                                </div>
+                                <audio controls src={track.audioUrl} className="w-full">
+                                  Your browser does not support the audio element.
+                                </audio>
+                                <div className="flex items-center justify-between mt-3">
+                                  <a
+                                    href={track.audioUrl}
+                                    download={`bluetao-song-${track.id.slice(0, 8)}.mp3`}
+                                    className="text-xs text-sky-600 dark:text-sky-400 hover:underline"
+                                  >
+                                    Download MP3
+                                  </a>
+                                  <button
+                                    onClick={() => setGeneratedMusic(prev => prev.filter(t => t.id !== track.id))}
+                                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1242,12 +1476,44 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
+                  {/* Music generating indicator */}
+                  {generatingMusic && (
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center animate-pulse">
+                        <Music className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-foreground mb-2 font-medium">{currentMusicPrompt}</p>
+                        <div className="flex items-center gap-3 text-emerald-600 bg-emerald-50 rounded-lg px-4 py-3">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">Composing music...</span>
+                            <span className="text-xs text-emerald-500">This may take 30-40 seconds</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 {(status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
                     <Bot className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 rounded-2xl p-4 border border-sky-100 dark:border-sky-800/50">
+                    {/* Completed reasoning steps stay visible as a growing log */}
+                    {thinkingLog.length > 1 && (
+                      <div className="space-y-1.5 mb-3">
+                        {thinkingLog.slice(0, -1).map((step, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 text-xs text-muted-foreground/80 animate-in fade-in slide-in-from-left-1 duration-300"
+                          >
+                            <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
+                            <span>{step}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="relative">
                         <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping absolute" />
@@ -1296,7 +1562,7 @@ export default function ChatInterface() {
         </main>
 
         {/* Input Area - Chat Mode */}
-        {(messages.length > 0 || generatedImages.length > 0 || generatingImage) && (
+                {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
               {/* File upload indicator */}
@@ -1355,6 +1621,33 @@ export default function ChatInterface() {
                       <Mic className="w-4 h-4" />
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const prompt = input.trim()
+                      if (prompt) {
+                        setInput('') // Clear input immediately
+                        handleGenerateMusic(prompt)
+                      }
+                    }}
+                    disabled={!input.trim() || isLoading || generatingMusic}
+                    title="Generate Music"
+                    className={cn(
+                      'mr-1 h-9 w-9 rounded-full transition-all',
+                      input.trim() && !isLoading && !generatingMusic
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {generatingMusic ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Music className="w-4 h-4" />
+                    )}
+                  </Button>
                   <Button
                     type="button"
                     size="icon"
@@ -1616,48 +1909,99 @@ function MessageBubble({
                 return formatInlineMarkdown(line)
               }
               
-  // Format inline markdown (bold **text** and italic *text*)
+  // Format inline markdown: clickable links, bold **text**, and italic *text*
   const formatInlineMarkdown = (text: string): React.ReactNode => {
-    // First handle bold **text**, then italic *text* (order matters to avoid conflicts)
     const parts: React.ReactNode[] = []
     let remaining = text
-    let localKeyIndex = 0
-    
-    // Process the text character by character to handle both ** and *
+
+    // Renders an <a> that is clickable in the browser and opens in a new tab
+    const renderLink = (label: string, url: string) => {
+      // Trim trailing punctuation that commonly clings to bare URLs
+      let href = url
+      let trailing = ''
+      const punctMatch = href.match(/[).,!?;:]+$/)
+      if (punctMatch && !href.startsWith('[')) {
+        trailing = punctMatch[0]
+        href = href.slice(0, href.length - trailing.length)
+      }
+      const fullHref = href.startsWith('www.') ? `https://${href}` : href
+      return { node: (
+        <a
+          key={keyIndex++}
+          href={fullHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sky-600 dark:text-sky-400 underline underline-offset-2 hover:text-sky-700 dark:hover:text-sky-300 break-words"
+        >
+          {label}
+        </a>
+      ), trailing }
+    }
+
+    // Matches markdown links [text](url) and bare http(s)/www URLs
+    const urlRegex = /(https?:\/\/[^\s)]+|www\.[^\s)]+)/
+
     while (remaining.length > 0) {
-      // Check for bold **text**
+      // Markdown link: [label](url)
+      const mdLink = remaining.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+|www\.[^\s)]+)\)/)
+      if (mdLink) {
+        const { node } = renderLink(mdLink[1], mdLink[2])
+        parts.push(node)
+        remaining = remaining.slice(mdLink[0].length)
+        continue
+      }
+
+      // Bare URL at the start
+      const bareUrl = remaining.match(/^(https?:\/\/[^\s)]+|www\.[^\s)]+)/)
+      if (bareUrl) {
+        const { node, trailing } = renderLink(bareUrl[1], bareUrl[1])
+        parts.push(node)
+        remaining = remaining.slice(bareUrl[0].length)
+        if (trailing) remaining = trailing + remaining
+        continue
+      }
+
+      // Bold **text**
       const boldMatch = remaining.match(/^\*\*(.+?)\*\*/)
       if (boldMatch) {
         parts.push(<strong key={keyIndex++} className="font-semibold">{boldMatch[1]}</strong>)
         remaining = remaining.slice(boldMatch[0].length)
         continue
       }
-      
-      // Check for italic *text* (but not **)
+
+      // Italic *text* (but not **)
       const italicMatch = remaining.match(/^\*([^*]+?)\*/)
       if (italicMatch) {
         parts.push(<em key={keyIndex++} className="italic">{italicMatch[1]}</em>)
         remaining = remaining.slice(italicMatch[0].length)
         continue
       }
-      
-      // Find the next * to know how much plain text to consume
-      const nextStar = remaining.indexOf('*', 0)
-      if (nextStar === -1) {
-        // No more stars, push the rest as plain text
+
+      // Find the next special character (star or link start) to consume plain text up to it
+      const nextSpecial = (() => {
+        const candidates: number[] = []
+        const star = remaining.indexOf('*')
+        if (star !== -1) candidates.push(star)
+        const bracket = remaining.indexOf('[')
+        if (bracket !== -1) candidates.push(bracket)
+        const urlIdx = remaining.search(urlRegex)
+        if (urlIdx !== -1) candidates.push(urlIdx)
+        return candidates.length > 0 ? Math.min(...candidates) : -1
+      })()
+
+      if (nextSpecial === -1) {
         parts.push(remaining)
         break
-      } else if (nextStar === 0) {
-        // Star at start but didn't match bold or italic, push it as plain text
-        parts.push('*')
+      } else if (nextSpecial === 0) {
+        // Special char at start but didn't match any pattern; emit it as plain text
+        parts.push(remaining[0])
         remaining = remaining.slice(1)
       } else {
-        // Push plain text up to the star
-        parts.push(remaining.slice(0, nextStar))
-        remaining = remaining.slice(nextStar)
+        parts.push(remaining.slice(0, nextSpecial))
+        remaining = remaining.slice(nextSpecial)
       }
     }
-    
+
     return parts.length > 0 ? parts : text
   }
               
