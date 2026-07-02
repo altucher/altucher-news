@@ -69,35 +69,56 @@ export async function POST(req: Request) {
     }
 
     console.log('[Video Gen] Requesting LTX-23-Video on Chutes (SN64)...')
-    const response = await fetch(CHUTES_LTX_VIDEO_API, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${chutesKey}`,
-        'Content-Type': 'application/json',
-      },
-      // Flat body (no "args" wrapper). Keep steps/frames modest so generation
-      // stays within the serverless time budget (~2s clip at 24fps).
-      body: JSON.stringify({
-        prompt,
-        num_frames: 49,
-        num_inference_steps: 6,
-        width: 768,
-        height: 512,
-        video_format: 'mp4',
-      }),
+
+    // Flat body (no "args" wrapper). Keep steps/frames/resolution modest so a
+    // generation completes well within the serverless time budget.
+    const requestBody = JSON.stringify({
+      prompt,
+      num_frames: 25,
+      num_inference_steps: 5,
+      width: 640,
+      height: 384,
+      video_format: 'mp4',
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[Video Gen] Chutes LTX error:', response.status, errorText.substring(0, 200))
-      // 503 = chute scaled to zero / no instances available
-      if (response.status === 503) {
+    // The chute scales to zero, so the first call after idle often returns a
+    // 502/503 while it cold-starts. Retry a few times with backoff so a warm-up
+    // blip doesn't surface to the user as a hard failure.
+    let response: Response | null = null
+    const maxAttempts = 4
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      response = await fetch(CHUTES_LTX_VIDEO_API, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${chutesKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: requestBody,
+      })
+
+      // 502/503 = chute cold-starting / no instances yet. Wait and retry.
+      if (response.status === 502 || response.status === 503) {
+        console.log(`[Video Gen] Chute warming up (${response.status}), attempt ${attempt}/${maxAttempts}`)
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 8000))
+          continue
+        }
+      }
+      break
+    }
+
+    if (!response || !response.ok) {
+      const status = response?.status ?? 500
+      const errorText = response ? await response.text().catch(() => '') : ''
+      console.error('[Video Gen] Chutes LTX error:', status, errorText.substring(0, 200))
+      // Cold-start / capacity errors: ask the user to retry shortly.
+      if (status === 502 || status === 503) {
         return NextResponse.json(
-          { error: 'The video generator is warming up. Please try again in a moment.' },
+          { error: 'The video generator is warming up (it scales down when idle). Please try again in about 30 seconds.' },
           { status: 503 }
         )
       }
-      return NextResponse.json({ error: `Video generation failed (${response.status})` }, { status: 500 })
+      return NextResponse.json({ error: `Video generation failed (${status})` }, { status: 500 })
     }
 
     // LTX returns mp4 (video/mp4) binary directly
