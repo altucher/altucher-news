@@ -347,12 +347,13 @@ export async function POST(req: Request) {
     const region = req.headers.get('x-vercel-ip-country-region') || undefined
     const location = { country, city, region }
 
-    const { messages, model, userId, fileContext, customContext }: { 
+    const { messages, model, userId, fileContext, customContext, codeMode }: { 
       messages: UIMessage[]; 
       model?: string; 
       userId?: string;
       fileContext?: { name: string; content: string } | null;
       customContext?: { company: string; context: string } | null;
+      codeMode?: boolean;
     } = await req.json()
 
     // Kick off the user-memory fetch immediately so it runs in parallel
@@ -501,8 +502,24 @@ When answering questions, use this business context when relevant. If someone as
 You answer questions directly and helpfully. You do not add unnecessary disclaimers or refuse reasonable requests.`
     }
     
-    // Check if we need to search for current information
-    if (isNewsQuery(lastMessage)) {
+    // Code mode: swap in a coding-focused system prompt and skip web search.
+    // Powered by the same Chutes (SN64) coding-capable models (DeepSeek V3.2 etc).
+    if (codeMode) {
+      systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
+
+You are a senior software engineer. Help the user write, debug, explain, and refactor code.
+
+RULES:
+- ALWAYS put code inside fenced markdown code blocks with the correct language tag, e.g. \`\`\`ts, \`\`\`python, \`\`\`bash. This is required so the UI can render and offer a copy button.
+- When writing a complete file, include the whole file so it can be copied and run directly.
+- Prefer modern, idiomatic, secure code and best practices. Include brief explanations before or after code, not interleaved line-by-line unless asked.
+- When debugging, identify the root cause first, then give the corrected code.
+- If the request is ambiguous, make a reasonable assumption and state it briefly rather than refusing.
+- Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
+    }
+
+    // Check if we need to search for current information (skipped in code mode)
+    if (!codeMode && isNewsQuery(lastMessage)) {
       const searchResults = await searchWeb('news today headlines')
       
       if (searchResults) {
@@ -515,7 +532,7 @@ ${searchResults}
 
 Respond by organizing these headlines by topic (politics, technology, business, etc.) and presenting them conversationally. Start your response with "Here are today's top stories:" and then list them.`
       }
-    } else if (needsCurrentInfo(lastMessage)) {
+    } else if (!codeMode && needsCurrentInfo(lastMessage)) {
       // Strip the force search prefix if present
       const cleanQuery = lastMessage.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
       const searchResults = await searchWeb(cleanQuery)
