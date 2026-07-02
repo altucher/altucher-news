@@ -129,7 +129,7 @@ export default function AnalyticsPage() {
               {data?.summary.totalQueries.toLocaleString() || 0}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              {data?.summary.totalChatQueries?.toLocaleString() || 0} chat + {data?.summary.totalImageGenerations?.toLocaleString() || 0} images + {data?.summary.totalAIDetections?.toLocaleString() || 0} detections + {data?.summary.totalMusicGenerations?.toLocaleString() || 0} songs
+              {data?.summary.totalChatQueries?.toLocaleString() || 0} chat + {data?.summary.totalImageGenerations?.toLocaleString() || 0} images + {data?.summary.totalAIDetections?.toLocaleString() || 0} detections + {data?.summary.totalMusicGenerations?.toLocaleString() || 0} songs + {data?.summary.totalVideoGenerations?.toLocaleString() || 0} videos
             </p>
           </div>
 
@@ -166,6 +166,18 @@ export default function AnalyticsPage() {
             </div>
             <p className="text-3xl font-semibold text-foreground">
               {data?.summary.totalMusicGenerations?.toLocaleString() || 0}
+            </p>
+          </div>
+
+          <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-rose-500/10 rounded-lg">
+                <Film className="w-5 h-5 text-rose-600" />
+              </div>
+              <span className="text-sm text-muted-foreground">Videos Generated</span>
+            </div>
+            <p className="text-3xl font-semibold text-foreground">
+              {data?.summary.totalVideoGenerations?.toLocaleString() || 0}
             </p>
           </div>
 
@@ -231,6 +243,10 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Music Generation</span>
                 <span className="font-medium text-foreground">${data?.summary.estimatedMusicCost || '0.0000'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Video Generation</span>
+                <span className="font-medium text-foreground">${data?.summary.estimatedVideoCost || '0.0000'}</span>
               </div>
               <div className="border-t border-border/50 pt-4 flex items-center justify-between">
                 <span className="font-medium text-foreground">Total Estimated</span>
@@ -333,6 +349,8 @@ export default function AnalyticsPage() {
                             ? 'bg-violet-500/10 text-violet-600' 
                             : event.type === 'music_generation'
                             ? 'bg-emerald-500/10 text-emerald-600'
+                            : event.type === 'video_generation'
+                            ? 'bg-rose-500/10 text-rose-600'
                             : event.type === 'ai_detection'
                             ? 'bg-cyan-500/10 text-cyan-600'
                             : 'bg-primary/10 text-primary'
@@ -341,6 +359,8 @@ export default function AnalyticsPage() {
                             <><ImageIcon className="w-3 h-3" /> Image</>
                           ) : event.type === 'music_generation' ? (
                             <><Music className="w-3 h-3" /> Music</>
+                          ) : event.type === 'video_generation' ? (
+                            <><Film className="w-3 h-3" /> Video</>
                           ) : event.type === 'ai_detection' ? (
                             <><Eye className="w-3 h-3" /> Detect</>
                           ) : (
@@ -404,6 +424,8 @@ export default function AnalyticsPage() {
                             ? 'bg-violet-500/10 text-violet-600' 
                             : query.type === 'music_generation'
                             ? 'bg-emerald-500/10 text-emerald-600'
+                            : query.type === 'video_generation'
+                            ? 'bg-rose-500/10 text-rose-600'
                             : query.type === 'ai_detection'
                             ? 'bg-cyan-500/10 text-cyan-600'
                             : 'bg-primary/10 text-primary'
@@ -412,6 +434,8 @@ export default function AnalyticsPage() {
                             <><ImageIcon className="w-3 h-3" /> Image</>
                           ) : query.type === 'music_generation' ? (
                             <><Music className="w-3 h-3" /> Music</>
+                          ) : query.type === 'video_generation' ? (
+                            <><Film className="w-3 h-3" /> Video</>
                           ) : query.type === 'ai_detection' ? (
                             <><Eye className="w-3 h-3" /> Detect</>
                           ) : (
