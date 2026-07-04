@@ -8,7 +8,11 @@ import type { UIMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
 
-export const maxDuration = 300 // 5 minutes for slow Chutes API
+// Chutes streams tokens slowly and routes to variable-speed instances, so a
+// long code generation can run well past 5 minutes. 300s was cutting some
+// builds off mid-stream; 800s (Vercel Pro standard max) gives enough headroom
+// for even slow-instance runs to finish in a single response.
+export const maxDuration = 800
 
 // CORS headers for embed widget
 const corsHeaders = {
