@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode, PartyPopper } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -1326,6 +1326,12 @@ export default function ChatInterface() {
                   Mining
                 </Button>
               </Link>
+              <Link href="/fun">
+                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
+                  <PartyPopper className="w-4 h-4 mr-1" />
+                  Fun
+                </Button>
+              </Link>
               <Link href="/detect">
                 <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
                   <Sparkles className="w-4 h-4 mr-1.5" />
@@ -1354,6 +1360,12 @@ export default function ChatInterface() {
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
                   <Pickaxe className="w-4 h-4 mr-1" />
                   Mining
+                </Button>
+              </Link>
+              <Link href="/fun">
+                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
+                  <PartyPopper className="w-4 h-4 mr-1" />
+                  Fun
                 </Button>
               </Link>
               <Link href="/detect">
