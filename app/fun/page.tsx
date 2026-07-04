@@ -21,6 +21,7 @@ export default function FunPage() {
 
   const [title, setTitle] = useState('')
   const [link, setLink] = useState('')
+  const [email, setEmail] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -47,12 +48,16 @@ export default function FunPage() {
       setFormError('Link is required.')
       return
     }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFormError('A valid email address is required.')
+      return
+    }
     setSubmitting(true)
     try {
       const res = await fetch('/api/fun/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, link, description }),
+        body: JSON.stringify({ title, link, email, description }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -61,6 +66,7 @@ export default function FunPage() {
       setSubmitted(true)
       setTitle('')
       setLink('')
+      setEmail('')
       setDescription('')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Submission failed')
@@ -199,6 +205,24 @@ export default function FunPage() {
                   placeholder="https://example.com"
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pink-400/50"
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="fun-email" className="text-sm font-medium text-foreground">
+                  Email address <span className="text-pink-500">*</span>
+                </label>
+                <input
+                  id="fun-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-pink-400/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  So we can reach you if your app is approved or we have questions. Not shown publicly.
+                </p>
               </div>
 
               <div className="flex flex-col gap-1.5">

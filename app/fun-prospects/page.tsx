@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Loader2, Check, X, ExternalLink, RefreshCw, Trash2, PartyPopper } from 'lucide-react'
+import { Loader2, Check, X, ExternalLink, RefreshCw, Trash2, PartyPopper, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 // Prevent static generation - this page fetches live data
@@ -13,6 +13,7 @@ interface FunProject {
   title: string
   link: string
   description: string | null
+  email?: string | null
   status: string
   created_at: string
 }
@@ -141,6 +142,15 @@ export default function FunProspectsPage() {
                           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                             {project.description}
                           </p>
+                        )}
+                        {project.email && (
+                          <a
+                            href={`mailto:${project.email}`}
+                            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            {project.email}
+                          </a>
                         )}
                         <p className="text-xs text-muted-foreground mt-2">
                           Submitted {new Date(project.created_at).toLocaleString()}

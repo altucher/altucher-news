@@ -32,9 +32,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status') || 'approved'
 
+    // Only expose submitter emails on the private prospects views (pending/rejected),
+    // never on the public approved list.
+    const columns =
+      status === 'approved'
+        ? 'id, title, link, description, status, created_at, approved_at'
+        : 'id, title, link, description, email, status, created_at, approved_at'
+
     const { data, error } = await supabaseAdmin
       .from('fun_projects')
-      .select('id, title, link, description, status, created_at, approved_at')
+      .select(columns)
       .eq('status', status)
       .order('created_at', { ascending: false })
 
@@ -60,6 +67,10 @@ export async function POST(req: Request) {
       typeof body.description === 'string' && body.description.trim()
         ? body.description.trim().slice(0, 1000)
         : null
+    const email =
+      typeof body.email === 'string' && body.email.trim()
+        ? body.email.trim().slice(0, 320)
+        : null
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -71,7 +82,7 @@ export async function POST(req: Request) {
 
     const { data, error } = await supabaseAdmin
       .from('fun_projects')
-      .insert({ title: title.slice(0, 200), link, description, status: 'pending' })
+      .insert({ title: title.slice(0, 200), link, description, email, status: 'pending' })
       .select('id, title, link, description, status, created_at')
       .single()
 
