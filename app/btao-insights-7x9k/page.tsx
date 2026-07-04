@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye, Search, Music, Film } from 'lucide-react'
+import { Loader2, MessageSquare, Image as ImageIcon, DollarSign, Users, Calendar, TrendingUp, RefreshCw, Globe, Eye, Search, Music, Film, PartyPopper, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -13,6 +13,8 @@ interface AnalyticsData {
     totalAIDetections?: number
     totalMusicGenerations?: number
     totalVideoGenerations?: number
+    totalFunPageViews?: number
+    totalFunSubmissions?: number
     uniqueUsers: number
     activeDays: number
     estimatedChatCost: string
@@ -178,6 +180,22 @@ export default function AnalyticsPage() {
             </div>
             <p className="text-3xl font-semibold text-foreground">
               {data?.summary.totalVideoGenerations?.toLocaleString() || 0}
+            </p>
+          </div>
+
+          <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-pink-500/10 rounded-lg">
+                <PartyPopper className="w-5 h-5 text-pink-600" />
+              </div>
+              <span className="text-sm text-muted-foreground">Fun Page Views</span>
+            </div>
+            <p className="text-3xl font-semibold text-foreground">
+              {data?.summary.totalFunPageViews?.toLocaleString() || 0}
+            </p>
+            <p className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-1.5">
+              <Send className="w-3 h-3" />
+              {data?.summary.totalFunSubmissions?.toLocaleString() || 0} app submissions
             </p>
           </div>
 

@@ -70,6 +70,16 @@ export async function GET() {
       .from('analytics_events')
       .select('*', { count: 'exact', head: true })
       .eq('event_type', 'video_generation')
+
+    const { count: funViewCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'fun_page_view')
+
+    const { count: funSubmissionCount } = await supabaseAdmin
+      .from('analytics_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'fun_submission')
     
     const { data: events, error: eventsError } = await supabaseAdmin
       .from('analytics_events')
@@ -91,6 +101,8 @@ export async function GET() {
     const totalAIDetections = detectCount || 0
     const totalMusicGenerations = musicCount || 0
     const totalVideoGenerations = videoCount || 0
+    const totalFunPageViews = funViewCount || 0
+    const totalFunSubmissions = funSubmissionCount || 0
     const totalAllQueries = totalEventsCount || 0
     
     // Filter events for cost calculation (from fetched data)
@@ -163,6 +175,8 @@ export async function GET() {
         totalAIDetections,
         totalMusicGenerations,
         totalVideoGenerations,
+        totalFunPageViews,
+        totalFunSubmissions,
         uniqueUsers,
         activeDays,
         estimatedChatCost: estimatedChatCost.toFixed(4),
