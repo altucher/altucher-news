@@ -25,6 +25,13 @@ export async function OPTIONS() {
 // Fallback model when Chutes is unavailable (via Vercel AI Gateway)
 const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 
+// Maximum tokens the model may generate in a single response.
+// Without this, providers default to a low cap (~4k) which cuts long
+// answers/code off mid-stream. Build mode gets a much bigger budget so a
+// full HTML page can finish in one go.
+const MAX_OUTPUT_TOKENS_DEFAULT = 8000
+const MAX_OUTPUT_TOKENS_CODE = 32000
+
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -588,6 +595,7 @@ When answering questions, refer to this document content. You can summarize it, 
       model: chutes.chatModel(selectedModel),
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
+      maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
       abortSignal: req.signal,
     })
 
@@ -629,6 +637,7 @@ When answering questions, refer to this document content. You can summarize it, 
             model: targon.chatModel(targonModel),
             system: systemPrompt + fileContextSection,
             messages: modelMessages,
+            maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
             abortSignal: req.signal,
           })
 
@@ -678,6 +687,8 @@ When answering questions, refer to this document content. You can summarize it, 
           model: gateway(FALLBACK_MODEL),
           system: `You are BlueTAO, a helpful AI assistant. Today's date is ${currentDate}. Answer questions thoughtfully and concisely.${fallbackFileContextSection}`,
           messages: fallbackModelMessages,
+          // gpt-4o-mini caps output at 16,384 tokens, so stay under that.
+          maxOutputTokens: codeMode ? 16000 : MAX_OUTPUT_TOKENS_DEFAULT,
         })
         
         // Extract location from headers
