@@ -1,11 +1,15 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, Copy, Eye, Code2, Download, ExternalLink } from 'lucide-react'
+import { Check, Copy, Eye, Code2, Download, ExternalLink, Save, Loader2 } from 'lucide-react'
 
 interface CodeBlockProps {
   code: string
   language?: string
+  // When provided (and the code is previewable), shows a "Save" button so a
+  // signed-in user can store this build in My Projects and keep editing later.
+  onSave?: (code: string, language: string) => Promise<void> | void
+  saveLabel?: string
 }
 
 // Decide whether a block is previewable web code (HTML we can render live).
@@ -37,8 +41,10 @@ ${code}
 // A Cursor/v0-style code block. For web (HTML) code it also offers a live
 // Preview tab plus Download and Open-in-new-tab actions, so people with no
 // coding experience can see, save, and share the result immediately.
-export function CodeBlock({ code, language }: CodeBlockProps) {
+export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const previewable = useMemo(() => isPreviewable(code, language), [code, language])
   // For previewable code, default to showing the running result first.
   const [tab, setTab] = useState<'preview' | 'code'>(previewable ? 'preview' : 'code')
@@ -70,6 +76,20 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
     setTimeout(() => URL.revokeObjectURL(url), 10000)
+  }
+
+  const handleSave = async () => {
+    if (!onSave || saving) return
+    setSaving(true)
+    try {
+      await onSave(code, (language || 'html').toLowerCase())
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2200)
+    } catch {
+      // Errors surface via the parent handler (e.g. alert); keep the UI stable.
+    } finally {
+      setSaving(false)
+    }
   }
 
   const label = (language || 'code').toLowerCase()
@@ -110,6 +130,32 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
         )}
 
         <div className="flex items-center gap-1">
+          {previewable && onSave && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-500 disabled:opacity-60"
+              aria-label="Save to My Projects"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Saving
+                </>
+              ) : saved ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save className="h-3.5 w-3.5" />
+                  {saveLabel || 'Save'}
+                </>
+              )}
+            </button>
+          )}
           {previewable && (
             <>
               <button

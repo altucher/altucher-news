@@ -354,13 +354,14 @@ export async function POST(req: Request) {
     const region = req.headers.get('x-vercel-ip-country-region') || undefined
     const location = { country, city, region }
 
-    const { messages, model, userId, fileContext, customContext, codeMode }: { 
+    const { messages, model, userId, fileContext, customContext, codeMode, editingCode }: { 
       messages: UIMessage[]; 
       model?: string; 
       userId?: string;
       fileContext?: { name: string; content: string } | null;
       customContext?: { company: string; context: string } | null;
       codeMode?: boolean;
+      editingCode?: string | null;
     } = await req.json()
 
     // Kick off the user-memory fetch immediately so it runs in parallel
@@ -524,6 +525,19 @@ RULES:
 - When debugging, identify the root cause first, then give the corrected code.
 - If the request is ambiguous, make a reasonable assumption and state it briefly rather than refusing.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
+
+      // If the user is continuing a saved project, give the model the current
+      // code as the starting point so it EDITS rather than rebuilding blindly.
+      if (editingCode && editingCode.trim().length > 0) {
+        systemPrompt += `
+
+YOU ARE EDITING AN EXISTING PROJECT. Below is the user's current saved code. Apply the requested change to THIS code and return the ENTIRE updated file in one \`\`\`html block (never a fragment or a diff). Preserve everything the user did not ask to change.
+
+CURRENT PROJECT CODE:
+\`\`\`html
+${editingCode}
+\`\`\``
+      }
     }
 
     // Check if we need to search for current information (skipped in code mode)

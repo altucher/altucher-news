@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { MemoryPanel } from '@/components/memory-panel'
+import { ProjectsPanel } from '@/components/projects-panel'
 import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import { CodeBlock } from '@/components/code-block'
 import Link from 'next/link'
@@ -161,6 +162,11 @@ export default function ChatInterface() {
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [showProjectsPanel, setShowProjectsPanel] = useState(false)
+  // The project the user is currently continuing to edit (if any). When set,
+  // code-mode messages are treated as edits to this saved code instead of a
+  // fresh build, so the model never starts from scratch.
+  const [activeProject, setActiveProject] = useState<{ id: string; title: string; code: string } | null>(null)
   const { speak, speakingId, loadingId: ttsLoadingId } = useTextToSpeech()
   const { toggle: toggleMic, listening, supported: micSupported } = useSpeechToText((transcript) => {
     setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
@@ -672,7 +678,10 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
-    sendMessage({ text: messageToSend }, { body: { codeMode } })
+    sendMessage(
+      { text: messageToSend },
+      { body: { codeMode, editingCode: activeProject?.code ?? null } }
+    )
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
@@ -701,6 +710,104 @@ export default function ChatInterface() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/auth/login')
+  }
+
+  // Save a generated build. If we're already editing a saved project, store a
+  // new version of it; otherwise create a brand-new project.
+  const handleSaveProject = async (code: string, language: string) => {
+    if (!user) {
+      setShowLoginPrompt(true)
+      setTimeout(() => setShowLoginPrompt(false), 3000)
+      throw new Error('Not signed in')
+    }
+    try {
+      if (activeProject) {
+        const res = await fetch(`/api/projects/${activeProject.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, language }),
+        })
+        if (!res.ok) throw new Error('save failed')
+        setActiveProject({ ...activeProject, code })
+      } else {
+        // Derive a friendly title from the first user prompt in this chat.
+        const firstPrompt = messages.find(m => m.role === 'user')
+        const title = (firstPrompt ? getMessageText(firstPrompt) : 'My project')
+          .slice(0, 60)
+          .trim() || 'My project'
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, code, language }),
+        })
+        if (!res.ok) throw new Error('save failed')
+        const data = await res.json()
+        if (data.project) {
+          setActiveProject({ id: data.project.id, title: data.project.title, code })
+        }
+      }
+    } catch (e) {
+      console.error('Failed to save project:', e)
+      alert('Could not save your project. Please try again.')
+      throw e
+    }
+  }
+
+  // Load a saved project into the chat so the user can keep editing it.
+  const handleOpenProject = async (projectId: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`)
+      if (!res.ok) throw new Error('load failed')
+      const data = await res.json()
+      const project = data.project
+      if (!project) return
+
+      // Reset the conversation to a fresh session anchored to this project.
+      setCurrentChatId(null)
+      lastSavedMessageRef.current = null
+      setNewsHeadlines([])
+      setCodeMode(true)
+      setActiveProject({ id: project.id, title: project.title, code: project.current_code })
+      setMessages([
+        {
+          id: `proj-${project.id}`,
+          role: 'assistant',
+          parts: [
+            {
+              type: 'text',
+              text: `Opened your saved project **${project.title}**. Here's where you left off — tell me what you'd like to change and I'll edit this version.\n\n\`\`\`html\n${project.current_code}\n\`\`\``,
+            },
+          ],
+        } as unknown as (typeof messages)[number],
+      ])
+      setShowProjectsPanel(false)
+      setSidebarOpen(false)
+    } catch (e) {
+      console.error('Failed to open project:', e)
+      alert('Could not open that project. Please try again.')
+    }
+  }
+
+  // Restore an older version: fetch its full code, save it as the newest
+  // version of the project, then open the project to continue editing.
+  const handleRestoreVersion = async (projectId: string, versionId: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/versions/${versionId}`)
+      if (!res.ok) throw new Error('load failed')
+      const data = await res.json()
+      const code = data.version?.code
+      if (!code) return
+
+      await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, label: `Restored v${data.version.version_number}` }),
+      })
+      await handleOpenProject(projectId)
+    } catch (e) {
+      console.error('Failed to restore version:', e)
+      alert('Could not restore that version. Please try again.')
+    }
   }
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -1198,6 +1305,15 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
+                onClick={() => setShowProjectsPanel(true)}
+                className="text-sky-500 hover:text-sky-400 flex"
+              >
+                <FolderCode className="w-4 h-4 mr-1" />
+                Projects
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
                 onClick={() => setShowMemoryPanel(true)}
                 className="text-violet-400 hover:text-violet-300 flex"
               >
@@ -1652,12 +1768,14 @@ export default function ChatInterface() {
                         
                         return (
                           <div key={message.id}>
-                            <MessageBubble 
-                              message={displayMessage} 
-                              onSpeak={speak}
-                              speakingId={speakingId}
-                              ttsLoadingId={ttsLoadingId}
-                            />
+                          <MessageBubble
+                            message={displayMessage}
+                            onSpeak={speak}
+                            speakingId={speakingId}
+                            ttsLoadingId={ttsLoadingId}
+                            onSaveCode={user ? handleSaveProject : undefined}
+                            saveActive={!!activeProject}
+                          />
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
                              idx === messages.length - 1 && (
@@ -1995,6 +2113,18 @@ export default function ChatInterface() {
           </div>
         )}
       </div>
+
+      {/* Projects & Memory modals */}
+      <ProjectsPanel
+        isOpen={showProjectsPanel}
+        onClose={() => setShowProjectsPanel(false)}
+        onOpenProject={handleOpenProject}
+        onRestoreVersion={handleRestoreVersion}
+      />
+      <MemoryPanel
+        isOpen={showMemoryPanel}
+        onClose={() => setShowMemoryPanel(false)}
+      />
     </div>
   )
 }
@@ -2047,12 +2177,6 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
           ))}
         </div>
       </div>
-
-      {/* Memory Panel Modal */}
-      <MemoryPanel 
-        isOpen={showMemoryPanel} 
-        onClose={() => setShowMemoryPanel(false)} 
-      />
     </div>
   )
 }
@@ -2061,12 +2185,16 @@ function MessageBubble({
   message, 
   onSpeak, 
   speakingId, 
-  ttsLoadingId 
+  ttsLoadingId,
+  onSaveCode,
+  saveActive,
 }: { 
   message: UIMessage
   onSpeak?: (text: string, id: string) => void
   speakingId?: string | null
   ttsLoadingId?: string | null
+  onSaveCode?: (code: string, language: string) => Promise<void> | void
+  saveActive?: boolean
 }) {
   const isUser = message.role === 'user'
   const parts = message.parts || []
@@ -2189,7 +2317,7 @@ function MessageBubble({
                   if (m.index > last) {
                     nodes.push(<span key={`ct-${k}`}>{formatMarkdown(text.slice(last, m.index))}</span>)
                   }
-                  nodes.push(<CodeBlock key={`cb-${k}`} language={m[1]} code={m[2].replace(/\n$/, '')} />)
+                  nodes.push(<CodeBlock key={`cb-${k}`} language={m[1]} code={m[2].replace(/\n$/, '')} onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} />)
                   last = m.index + m[0].length
                   k++
                 }
