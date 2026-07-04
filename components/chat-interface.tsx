@@ -12,6 +12,7 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { AnimatedOceanBackground, BlueTaoLogo } from '@/components/animated-background'
 import { MemoryPanel } from '@/components/memory-panel'
 import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
+import { CodeBlock } from '@/components/code-block'
 import Link from 'next/link'
 
 // Lightweight hover tooltip. Wrapping span catches the hover so the label
@@ -27,6 +28,55 @@ function Tip({ label, children }: { label: string; children: React.ReactNode }) 
         {label}
       </span>
     </span>
+  )
+}
+
+// Clear, labeled mode switcher: Chat vs. BlueTAO Code (build mode).
+// Designed to be self-explanatory for people with no coding experience.
+function ModeToggle({
+  codeMode,
+  setCodeMode,
+  compact = false,
+}: {
+  codeMode: boolean
+  setCodeMode: (v: boolean) => void
+  compact?: boolean
+}) {
+  const base = cn(
+    'inline-flex items-center gap-1.5 rounded-full font-medium transition-all',
+    compact ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-sm'
+  )
+  return (
+    <div className="inline-flex items-center rounded-full border border-border bg-card p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setCodeMode(false)}
+        aria-pressed={!codeMode}
+        className={cn(
+          base,
+          !codeMode
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <MessageSquare className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        Chat
+      </button>
+      <button
+        type="button"
+        onClick={() => setCodeMode(true)}
+        aria-pressed={codeMode}
+        className={cn(
+          base,
+          codeMode
+            ? 'bg-sky-600 text-white shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        BlueTAO Code
+      </button>
+    </div>
   )
 }
 
@@ -104,6 +154,8 @@ export default function ChatInterface() {
   const [generatingVideo, setGeneratingVideo] = useState(false)
   const [generatedVideos, setGeneratedVideos] = useState<Array<{id: string, prompt: string, videoUrl: string, createdAt: number}>>([])
   const [currentVideoPrompt, setCurrentVideoPrompt] = useState<string | null>(null)
+  // Code mode: routes chat to a coding-optimized system prompt on Chutes (SN64)
+  const [codeMode, setCodeMode] = useState(false)
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
@@ -560,23 +612,27 @@ export default function ChatInterface() {
       textareaRef.current.style.height = 'auto'
     }
 
-    // If the user is asking for an image, route to image generation even
-    // if they pressed the text/send button instead of the image button.
-    if (isImageRequest(userMessage)) {
-      handleGenerateImage(userMessage)
-      return
-    }
+    // In Code mode, everything is a coding request — skip the media routing
+    // so prompts like "make a function" aren't hijacked into image/video/music.
+    if (!codeMode) {
+      // If the user is asking for an image, route to image generation even
+      // if they pressed the text/send button instead of the image button.
+      if (isImageRequest(userMessage)) {
+        handleGenerateImage(userMessage)
+        return
+      }
 
-    // If the user is asking for a video, route to video generation.
-    if (isVideoRequest(userMessage)) {
-      handleGenerateVideo(userMessage)
-      return
-    }
+      // If the user is asking for a video, route to video generation.
+      if (isVideoRequest(userMessage)) {
+        handleGenerateVideo(userMessage)
+        return
+      }
 
-    // If the user is asking for a song/music, route to music generation.
-    if (isMusicRequest(userMessage)) {
-      handleGenerateMusic(userMessage)
-      return
+      // If the user is asking for a song/music, route to music generation.
+      if (isMusicRequest(userMessage)) {
+        handleGenerateMusic(userMessage)
+        return
+      }
     }
 
     // Create a new chat if we don't have one AND user is logged in
@@ -616,7 +672,7 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
-    sendMessage({ text: messageToSend })
+    sendMessage({ text: messageToSend }, { body: { codeMode } })
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
@@ -1229,6 +1285,22 @@ export default function ChatInterface() {
                 
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
+                  {/* Mode switcher: Chat vs. BlueTAO Code */}
+                  <div className="mb-3 flex justify-center">
+                    <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
+                  </div>
+
+                  {/* Build-mode helper banner */}
+                  {codeMode && (
+                    <div className="mb-3 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+                      <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
+                      <span>
+                        <strong>Build mode is on.</strong> Describe a website or app in plain English
+                        {' '}&mdash; you&apos;ll see it come to life in a live preview, and you can download or copy it. No coding needed.
+                      </span>
+                    </div>
+                  )}
+
                   {/* File upload indicator */}
                   {uploadedFile && (
                     <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
@@ -1263,10 +1335,12 @@ export default function ChatInterface() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
+                        placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
+                      {!codeMode && (
+                      <>
                       <Tip label="Video">
                         <Button
                           type="button"
@@ -1351,7 +1425,9 @@ export default function ChatInterface() {
                           )}
                         </Button>
                       </Tip>
-                      <Tip label="Text">
+                      </>
+                      )}
+                      <Tip label={codeMode ? 'Build' : 'Text'}>
                       <Button
                         type="submit"
                         size="icon"
@@ -1741,6 +1817,15 @@ export default function ChatInterface() {
                 {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic || generatedVideos.length > 0 || generatingVideo) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
+              {/* Mode switcher: Chat vs. BlueTAO Code */}
+              <div className="mb-2 flex items-center justify-center gap-2">
+                <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />
+                {codeMode && (
+                  <span className="hidden sm:inline text-xs text-sky-700 dark:text-sky-400">
+                    Build mode: describe a website or app to preview it live
+                  </span>
+                )}
+              </div>
               {/* File upload indicator */}
               {uploadedFile && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
@@ -1775,7 +1860,7 @@ export default function ChatInterface() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={uploadedFile ? "Ask about your file..." : "Ask anything..."}
+                    placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything..."}
                     disabled={isLoading}
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
@@ -1797,6 +1882,8 @@ export default function ChatInterface() {
                       <Mic className="w-4 h-4" />
                     </Button>
                   )}
+                  {!codeMode && (
+                  <>
                   <Tip label="Video">
                     <Button
                       type="button"
@@ -1881,7 +1968,9 @@ export default function ChatInterface() {
                       )}
                     </Button>
                   </Tip>
-                  <Tip label="Text">
+                  </>
+                  )}
+                  <Tip label={codeMode ? 'Build' : 'Text'}>
                     <Button
                       type="submit"
                       size="icon"
@@ -2087,6 +2176,36 @@ function MessageBubble({
             
             // Parse markdown and render formatted text
             const formatMarkdown = (text: string): React.ReactNode => {
+              // Handle fenced code blocks (```lang ... ```) first, rendering them
+              // with the CodeBlock component. Non-code text is passed back through
+              // this same formatter (safe: those segments contain no fences).
+              if (text.includes('```')) {
+                const nodes: React.ReactNode[] = []
+                const fenceRegex = /```(\w+)?\n?([\s\S]*?)```/g
+                let last = 0
+                let m: RegExpExecArray | null
+                let k = 0
+                while ((m = fenceRegex.exec(text)) !== null) {
+                  if (m.index > last) {
+                    nodes.push(<span key={`ct-${k}`}>{formatMarkdown(text.slice(last, m.index))}</span>)
+                  }
+                  nodes.push(<CodeBlock key={`cb-${k}`} language={m[1]} code={m[2].replace(/\n$/, '')} />)
+                  last = m.index + m[0].length
+                  k++
+                }
+                const rest = text.slice(last)
+                // A trailing unclosed fence means the code block is still streaming.
+                const openMatch = rest.match(/```(\w+)?\n?([\s\S]*)$/)
+                if (openMatch) {
+                  const before = rest.slice(0, openMatch.index)
+                  if (before) nodes.push(<span key="ct-open">{formatMarkdown(before)}</span>)
+                  nodes.push(<CodeBlock key="cb-stream" language={openMatch[1]} code={openMatch[2]} />)
+                } else if (rest) {
+                  nodes.push(<span key="ct-final">{formatMarkdown(rest)}</span>)
+                }
+                return nodes
+              }
+
               // Split by lines to handle line-based formatting
               const lines = text.split('\n')
               let keyIndex = 0

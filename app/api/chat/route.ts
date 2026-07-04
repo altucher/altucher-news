@@ -347,12 +347,13 @@ export async function POST(req: Request) {
     const region = req.headers.get('x-vercel-ip-country-region') || undefined
     const location = { country, city, region }
 
-    const { messages, model, userId, fileContext, customContext }: { 
+    const { messages, model, userId, fileContext, customContext, codeMode }: { 
       messages: UIMessage[]; 
       model?: string; 
       userId?: string;
       fileContext?: { name: string; content: string } | null;
       customContext?: { company: string; context: string } | null;
+      codeMode?: boolean;
     } = await req.json()
 
     // Kick off the user-memory fetch immediately so it runs in parallel
@@ -501,8 +502,25 @@ When answering questions, use this business context when relevant. If someone as
 You answer questions directly and helpfully. You do not add unnecessary disclaimers or refuse reasonable requests.`
     }
     
-    // Check if we need to search for current information
-    if (isNewsQuery(lastMessage)) {
+    // Code mode: swap in a coding-focused system prompt and skip web search.
+    // Powered by the same Chutes (SN64) coding-capable models (DeepSeek V3.2 etc).
+    if (codeMode) {
+      systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
+
+You are a senior software engineer helping people build things. Many of your users have NO programming experience, so be friendly, clear, and jargon-free in your explanations.
+
+RULES:
+- ALWAYS put code inside fenced markdown code blocks with the correct language tag, e.g. \`\`\`html, \`\`\`ts, \`\`\`python. This is required so the UI can render, preview, and offer copy/download buttons.
+- WHEN THE USER ASKS TO BUILD A WEBSITE, PAGE, APP, GAME, LANDING PAGE, TOOL, OR ANY VISUAL/INTERACTIVE UI: output ONE complete, self-contained HTML file in a single \`\`\`html block. Put all CSS inside a <style> tag and all JavaScript inside a <script> tag in that same file. Start with <!DOCTYPE html>. Do NOT split it into multiple files and do NOT rely on external build tools. This lets the user see it live, download it as one file, and publish it anywhere. Make it look polished and modern (good spacing, readable fonts, a pleasant color palette, responsive layout). You may load libraries/fonts from a CDN via <script>/<link> tags.
+- After a build, add ONE short, plain-English sentence telling the user they can press "Preview" to see it, "Download" to save it as index.html, or "Copy" to reuse it. Then briefly say how to change it (e.g. "just tell me what to add or change").
+- For non-website coding help (scripts, functions, debugging, other languages), write clean idiomatic code in the appropriate language with a brief explanation.
+- When debugging, identify the root cause first, then give the corrected code.
+- If the request is ambiguous, make a reasonable assumption and state it briefly rather than refusing.
+- Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
+    }
+
+    // Check if we need to search for current information (skipped in code mode)
+    if (!codeMode && isNewsQuery(lastMessage)) {
       const searchResults = await searchWeb('news today headlines')
       
       if (searchResults) {
@@ -515,7 +533,7 @@ ${searchResults}
 
 Respond by organizing these headlines by topic (politics, technology, business, etc.) and presenting them conversationally. Start your response with "Here are today's top stories:" and then list them.`
       }
-    } else if (needsCurrentInfo(lastMessage)) {
+    } else if (!codeMode && needsCurrentInfo(lastMessage)) {
       // Strip the force search prefix if present
       const cleanQuery = lastMessage.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
       const searchResults = await searchWeb(cleanQuery)
