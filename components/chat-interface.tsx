@@ -117,6 +117,14 @@ function getMessageText(message: UIMessage): string {
     .join('')
 }
 
+// A response was likely cut off mid-stream if it contains an odd number of
+// ``` fences (an unterminated code block). Used to offer a "Continue" action.
+function looksTruncated(text: string): boolean {
+  if (!text) return false
+  const fences = (text.match(/```/g) || []).length
+  return fences % 2 === 1
+}
+
 function isNewsQuery(text: string): boolean {
   const lowerText = text.toLowerCase()
   return (lowerText.includes('news') || lowerText.includes('headlines') || lowerText.includes('happening')) &&
@@ -163,6 +171,9 @@ export default function ChatInterface() {
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [showProjectsPanel, setShowProjectsPanel] = useState(false)
+  // True while we're fetching a continuation for a response that got cut off
+  // mid-stream (e.g. the model/provider stopped before closing a code block).
+  const [continuing, setContinuing] = useState(false)
   // The project the user is currently continuing to edit (if any). When set,
   // code-mode messages are treated as edits to this saved code instead of a
   // fresh build, so the model never starts from scratch.
@@ -865,6 +876,96 @@ export default function ChatInterface() {
     if (isLoading) return
     const enhancedQuery = `[SEARCH THE WEB FOR RECENT DATA] ${userQuestion}`
     sendMessage({ text: enhancedQuery })
+  }
+
+  // Resume a response that was cut off mid-stream. Instead of starting a new
+  // turn, we stream the continuation straight into the SAME assistant message
+  // so a partially-written code block ends up whole (previewable/downloadable).
+  const handleContinueGeneration = async () => {
+    if (isLoading || continuing) return
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+    if (!lastAssistant) return
+    const targetId = lastAssistant.id
+
+    setContinuing(true)
+    try {
+      const continuationMessages = [
+        ...messages,
+        {
+          id: `continue-${Date.now()}`,
+          role: 'user' as const,
+          parts: [
+            {
+              type: 'text' as const,
+              text:
+                'Your previous response was cut off mid-stream. Continue from the EXACT point you stopped. Do NOT repeat or restart anything you already wrote, and do NOT re-explain. Resume from the very next character. If you were inside a fenced code block, keep writing the code and be sure to close it with a final ``` when done.',
+            },
+          ],
+        },
+      ]
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: continuationMessages,
+          codeMode: true,
+          userId: user?.id ?? undefined,
+        }),
+      })
+      if (!res.ok || !res.body) throw new Error('Continue request failed')
+
+      const appendText = (delta: string) => {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== targetId) return m
+            const parts = Array.isArray(m.parts) ? [...m.parts] : []
+            let lastTextIdx = -1
+            for (let i = parts.length - 1; i >= 0; i--) {
+              if (parts[i]?.type === 'text') {
+                lastTextIdx = i
+                break
+              }
+            }
+            if (lastTextIdx === -1) {
+              parts.push({ type: 'text', text: delta })
+            } else {
+              const p = parts[lastTextIdx] as { type: 'text'; text: string }
+              parts[lastTextIdx] = { ...p, text: p.text + delta }
+            }
+            return { ...m, parts }
+          })
+        )
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6)
+          if (payload === '[DONE]') continue
+          try {
+            const evt = JSON.parse(payload)
+            if (evt.type === 'text-delta' && typeof evt.delta === 'string') {
+              appendText(evt.delta)
+            }
+          } catch {
+            // ignore non-JSON keepalive lines
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[v0] Continue generation error:', e)
+    } finally {
+      setContinuing(false)
+    }
   }
 
   // Generate image from prompt
@@ -1795,6 +1896,31 @@ export default function ChatInterface() {
                                 headlines={newsHeadlines} 
                                 loading={loadingNews} 
                               />
+                            )}
+                            {/* Continue button when a response was cut off mid-stream */}
+                            {message.role === 'assistant' &&
+                              idx === messages.length - 1 &&
+                              (looksTruncated(getMessageText(message)) || continuing) && (
+                              <div className="flex gap-4 mt-2">
+                                <div className="w-9" /> {/* Spacer to align with message */}
+                                <button
+                                  onClick={handleContinueGeneration}
+                                  disabled={isLoading || continuing}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-full transition-colors disabled:opacity-60"
+                                >
+                                  {continuing ? (
+                                    <>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      Continuing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                      Continue generating
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             )}
                             {/* Include recent history button after assistant messages */}
                             {message.role === 'assistant' && !isLoading && idx > 0 && (
