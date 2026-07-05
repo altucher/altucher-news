@@ -1323,20 +1323,20 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowProjectsPanel(true)}
-                className="text-sky-500 hover:text-sky-400 flex"
-              >
-                <FolderCode className="w-4 h-4 mr-1" />
-                Projects
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
                 onClick={() => setCodeMode(true)}
                 className="text-white hover:text-white/80 flex font-semibold tracking-wide"
               >
                 <Code className="w-4 h-4 mr-1" />
                 CODE
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowProjectsPanel(true)}
+                className="text-sky-500 hover:text-sky-400 flex"
+              >
+                <FolderCode className="w-4 h-4 mr-1" />
+                Projects
               </Button>
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
