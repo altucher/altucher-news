@@ -69,9 +69,10 @@ function ModeToggle({
         aria-pressed={codeMode}
         className={cn(
           base,
+          'font-semibold',
           codeMode
-            ? 'bg-sky-600 text-white shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 ring-1 ring-sky-300/60'
+            : 'text-sky-600 hover:bg-sky-500/10 hover:text-sky-700'
         )}
       >
         <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
