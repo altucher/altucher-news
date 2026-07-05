@@ -1195,7 +1195,22 @@ export default function ChatInterface() {
       )}>
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-            <span className="text-3xl font-bold text-primary tracking-tight">BlueTAO</span>
+            <button
+              onClick={handleNewChat}
+              className="group flex items-center gap-2.5"
+              aria-label="BlueTAO home"
+            >
+              <span className="relative flex items-center justify-center">
+                <span
+                  className="absolute inset-0 -z-10 rounded-full bg-primary/40 blur-lg opacity-70 group-hover:opacity-100 transition-opacity"
+                  aria-hidden="true"
+                />
+                <BlueTaoLogo className="w-8 h-8 text-primary drop-shadow-[0_0_12px_var(--primary)]" />
+              </span>
+              <span className="text-4xl font-extrabold tracking-tight leading-none text-primary drop-shadow-[0_0_18px_color-mix(in_oklch,var(--primary)_55%,transparent)]">
+                Blue<span className="text-foreground">TAO</span>
+              </span>
+            </button>
           <Button
             variant="ghost"
             size="icon"
