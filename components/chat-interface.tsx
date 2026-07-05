@@ -32,99 +32,52 @@ function Tip({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-// The five creation abilities, presented as equal siblings of one composer.
-// Each carries a small accent used ONLY as an identifier (dot + active text),
-// never as a loud filled button — palette stays disciplined.
-type CreateMode = 'chat' | 'code' | 'image' | 'music' | 'video'
-
-const CREATE_MODES: {
-  id: CreateMode
-  label: string
-  icon: typeof MessageSquare
-  accent: string // text color for the icon when active
-  placeholder: string
-  hint: string
-}[] = [
-  {
-    id: 'chat',
-    label: 'Chat',
-    icon: MessageSquare,
-    accent: 'text-primary',
-    placeholder: 'Ask BlueTAO anything…',
-    hint: 'Ask questions, get real-time answers, or just talk.',
-  },
-  {
-    id: 'code',
-    label: 'Code',
-    icon: Code,
-    accent: 'text-sky-400',
-    placeholder: 'Describe the app, game, or site you want to build…',
-    hint: 'Build a working app or game — press “Open” to run it, then Publish.',
-  },
-  {
-    id: 'image',
-    label: 'Image',
-    icon: ImageIcon,
-    accent: 'text-violet-400',
-    placeholder: 'Describe an image to generate…',
-    hint: 'Turn a description into an image.',
-  },
-  {
-    id: 'music',
-    label: 'Music',
-    icon: Music,
-    accent: 'text-emerald-400',
-    placeholder: 'Describe a song — mood, genre, lyrics…',
-    hint: 'Generate an original track from a prompt.',
-  },
-  {
-    id: 'video',
-    label: 'Video',
-    icon: Film,
-    accent: 'text-rose-400',
-    placeholder: 'Describe a short video to generate…',
-    hint: 'Generate a short video from a prompt.',
-  },
-]
-
-function ModeSelector({
-  mode,
-  setMode,
+// Clear, labeled mode switcher: Chat vs. BlueTAO Code (build mode).
+// Designed to be self-explanatory for people with no coding experience.
+function ModeToggle({
+  codeMode,
+  setCodeMode,
   compact = false,
 }: {
-  mode: CreateMode
-  setMode: (m: CreateMode) => void
+  codeMode: boolean
+  setCodeMode: (v: boolean) => void
   compact?: boolean
 }) {
+  const base = cn(
+    'inline-flex items-center gap-1.5 rounded-full font-medium transition-all',
+    compact ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-sm'
+  )
   return (
-    <div
-      role="tablist"
-      aria-label="Creation mode"
-      className="inline-flex flex-wrap items-center gap-1 rounded-full border border-border bg-card/80 p-1 shadow-sm backdrop-blur"
-    >
-      {CREATE_MODES.map((m) => {
-        const Icon = m.icon
-        const active = mode === m.id
-        return (
-          <button
-            key={m.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => setMode(m.id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full font-medium transition-all',
-              compact ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5 text-sm',
-              active
-                ? 'bg-sidebar-accent text-foreground shadow-sm ring-1 ring-border'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Icon className={cn(compact ? 'h-3.5 w-3.5' : 'h-4 w-4', active ? m.accent : '')} />
-            {m.label}
-          </button>
-        )
-      })}
+    <div className="inline-flex items-center rounded-full border border-border bg-card p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setCodeMode(false)}
+        aria-pressed={!codeMode}
+        className={cn(
+          base,
+          !codeMode
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <MessageSquare className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        Chat
+      </button>
+      <button
+        type="button"
+        onClick={() => setCodeMode(true)}
+        aria-pressed={codeMode}
+        className={cn(
+          base,
+          'font-semibold',
+          codeMode
+            ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 ring-1 ring-sky-300/60'
+            : 'text-sky-600 hover:bg-sky-500/10 hover:text-sky-700'
+        )}
+      >
+        <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        BlueTAO Code
+      </button>
     </div>
   )
 }
@@ -203,11 +156,8 @@ export default function ChatInterface() {
   const [generatingVideo, setGeneratingVideo] = useState(false)
   const [generatedVideos, setGeneratedVideos] = useState<Array<{id: string, prompt: string, videoUrl: string, createdAt: number}>>([])
   const [currentVideoPrompt, setCurrentVideoPrompt] = useState<string | null>(null)
-  // The five creation abilities live in one unified selector. `codeMode` is
-  // derived so the existing coding-prompt routing keeps working unchanged.
-  const [mode, setMode] = useState<CreateMode>('chat')
-  const codeMode = mode === 'code'
-  const activeMode = CREATE_MODES.find((m) => m.id === mode) ?? CREATE_MODES[0]
+  // Code mode: routes chat to a coding-optimized system prompt on Chutes (SN64)
+  const [codeMode, setCodeMode] = useState(false)
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
@@ -669,32 +619,23 @@ export default function ChatInterface() {
       textareaRef.current.style.height = 'auto'
     }
 
-    // Explicit creation modes route straight to the matching generator.
-    if (mode === 'image') {
-      handleGenerateImage(userMessage)
-      return
-    }
-    if (mode === 'video') {
-      handleGenerateVideo(userMessage)
-      return
-    }
-    if (mode === 'music') {
-      handleGenerateMusic(userMessage)
-      return
-    }
-
-    // In Chat mode only, keep the convenience auto-routing so a prompt like
-    // "make me an image of…" still works without switching modes first.
-    // Code mode treats everything as a coding request.
-    if (mode === 'chat') {
+    // In Code mode, everything is a coding request — skip the media routing
+    // so prompts like "make a function" aren't hijacked into image/video/music.
+    if (!codeMode) {
+      // If the user is asking for an image, route to image generation even
+      // if they pressed the text/send button instead of the image button.
       if (isImageRequest(userMessage)) {
         handleGenerateImage(userMessage)
         return
       }
+
+      // If the user is asking for a video, route to video generation.
       if (isVideoRequest(userMessage)) {
         handleGenerateVideo(userMessage)
         return
       }
+
+      // If the user is asking for a song/music, route to music generation.
       if (isMusicRequest(userMessage)) {
         handleGenerateMusic(userMessage)
         return
@@ -826,7 +767,7 @@ export default function ChatInterface() {
       setCurrentChatId(null)
       lastSavedMessageRef.current = null
       setNewsHeadlines([])
-      setMode('code')
+      setCodeMode(true)
       setActiveProject({ id: project.id, title: project.title, code: project.current_code })
       setMessages([
         {
@@ -1147,29 +1088,29 @@ export default function ChatInterface() {
         />
       )}
 
-      {/* Sidebar — grouped rail: Create / Library / Explore / Account */}
+      {/* Sidebar */}
       <aside className={cn(
         "fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-sidebar border-r border-sidebar-border flex flex-col transform transition-transform duration-200 ease-in-out",
         sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
-        {/* Brand */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border">
-          <button
-            onClick={handleNewChat}
-            className="group flex items-center gap-2.5"
-            aria-label="BlueTAO home"
-          >
-            <span className="relative flex items-center justify-center">
-              <span
-                className="absolute inset-0 -z-10 rounded-full bg-primary/40 blur-lg opacity-70 group-hover:opacity-100 transition-opacity"
-                aria-hidden="true"
-              />
-              <BlueTaoLogo className="w-7 h-7 text-primary drop-shadow-[0_0_12px_var(--primary)]" />
-            </span>
-            <span className="text-2xl font-extrabold tracking-tight leading-none text-primary">
-              Blue<span className="text-foreground">TAO</span>
-            </span>
-          </button>
+        {/* Sidebar Header */}
+        <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+            <button
+              onClick={handleNewChat}
+              className="group flex items-center gap-2.5"
+              aria-label="BlueTAO home"
+            >
+              <span className="relative flex items-center justify-center">
+                <span
+                  className="absolute inset-0 -z-10 rounded-full bg-primary/40 blur-lg opacity-70 group-hover:opacity-100 transition-opacity"
+                  aria-hidden="true"
+                />
+                <BlueTaoLogo className="w-8 h-8 text-primary drop-shadow-[0_0_12px_var(--primary)]" />
+              </span>
+              <span className="text-4xl font-extrabold tracking-tight leading-none text-primary drop-shadow-[0_0_18px_color-mix(in_oklch,var(--primary)_55%,transparent)]">
+                Blue<span className="text-foreground">TAO</span>
+              </span>
+            </button>
           <Button
             variant="ghost"
             size="icon"
@@ -1180,57 +1121,57 @@ export default function ChatInterface() {
           </Button>
         </div>
 
-        {/* Create */}
-        <div className="px-3 pt-3">
+        {/* New Chat Button */}
+        <div className="p-3">
           <Button
             onClick={handleNewChat}
             className="w-full justify-start gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Plus className="w-4 h-4" />
-            New
+            New Chat
           </Button>
           {showLoginPrompt && (
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Sign in to save your history
+            <p className="text-xs text-amber-600 mt-2 text-center animate-pulse">
+              Log in to create a chat history
             </p>
           )}
         </div>
 
-        {/* Library — your stuff */}
-        <div className="px-3 pt-4">
-          <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-            Library
-          </p>
-          <nav className="space-y-0.5">
-            {user && (
-              <>
-                <button
-                  onClick={() => setShowProjectsPanel(true)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors"
-                >
-                  <FolderCode className="w-4 h-4 flex-shrink-0" />
-                  Projects
-                </button>
-                <button
-                  onClick={() => setShowMemoryPanel(true)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors"
-                >
-                  <Brain className="w-4 h-4 flex-shrink-0" />
-                  Memory
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
+        {/* Usage Indicator */}
+        {user && usage && (
+          <div className="px-3 pb-3">
+            <div className="bg-sidebar-accent/50 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-sidebar-foreground capitalize">{usage.tier} Plan</span>
+                <Link href="/pricing">
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary/80 p-0">
+                    <Zap className="w-3 h-3 mr-1" />
+                    Upgrade
+                  </Button>
+                </Link>
+              </div>
+              <div className="w-full bg-sidebar-border rounded-full h-1.5 mb-1">
+                <div 
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    usage.remaining < usage.messageLimit * 0.1 ? "bg-red-500" :
+                    usage.remaining < usage.messageLimit * 0.3 ? "bg-amber-500" : "bg-primary"
+                  )}
+                  style={{ width: `${Math.min(100, (usage.messageCount / usage.messageLimit) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {usage.remaining} of {usage.messageLimit} messages left today
+              </p>
+            </div>
+          </div>
+        )}
 
-        {/* Chats list */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 pt-3">
-          <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-            Chats
-          </p>
+        {/* Chat List */}
+        <div className="flex-1 overflow-y-auto p-2">
           {!user ? (
-            <div className="px-2 py-3">
-              <p className="text-muted-foreground text-xs mb-2">Sign in to save your chats</p>
+            <div className="text-center py-8 px-4">
+              <p className="text-muted-foreground text-sm mb-3">Sign in to save your chat history</p>
               <Button
                 onClick={() => router.push('/auth/login')}
                 variant="outline"
@@ -1241,21 +1182,21 @@ export default function ChatInterface() {
               </Button>
             </div>
           ) : loadingChats ? (
-            <div className="flex items-center justify-center py-6">
+            <div className="flex items-center justify-center py-8">
               <Loader2 className="w-5 h-5 animate-spin text-primary" />
             </div>
           ) : chats.length === 0 ? (
-            <div className="px-2 py-3 text-muted-foreground text-xs">
+            <div className="text-center py-8 text-muted-foreground text-sm">
               No conversations yet
             </div>
           ) : (
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {chats.map((chat) => (
                 <div
                   key={chat.id}
                   onClick={() => loadChat(chat.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-colors group cursor-pointer",
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors group cursor-pointer",
                     currentChatId === chat.id
                       ? "bg-sidebar-accent text-sidebar-foreground"
                       : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
@@ -1266,7 +1207,6 @@ export default function ChatInterface() {
                   <button
                     onClick={(e) => deleteChat(chat.id, e)}
                     className="opacity-0 group-hover:opacity-100 p-1 hover:bg-sidebar-accent rounded transition-opacity"
-                    aria-label="Delete chat"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-red-400" />
                   </button>
@@ -1276,81 +1216,17 @@ export default function ChatInterface() {
           )}
         </div>
 
-        {/* Explore — destinations */}
-        <div className="px-3 pt-3 border-t border-sidebar-border">
-          <p className="px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-            Explore
-          </p>
-          <nav className="space-y-0.5">
-            {[
-              { href: '/mining', label: 'Mining', icon: Pickaxe },
-              { href: '/fun', label: 'Fun', icon: PartyPopper },
-              { href: '/detect', label: 'Is it AI?', icon: Sparkles },
-              { href: '/developers', label: 'Developers', icon: Code },
-              { href: '/pricing', label: 'Pricing', icon: Zap },
-            ].map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors"
-              >
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                {label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        {/* Account */}
+        {/* User & Sign Out */}
         <div className="p-3 border-t border-sidebar-border">
           {user ? (
-            <div className="space-y-2">
-              {usage && (
-                <div className="bg-sidebar-accent/50 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-sidebar-foreground capitalize">{usage.tier} Plan</span>
-                    <Link href="/pricing">
-                      <Button variant="ghost" size="sm" className="h-6 text-xs text-primary hover:text-primary/80 p-0">
-                        <Zap className="w-3 h-3 mr-1" />
-                        Upgrade
-                      </Button>
-                    </Link>
-                  </div>
-                  <div className="w-full bg-sidebar-border rounded-full h-1.5 mb-1">
-                    <div
-                      className={cn(
-                        "h-1.5 rounded-full transition-all",
-                        usage.remaining < usage.messageLimit * 0.1 ? "bg-red-500" :
-                        usage.remaining < usage.messageLimit * 0.3 ? "bg-amber-500" : "bg-primary"
-                      )}
-                      style={{ width: `${Math.min(100, (usage.messageCount / usage.messageLimit) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {usage.remaining} of {usage.messageLimit} messages left today
-                  </p>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-2 px-1">
-                <span className="flex items-center gap-2 text-sm text-sidebar-foreground truncate">
-                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <User className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="truncate">
-                    {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
-                  </span>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleSignOut}
-                  className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                  aria-label="Sign out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+            <Button
+              variant="ghost"
+              onClick={handleSignOut}
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </Button>
           ) : (
             <Button
               variant="ghost"
@@ -1408,56 +1284,130 @@ export default function ChatInterface() {
           </div>
         )}
 
-        {/* Header — slim context bar; global nav lives in the rail */}
-        <header className="relative z-10 flex items-center justify-between gap-3 px-4 lg:px-6 py-3 border-b border-border/30 bg-background/80 backdrop-blur-md">
-          <div className="flex items-center gap-2 min-w-0">
+        {/* Header */}
+        <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/30 bg-background/80 backdrop-blur-md">
+          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden text-foreground"
-              aria-label="Open menu"
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <span className="flex items-center gap-2 min-w-0 text-sm text-muted-foreground">
-              <activeMode.icon className={cn('w-4 h-4 flex-shrink-0', activeMode.accent)} />
-              <span className="truncate">
-                {activeProject ? (
-                  <>Editing <span className="text-foreground font-medium">{activeProject.title}</span></>
-                ) : (
-                  <><span className="text-foreground font-medium">{activeMode.label}</span> mode</>
-                )}
-              </span>
-            </span>
+            <button 
+              onClick={handleNewChat}
+                className="text-xl font-bold text-foreground hover:text-primary transition-colors hidden lg:block tracking-tight"
+            >
+              a front end to bittensor
+            </button>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/detect" className="hidden sm:block">
-              <Button variant="outline" size="sm" className="rounded-full border-border/60 text-foreground hover:bg-accent hover:text-accent-foreground">
-                <Sparkles className="w-4 h-4 mr-1.5" />
-                Is it AI?
-              </Button>
-            </Link>
             <Button
               variant="outline"
               size="sm"
               onClick={handleNewChat}
-              className="rounded-full border-border/50 bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+              className="rounded-full border-border/50 bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground text-sm"
             >
-              <Plus className="w-4 h-4 mr-1.5" />
-              New
+              <Plus className="w-4 h-4 mr-2" />
+              New Chat
             </Button>
-            {!user && (
+            {showLoginPrompt && (
+              <span className="text-xs text-amber-600 animate-pulse hidden sm:block">
+                Log in to create a chat history
+              </span>
+            )}
+          </div>
+          {user ? (
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowProjectsPanel(true)}
+                className="text-sky-500 hover:text-sky-400 flex"
+              >
+                <FolderCode className="w-4 h-4 mr-1" />
+                Projects
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowMemoryPanel(true)}
+                className="text-violet-400 hover:text-violet-300 flex"
+              >
+                <Brain className="w-4 h-4 mr-1" />
+                Memory
+              </Button>
+              <Link href="/mining">
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
+                  <Pickaxe className="w-4 h-4 mr-1" />
+                  Mining
+                </Button>
+              </Link>
+              <Link href="/fun">
+                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
+                  <PartyPopper className="w-4 h-4 mr-1" />
+                  Fun
+                </Button>
+              </Link>
+              <Link href="/detect">
+                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
+                  <Sparkles className="w-4 h-4 mr-1.5" />
+                  Is it AI?
+                </Button>
+              </Link>
+              <Link href="/developers">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
+                  <Code className="w-4 h-4 mr-1" />
+                  Embed
+                </Button>
+              </Link>
+              <Link href="/pricing">
+                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden sm:flex">
+                  <Zap className="w-4 h-4 mr-1" />
+                  Upgrade
+                </Button>
+              </Link>
+              <span className="text-sm text-muted-foreground hidden sm:block">
+                {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link href="/mining">
+                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
+                  <Pickaxe className="w-4 h-4 mr-1" />
+                  Mining
+                </Button>
+              </Link>
+              <Link href="/fun">
+                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
+                  <PartyPopper className="w-4 h-4 mr-1" />
+                  Fun
+                </Button>
+              </Link>
+              <Link href="/detect">
+                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
+                  <Sparkles className="w-4 h-4 mr-1.5" />
+                  Is it AI?
+                </Button>
+              </Link>
+              <Link href="/developers">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
+                  <Code className="w-4 h-4 mr-1" />
+                  Embed
+                </Button>
+              </Link>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push('/auth/login')}
-                className="text-muted-foreground hover:text-foreground hidden sm:flex"
+                className="ml-2 text-muted-foreground hover:text-foreground hidden sm:flex"
               >
                 Sign in
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </header>
 
         {/* Main Content */}
@@ -1482,15 +1432,21 @@ export default function ChatInterface() {
                 
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
-                  {/* Unified creation mode selector */}
+                  {/* Mode switcher: Chat vs. BlueTAO Code */}
                   <div className="mb-3 flex justify-center">
-                    <ModeSelector mode={mode} setMode={setMode} />
+                    <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
                   </div>
 
-                  {/* Mode hint */}
-                  <p className="mb-3 text-sm text-muted-foreground text-center text-pretty">
-                    {activeMode.hint}
-                  </p>
+                  {/* Build-mode helper banner */}
+                  {codeMode && (
+                    <div className="mb-3 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+                      <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
+                      <span>
+                        <strong>Build mode is on.</strong> Describe a website or app in plain English
+                        {' '}&mdash; you&apos;ll see it come to life in a live preview, and you can download or copy it. No coding needed.
+                      </span>
+                    </div>
+                  )}
 
                   {/* File upload indicator */}
                   {uploadedFile && (
@@ -1526,15 +1482,103 @@ export default function ChatInterface() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={activeMode.placeholder}
+                        placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
-                      <Tip label={`Send (${activeMode.label})`}>
+                      {!codeMode && (
+                      <>
+                      <Tip label="Video">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const prompt = input.trim()
+                            if (prompt) {
+                              setInput('') // Clear input immediately
+                              handleGenerateVideo(prompt)
+                            }
+                          }}
+                          disabled={!input.trim() || isLoading || generatingVideo}
+                          className={cn(
+                            'mr-1 h-10 w-10 rounded-full transition-all',
+                            input.trim() && !isLoading && !generatingVideo
+                              ? 'bg-rose-600 text-white hover:bg-rose-500'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {generatingVideo ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Film className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </Tip>
+                      <Tip label="Music">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const prompt = input.trim()
+                            if (prompt) {
+                              setInput('') // Clear input immediately
+                              handleGenerateMusic(prompt)
+                            }
+                          }}
+                          disabled={!input.trim() || isLoading || generatingMusic}
+                          className={cn(
+                            'mr-1 h-10 w-10 rounded-full transition-all',
+                            input.trim() && !isLoading && !generatingMusic
+                              ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {generatingMusic ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Music className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </Tip>
+                      <Tip label="Image">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const prompt = input.trim()
+                            if (prompt) {
+                              setInput('') // Clear input immediately
+                              handleGenerateImage(prompt)
+                            }
+                          }}
+                          disabled={!input.trim() || isLoading || generatingImage}
+                          className={cn(
+                            'mr-1 h-10 w-10 rounded-full transition-all',
+                            input.trim() && !isLoading && !generatingImage
+                              ? 'bg-violet-600 text-white hover:bg-violet-500'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {generatingImage ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <ImageIcon className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </Tip>
+                      </>
+                      )}
+                      <Tip label={codeMode ? 'Build' : 'Text'}>
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={!input.trim() || isLoading || generatingImage || generatingMusic || generatingVideo}
+                        disabled={!input.trim() || isLoading}
                         className={cn(
                           'mr-2 h-10 w-10 rounded-full transition-all',
                           input.trim() && !isLoading
@@ -1542,7 +1586,7 @@ export default function ChatInterface() {
                             : 'bg-muted text-muted-foreground'
                         )}
                       >
-                        {(isLoading || generatingImage || generatingMusic || generatingVideo) ? (
+                        {isLoading ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                           <Send className="w-5 h-5" />
@@ -1922,12 +1966,14 @@ export default function ChatInterface() {
                 {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic || generatedVideos.length > 0 || generatingVideo) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
-              {/* Unified creation mode selector */}
+              {/* Mode switcher: Chat vs. BlueTAO Code */}
               <div className="mb-2 flex items-center justify-center gap-2">
-                <ModeSelector mode={mode} setMode={setMode} compact />
-                <span className="hidden md:inline text-xs text-muted-foreground">
-                  {activeMode.hint}
-                </span>
+                <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />
+                {codeMode && (
+                  <span className="hidden sm:inline text-xs text-sky-700 dark:text-sky-400">
+                    Build mode: describe a website or app to preview it live
+                  </span>
+                )}
               </div>
               {/* File upload indicator */}
               {uploadedFile && (
@@ -1963,7 +2009,7 @@ export default function ChatInterface() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={activeMode.placeholder}
+                    placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything..."}
                     disabled={isLoading}
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
@@ -1985,11 +2031,99 @@ export default function ChatInterface() {
                       <Mic className="w-4 h-4" />
                     </Button>
                   )}
-                  <Tip label={`Send (${activeMode.label})`}>
+                  {!codeMode && (
+                  <>
+                  <Tip label="Video">
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const prompt = input.trim()
+                        if (prompt) {
+                          setInput('') // Clear input immediately
+                          handleGenerateVideo(prompt)
+                        }
+                      }}
+                      disabled={!input.trim() || isLoading || generatingVideo}
+                      className={cn(
+                        'mr-1 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading && !generatingVideo
+                          ? 'bg-rose-600 text-white hover:bg-rose-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {generatingVideo ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Film className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
+                  <Tip label="Music">
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const prompt = input.trim()
+                        if (prompt) {
+                          setInput('') // Clear input immediately
+                          handleGenerateMusic(prompt)
+                        }
+                      }}
+                      disabled={!input.trim() || isLoading || generatingMusic}
+                      className={cn(
+                        'mr-1 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading && !generatingMusic
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {generatingMusic ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Music className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
+                  <Tip label="Image">
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const prompt = input.trim()
+                        if (prompt) {
+                          setInput('') // Clear input immediately
+                          handleGenerateImage(prompt)
+                        }
+                      }}
+                      disabled={!input.trim() || isLoading || generatingImage}
+                      className={cn(
+                        'mr-1 h-9 w-9 rounded-full transition-all',
+                        input.trim() && !isLoading && !generatingImage
+                          ? 'bg-violet-600 text-white hover:bg-violet-500'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {generatingImage ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </Tip>
+                  </>
+                  )}
+                  <Tip label={codeMode ? 'Build' : 'Text'}>
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={!input.trim() || isLoading || generatingImage || generatingMusic || generatingVideo}
+                      disabled={!input.trim() || isLoading}
                       className={cn(
                         'mr-2 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading
@@ -1997,7 +2131,7 @@ export default function ChatInterface() {
                           : 'bg-muted text-muted-foreground'
                       )}
                     >
-                      {(isLoading || generatingImage || generatingMusic || generatingVideo) ? (
+                      {isLoading ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <Send className="w-4 h-4" />
