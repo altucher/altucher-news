@@ -101,9 +101,9 @@ Format your response in clean, readable markdown. Be thorough and informative.`
     console.log('[v0] Starting research generation...')
     console.log('[v0] CHUTES_API_KEY exists:', !!process.env.CHUTES_API_KEY)
 
-    // Generate research using DeepSeek
+    // Generate research using Kimi K2.6 (Chutes SN64)
     const { text: researchResult } = await generateText({
-      model: chutes.chatModel('deepseek-ai/DeepSeek-V3.2-TEE'),
+      model: chutes.chatModel('moonshotai/Kimi-K2.6-TEE'),
       prompt: researchPrompt,
       maxTokens: depth === 'quick' ? 1500 : 4000,
     })
