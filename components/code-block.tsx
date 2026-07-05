@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, Copy, Eye, Code2, Download, ExternalLink, Save, Loader2, Rocket, Globe, Link2 } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, Save, Loader2, Rocket, Globe, Link2 } from 'lucide-react'
 
 interface CodeBlockProps {
   code: string
@@ -56,8 +56,6 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
   const [publishError, setPublishError] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const previewable = useMemo(() => isPreviewable(code, language), [code, language])
-  // For previewable code, default to showing the running result first.
-  const [tab, setTab] = useState<'preview' | 'code'>(previewable ? 'preview' : 'code')
 
   const doc = useMemo(() => (previewable ? toDocument(code) : ''), [previewable, code])
 
@@ -157,36 +155,7 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
     <div className="my-3 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-100">
       {/* Header bar */}
       <div className="flex items-center justify-between border-b border-zinc-700 bg-zinc-800 px-3 py-1.5">
-        {previewable ? (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setTab('preview')}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                tab === 'preview'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-zinc-300 hover:bg-zinc-700 hover:text-white'
-              }`}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Preview
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('code')}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                tab === 'code'
-                  ? 'bg-zinc-600 text-white'
-                  : 'text-zinc-300 hover:bg-zinc-700 hover:text-white'
-              }`}
-            >
-              <Code2 className="h-3.5 w-3.5" />
-              Code
-            </button>
-          </div>
-        ) : (
-          <span className="text-xs font-medium text-zinc-400">{label}</span>
-        )}
+        <span className="text-xs font-medium text-zinc-400">{label}</span>
 
         <div className="flex items-center gap-1">
           {previewable && (
@@ -334,33 +303,17 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
         </div>
       )}
 
-      {/* Body: live preview or source code.
-          While streaming, never mount the iframe — show the code building
-          instead so the half-finished page doesn't flash on every chunk. */}
-      {previewable && isStreaming ? (
-        <div className="relative">
-          <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-400">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
-            Building your app… preview will appear when it&apos;s ready
-          </div>
-          <pre className="max-h-96 overflow-y-auto p-4 text-sm leading-relaxed">
-            <code className="font-mono">{code}</code>
-          </pre>
+      {/* Body: source code. Use the "Open" button to view the live result in a
+          new tab (the inline preview tab was removed). */}
+      {previewable && isStreaming && (
+        <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+          Building your app… press &quot;Open&quot; to view it when it&apos;s ready
         </div>
-      ) : previewable && tab === 'preview' ? (
-        <div className="bg-white">
-          <iframe
-            title="Live preview"
-            srcDoc={doc}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-            className="h-96 w-full border-0 bg-white"
-          />
-        </div>
-      ) : (
-        <pre className="overflow-x-auto p-4 text-sm leading-relaxed">
-          <code className="font-mono">{code}</code>
-        </pre>
       )}
+      <pre className="max-h-96 overflow-auto p-4 text-sm leading-relaxed">
+        <code className="font-mono">{code}</code>
+      </pre>
     </div>
   )
 }
