@@ -7,6 +7,7 @@ import {
 import type { UIMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
+import { stripKimiToolTokens } from '@/lib/strip-kimi-tokens'
 
 // Chutes streams tokens slowly and routes to variable-speed instances, so a
 // long code generation can run well past 5 minutes. 300s was cutting some
@@ -648,6 +649,7 @@ When answering questions, refer to this document content. You can summarize it, 
       messages: modelMessages,
       maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
       abortSignal: req.signal,
+      experimental_transform: stripKimiToolTokens(),
     })
 
     // Track the chat query event (async, don't wait)
@@ -690,6 +692,7 @@ When answering questions, refer to this document content. You can summarize it, 
             messages: modelMessages,
             maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
             abortSignal: req.signal,
+            experimental_transform: stripKimiToolTokens(),
           })
 
           trackAnalyticsEvent('chat_query', lastMessage, `targon/${targonModel}`, 0.002, location, usedDesearch)
