@@ -1482,7 +1482,7 @@ export default function ChatInterface() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
+                        placeholder={codeMode ? "What would you like to BUILD today?" : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
@@ -2009,7 +2009,7 @@ export default function ChatInterface() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything..."}
+                    placeholder={codeMode ? "What would you like to BUILD today?" : uploadedFile ? "Ask about your file..." : "Ask anything..."}
                     disabled={isLoading}
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
