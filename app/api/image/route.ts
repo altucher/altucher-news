@@ -3,10 +3,15 @@ import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 120 // 2 minutes for image generation
 
-// Z Image Turbo on Chutes (Bittensor SN64) - Primary
-const CHUTES_Z_IMAGE_API = 'https://chutes-z-image-turbo.chutes.ai/generate'
+// Chutes image models (Bittensor SN64), tried in order.
+// Qwen-Image-2512 is the latest / highest-quality model; Z Image Turbo is the
+// fast fallback that also covers the case where Qwen is scaled to zero (503).
+const CHUTES_IMAGE_MODELS: { label: string; endpoint: string }[] = [
+  { label: 'chutes/qwen-image-2512', endpoint: 'https://vonkaiser-qwen-image-2512.chutes.ai/generate' },
+  { label: 'chutes/z-image-turbo', endpoint: 'https://vonkaiser-z-image-turbo.chutes.ai/generate' },
+]
 
-// Fal.ai FLUX schnell - Fallback
+// Fal.ai FLUX schnell - last-resort fallback
 const FAL_API_URL = 'https://fal.run/fal-ai/flux/schnell'
 
 // Lazy initialization to avoid build-time errors
@@ -44,12 +49,18 @@ async function trackEvent(
   }
 }
 
-// Generate image using Chutes Z Image Turbo
-async function generateWithChutes(prompt: string, apiKey: string): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+// Generate image using a Chutes image model. These endpoints return the image
+// binary directly (JPEG or PNG depending on the model).
+async function generateWithChutes(
+  prompt: string,
+  apiKey: string,
+  endpoint: string,
+  label: string,
+): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
   try {
-    console.log('[Image Gen] Trying Chutes Z Image Turbo...')
-    
-    const response = await fetch(CHUTES_Z_IMAGE_API, {
+    console.log(`[Image Gen] Trying ${label}...`)
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -60,26 +71,28 @@ async function generateWithChutes(prompt: string, apiKey: string): Promise<{ suc
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('[Image Gen] Chutes API error:', response.status, errorText.substring(0, 200))
+      console.error(`[Image Gen] ${label} error:`, response.status, errorText.substring(0, 200))
       return { success: false, error: `Chutes error: ${response.status}` }
     }
 
-    // Z Image Turbo returns PNG binary directly
+    // Chutes image chutes return the image binary directly.
     const imageBuffer = await response.arrayBuffer()
-    
+
     if (imageBuffer.byteLength < 1000) {
-      console.error('[Image Gen] Chutes returned too small response, likely error')
+      console.error(`[Image Gen] ${label} returned too small response, likely error`)
       return { success: false, error: 'Invalid image response' }
     }
 
-    // Convert to base64 data URL
+    // Preserve the actual image format returned by the model.
+    const contentType = response.headers.get('content-type') || 'image/png'
+    const mime = contentType.startsWith('image/') ? contentType : 'image/png'
     const base64 = Buffer.from(imageBuffer).toString('base64')
-    const imageUrl = `data:image/png;base64,${base64}`
-    
-    console.log('[Image Gen] Chutes Z Image Turbo success, image size:', imageBuffer.byteLength)
+    const imageUrl = `data:${mime};base64,${base64}`
+
+    console.log(`[Image Gen] ${label} success, image size:`, imageBuffer.byteLength)
     return { success: true, imageUrl }
   } catch (e) {
-    console.error('[Image Gen] Chutes error:', e)
+    console.error(`[Image Gen] ${label} error:`, e)
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
   }
 }
@@ -156,15 +169,19 @@ export async function POST(req: Request) {
     let result: { success: boolean; imageUrl?: string; error?: string } = { success: false }
     let model = 'unknown'
 
-    // Try Chutes Z Image Turbo first (decentralized, on Bittensor)
+    // Try Chutes image models in order: latest (Qwen-Image-2512) first, then the
+    // fast Z Image Turbo fallback (also covers Qwen scaled-to-zero 503s).
     if (chutesKey) {
-      result = await generateWithChutes(prompt, chutesKey)
-      if (result.success) {
-        model = 'chutes/z-image-turbo'
+      for (const { label, endpoint } of CHUTES_IMAGE_MODELS) {
+        result = await generateWithChutes(prompt, chutesKey, endpoint, label)
+        if (result.success) {
+          model = label
+          break
+        }
       }
     }
 
-    // Fallback to Fal.ai FLUX if Chutes failed
+    // Last-resort fallback to Fal.ai FLUX if all Chutes models failed
     if (!result.success && falKey) {
       result = await generateWithFal(prompt, falKey)
       if (result.success) {
