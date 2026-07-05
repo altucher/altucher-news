@@ -1168,6 +1168,8 @@ export default function ChatInterface() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Linear-style ambient blue glow */}
+      <div className="app-glow" aria-hidden="true" />
       {/* Hidden file input - always rendered so ref is available */}
       {/* Hidden file input - always rendered so ref is available */}
       <input
@@ -1500,12 +1502,13 @@ export default function ChatInterface() {
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
-                <div className="mb-8">
-                  <BlueTaoLogo className="w-24 h-24 text-primary" />
+                <div className="mb-8 relative">
+                  <div className="absolute inset-0 -z-10 blur-2xl opacity-60 bg-primary/30 rounded-full" aria-hidden="true" />
+                  <BlueTaoLogo className="w-20 h-20 text-primary drop-shadow-[0_0_25px_var(--primary)]" />
                 </div>
 
                 {/* Title */}
-                <h1 className="text-5xl md:text-6xl text-foreground font-bold tracking-tight mb-4 text-balance">
+                <h1 className="text-5xl md:text-7xl text-foreground font-bold tracking-tighter mb-4 text-balance hero-glow">
                   Ask anything
                 </h1>
                 <p className="text-muted-foreground text-lg mb-12 max-w-md text-pretty">
@@ -1544,7 +1547,7 @@ export default function ChatInterface() {
                     </div>
                   )}
                   <form onSubmit={handleSubmit} className="relative">
-                    <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
+                    <div className="glass-panel relative flex items-center rounded-full transition-all">
                       <Button
                         type="button"
                         size="icon"
@@ -2096,7 +2099,7 @@ export default function ChatInterface() {
                 </div>
               )}
               <form onSubmit={handleSubmit} className="relative">
-                <div className="relative flex items-center rounded-full border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow">
+                <div className="glass-panel relative flex items-center rounded-full transition-all">
                   <Button
                     type="button"
                     size="icon"
