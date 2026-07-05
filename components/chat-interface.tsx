@@ -1329,15 +1329,6 @@ export default function ChatInterface() {
                 <Code className="w-4 h-4 mr-1" />
                 CODE
               </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowProjectsPanel(true)}
-                className="text-sky-500 hover:text-sky-400 flex"
-              >
-                <FolderCode className="w-4 h-4 mr-1" />
-                Projects
-              </Button>
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
                   <Pickaxe className="w-4 h-4 mr-1" />
@@ -1356,6 +1347,15 @@ export default function ChatInterface() {
                   Is it AI?
                 </Button>
               </Link>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowProjectsPanel(true)}
+                className="text-sky-500 hover:text-sky-400 flex"
+              >
+                <FolderCode className="w-4 h-4 mr-1" />
+                Projects
+              </Button>
               <Link href="/developers">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
