@@ -1323,15 +1323,6 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowProjectsPanel(true)}
-                className="text-sky-500 hover:text-sky-400 flex"
-              >
-                <FolderCode className="w-4 h-4 mr-1" />
-                Projects
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
                 onClick={() => setCodeMode(true)}
                 className="text-white hover:text-white/80 flex font-semibold tracking-wide"
               >
@@ -1341,13 +1332,13 @@ export default function ChatInterface() {
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
                   <Pickaxe className="w-4 h-4 mr-1" />
-                  Mining
+                  MINING
                 </Button>
               </Link>
               <Link href="/fun">
                 <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
                   <PartyPopper className="w-4 h-4 mr-1" />
-                  Fun
+                  FUN
                 </Button>
               </Link>
               <Link href="/detect">
@@ -1356,6 +1347,15 @@ export default function ChatInterface() {
                   Is it AI?
                 </Button>
               </Link>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowProjectsPanel(true)}
+                className="text-sky-500 hover:text-sky-400 flex"
+              >
+                <FolderCode className="w-4 h-4 mr-1" />
+                Projects
+              </Button>
               <Link href="/developers">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
                   <Code className="w-4 h-4 mr-1" />
@@ -1377,13 +1377,13 @@ export default function ChatInterface() {
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
                   <Pickaxe className="w-4 h-4 mr-1" />
-                  Mining
+                  MINING
                 </Button>
               </Link>
               <Link href="/fun">
                 <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
                   <PartyPopper className="w-4 h-4 mr-1" />
-                  Fun
+                  FUN
                 </Button>
               </Link>
               <Link href="/detect">
@@ -1482,7 +1482,7 @@ export default function ChatInterface() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
+                        placeholder={codeMode ? "What would you like to BUILD today?" : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
@@ -2009,7 +2009,7 @@ export default function ChatInterface() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={codeMode ? "Ask me to write or debug code..." : uploadedFile ? "Ask about your file..." : "Ask anything..."}
+                    placeholder={codeMode ? "What would you like to BUILD today?" : uploadedFile ? "Ask about your file..." : "Ask anything..."}
                     disabled={isLoading}
                     rows={1}
                     className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 max-h-[120px]"
