@@ -2484,7 +2484,7 @@ function MessageBubble({
                 if (openMatch) {
                   const before = rest.slice(0, openMatch.index)
                   if (before) nodes.push(<span key="ct-open">{formatMarkdown(before)}</span>)
-                  nodes.push(<CodeBlock key="cb-stream" language={openMatch[1]} code={openMatch[2]} />)
+                  nodes.push(<CodeBlock key="cb-stream" language={openMatch[1]} code={openMatch[2]} isStreaming />)
                 } else if (rest) {
                   nodes.push(<span key="ct-final">{formatMarkdown(rest)}</span>)
                 }
@@ -2512,6 +2512,7 @@ function MessageBubble({
                     code={htmlCode}
                     onSave={onSaveCode}
                     saveLabel={saveActive ? 'Save changes' : 'Save'}
+                    isStreaming={!closeMatch}
                   />
                 )
                 const after = text.slice(htmlEnd)
