@@ -1332,13 +1332,13 @@ export default function ChatInterface() {
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
                   <Pickaxe className="w-4 h-4 mr-1" />
-                  Mining
+                  MINING
                 </Button>
               </Link>
               <Link href="/fun">
                 <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
                   <PartyPopper className="w-4 h-4 mr-1" />
-                  Fun
+                  FUN
                 </Button>
               </Link>
               <Link href="/detect">
@@ -1377,13 +1377,13 @@ export default function ChatInterface() {
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
                   <Pickaxe className="w-4 h-4 mr-1" />
-                  Mining
+                  MINING
                 </Button>
               </Link>
               <Link href="/fun">
                 <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
                   <PartyPopper className="w-4 h-4 mr-1" />
-                  Fun
+                  FUN
                 </Button>
               </Link>
               <Link href="/detect">
