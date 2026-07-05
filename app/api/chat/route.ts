@@ -440,7 +440,13 @@ export async function POST(req: Request) {
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3.5-397B-A17B-TEE'
+    // Model-aware defaults (benchmarked on Chutes SN64):
+    //  - Code mode generates long outputs where Qwen 3.5 (397B) has the highest
+    //    throughput, so it finishes big code builds fastest.
+    //  - Normal chat is short, where Kimi K2.6 is faster and more consistent.
+    // An explicit `model` from the client always overrides these defaults.
+    const defaultModel = codeMode ? 'Qwen/Qwen3.5-397B-A17B-TEE' : 'moonshotai/Kimi-K2.6-TEE'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
@@ -496,7 +502,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-- You are powered by Qwen 3.5, a large language model running on Bittensor Subnet 64 (Chutes)
+- You are powered by ${codeMode ? 'Qwen 3.5' : 'Kimi K2.6'}, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
