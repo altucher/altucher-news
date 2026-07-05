@@ -580,9 +580,13 @@ ${editingCode}
 
     // Check if we need to search for current information (skipped in code mode)
     if (!codeMode && isNewsQuery(lastMessage)) {
-      const searchResults = await searchWeb('news today headlines')
+      // Search for the user's actual topic. Only fall back to generic headlines
+      // when the message is a bare "what's the news" style request.
+      const newsQuery = lastMessage.replace('[SEARCH THE WEB FOR RECENT DATA] ', '').trim()
+      const searchResults = await searchWeb(newsQuery || 'news today headlines')
       
       if (searchResults) {
+        usedDesearch = true
         systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant. Today's date is ${currentDate}.
 
 IMPORTANT: I have already retrieved today's news for the user. Your ONLY job is to present this information clearly. DO NOT claim you cannot access news. DO NOT suggest visiting websites. DO NOT add caveats about dates. Just present this news:
