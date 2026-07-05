@@ -439,7 +439,7 @@ export async function POST(req: Request) {
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'deepseek-ai/DeepSeek-V3.2-TEE'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'moonshotai/Kimi-K2.6-TEE'
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
@@ -460,7 +460,7 @@ export async function POST(req: Request) {
       'kimi-k2.5': 'moonshotai/Kimi-K2-Instruct',
       'qwen3-32b': 'Qwen/Qwen3-32B',
     }
-    const targonModel = (model && targonModelOptions[model]) || 'deepseek-ai/DeepSeek-V3.1'
+    const targonModel = (model && targonModelOptions[model]) || 'moonshotai/Kimi-K2-Instruct'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
@@ -492,7 +492,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-- You are powered by DeepSeek V3.2, a large language model running on Bittensor Subnet 64 (Chutes)
+- You are powered by Kimi K2.6, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
@@ -515,7 +515,7 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by the same Chutes (SN64) coding-capable models (DeepSeek V3.2 etc).
+    // Powered by the same Chutes (SN64) coding-capable models (Kimi K2.6 etc).
     if (codeMode) {
       systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
 
