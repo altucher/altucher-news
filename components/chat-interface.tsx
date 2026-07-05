@@ -2491,6 +2491,34 @@ function MessageBubble({
                 return nodes
               }
 
+              // Fallback: the model sometimes returns a full HTML document WITHOUT
+              // wrapping it in a ``` fence. Detect that raw document and render it
+              // as a previewable CodeBlock so the game/app still shows up live
+              // (otherwise the whole thing would be dumped as escaped plain text).
+              const htmlStart = text.search(/<!doctype html|<html[\s>]/i)
+              if (htmlStart !== -1) {
+                const nodes: React.ReactNode[] = []
+                const before = text.slice(0, htmlStart)
+                if (before.trim()) nodes.push(<span key="rawhtml-before">{formatMarkdown(before)}</span>)
+                const closeMatch = text.slice(htmlStart).match(/<\/html\s*>/i)
+                const htmlEnd = closeMatch
+                  ? htmlStart + (closeMatch.index ?? 0) + closeMatch[0].length
+                  : text.length // still streaming: take the rest
+                const htmlCode = text.slice(htmlStart, htmlEnd)
+                nodes.push(
+                  <CodeBlock
+                    key="rawhtml-block"
+                    language="html"
+                    code={htmlCode}
+                    onSave={onSaveCode}
+                    saveLabel={saveActive ? 'Save changes' : 'Save'}
+                  />
+                )
+                const after = text.slice(htmlEnd)
+                if (after.trim()) nodes.push(<span key="rawhtml-after">{formatMarkdown(after)}</span>)
+                return nodes
+              }
+
               // Split by lines to handle line-based formatting
               const lines = text.split('\n')
               let keyIndex = 0
