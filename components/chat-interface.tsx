@@ -69,9 +69,10 @@ function ModeToggle({
         aria-pressed={codeMode}
         className={cn(
           base,
+          'font-semibold',
           codeMode
-            ? 'bg-sky-600 text-white shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 ring-1 ring-sky-300/60'
+            : 'text-sky-600 hover:bg-sky-500/10 hover:text-sky-700'
         )}
       >
         <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
@@ -725,7 +726,7 @@ export default function ChatInterface() {
 
   // Save a generated build. If we're already editing a saved project, store a
   // new version of it; otherwise create a brand-new project.
-  const handleSaveProject = async (code: string, language: string) => {
+  const handleSaveProject = async (code: string, language: string, publishedUrl?: string) => {
     if (!user) {
       setShowLoginPrompt(true)
       setTimeout(() => setShowLoginPrompt(false), 3000)
@@ -736,7 +737,7 @@ export default function ChatInterface() {
         const res = await fetch(`/api/projects/${activeProject.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, language }),
+          body: JSON.stringify({ code, language, publishedUrl }),
         })
         if (!res.ok) throw new Error('save failed')
         setActiveProject({ ...activeProject, code })
@@ -749,7 +750,7 @@ export default function ChatInterface() {
         const res = await fetch('/api/projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, code, language }),
+          body: JSON.stringify({ title, code, language, publishedUrl }),
         })
         if (!res.ok) throw new Error('save failed')
         const data = await res.json()
@@ -2487,6 +2488,34 @@ function MessageBubble({
                 } else if (rest) {
                   nodes.push(<span key="ct-final">{formatMarkdown(rest)}</span>)
                 }
+                return nodes
+              }
+
+              // Fallback: the model sometimes returns a full HTML document WITHOUT
+              // wrapping it in a ``` fence. Detect that raw document and render it
+              // as a previewable CodeBlock so the game/app still shows up live
+              // (otherwise the whole thing would be dumped as escaped plain text).
+              const htmlStart = text.search(/<!doctype html|<html[\s>]/i)
+              if (htmlStart !== -1) {
+                const nodes: React.ReactNode[] = []
+                const before = text.slice(0, htmlStart)
+                if (before.trim()) nodes.push(<span key="rawhtml-before">{formatMarkdown(before)}</span>)
+                const closeMatch = text.slice(htmlStart).match(/<\/html\s*>/i)
+                const htmlEnd = closeMatch
+                  ? htmlStart + (closeMatch.index ?? 0) + closeMatch[0].length
+                  : text.length // still streaming: take the rest
+                const htmlCode = text.slice(htmlStart, htmlEnd)
+                nodes.push(
+                  <CodeBlock
+                    key="rawhtml-block"
+                    language="html"
+                    code={htmlCode}
+                    onSave={onSaveCode}
+                    saveLabel={saveActive ? 'Save changes' : 'Save'}
+                  />
+                )
+                const after = text.slice(htmlEnd)
+                if (after.trim()) nodes.push(<span key="rawhtml-after">{formatMarkdown(after)}</span>)
                 return nodes
               }
 

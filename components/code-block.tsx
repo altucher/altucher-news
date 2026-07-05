@@ -8,7 +8,9 @@ interface CodeBlockProps {
   language?: string
   // When provided (and the code is previewable), shows a "Save" button so a
   // signed-in user can store this build in My Projects and keep editing later.
-  onSave?: (code: string, language: string) => Promise<void> | void
+  // An optional publishedUrl is passed when the save happens right after a
+  // successful publish, so the live link is stored alongside the project.
+  onSave?: (code: string, language: string, publishedUrl?: string) => Promise<void> | void
   saveLabel?: string
 }
 
@@ -97,8 +99,10 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
   }
 
   // One-click deploy: uploads the HTML and returns a real, shareable live URL.
+  // On success we also auto-save the build to My Projects (for signed-in users)
+  // so the published link is captured and the work is never lost.
   const handlePublish = async () => {
-    if (publishing) return
+    if (publishing || publishedUrl) return
     setPublishing(true)
     setPublishError(null)
     try {
@@ -112,7 +116,19 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
       if (!res.ok || !data?.url) {
         throw new Error(data?.error || 'Could not publish')
       }
-      setPublishedUrl(data.url as string)
+      const url = data.url as string
+      setPublishedUrl(url)
+
+      // Automatically save to My Projects with the live URL attached.
+      if (onSave) {
+        try {
+          await onSave(code, (language || 'html').toLowerCase(), url)
+          setSaved(true)
+          setTimeout(() => setSaved(false), 2200)
+        } catch {
+          // Save failures are non-fatal to publishing; ignore silently.
+        }
+      }
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Could not publish')
     } finally {
@@ -270,7 +286,9 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
           <div className="flex min-w-0 items-center gap-2">
             <Globe className="h-4 w-4 shrink-0 text-emerald-400" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-emerald-300">Your site is live</p>
+              <p className="text-xs font-medium text-emerald-300">
+                {onSave ? 'Your site is live and saved to My Projects' : 'Your site is live'}
+              </p>
               <a
                 href={publishedUrl}
                 target="_blank"
