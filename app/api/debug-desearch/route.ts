@@ -38,13 +38,21 @@ export async function GET() {
     // Parse SSE-style lines and collect the event types present
     const dataLines = text.split('\n').filter((l) => l.startsWith('data: '))
     const types: Record<string, number> = {}
-    const sampleObjs: unknown[] = []
+    const textSamples: unknown[] = []
+    const completionSamples: unknown[] = []
+    const searchSample: unknown[] = []
+    let joinedText = ''
     for (const line of dataLines) {
       try {
         const d = JSON.parse(line.replace('data: ', ''))
         const t = (d && d.type) || 'unknown'
         types[t] = (types[t] || 0) + 1
-        if (sampleObjs.length < 6) sampleObjs.push(d)
+        if (t === 'text') {
+          if (textSamples.length < 3) textSamples.push(d)
+          if (typeof d.content === 'string') joinedText += d.content
+        }
+        if (t === 'completion' && completionSamples.length < 2) completionSamples.push(d)
+        if (t === 'search' && searchSample.length < 1) searchSample.push(d)
       } catch {
         // ignore
       }
@@ -56,9 +64,10 @@ export async function GET() {
     out.bytes = text.length
     out.dataLineCount = dataLines.length
     out.sseTypes = types
-    out.isJsonNotSse = dataLines.length === 0
-    out.bodySample = text.slice(0, 2500)
-    out.sampleParsed = sampleObjs
+    out.joinedTextSample = joinedText.slice(0, 800)
+    out.textSamples = textSamples
+    out.completionSamples = completionSamples
+    out.searchSample = searchSample
   } catch (e) {
     out.fetchError = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     out.ms = Date.now() - start
