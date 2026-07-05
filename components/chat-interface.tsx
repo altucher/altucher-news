@@ -1193,7 +1193,7 @@ export default function ChatInterface() {
       )}>
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-          <span className="text-4xl font-bold text-blue-500 tracking-tight" style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic' }}>BlueTAO</span>
+            <span className="text-3xl font-bold text-primary tracking-tight">BlueTAO</span>
           <Button
             variant="ghost"
             size="icon"
@@ -1380,7 +1380,7 @@ export default function ChatInterface() {
             </Button>
             <button 
               onClick={handleNewChat}
-              className="font-[family-name:var(--font-playfair)] text-xl font-medium text-foreground hover:text-primary transition-colors hidden lg:block tracking-wide italic"
+                className="text-xl font-bold text-foreground hover:text-primary transition-colors hidden lg:block tracking-tight"
             >
               a front end to bittensor
             </button>
@@ -1505,10 +1505,10 @@ export default function ChatInterface() {
                 </div>
 
                 {/* Title */}
-                <h1 className="font-[family-name:var(--font-playfair)] text-5xl md:text-6xl text-foreground font-normal tracking-tight mb-4">
+                <h1 className="text-5xl md:text-6xl text-foreground font-bold tracking-tight mb-4 text-balance">
                   Ask anything
                 </h1>
-                <p className="text-muted-foreground text-lg mb-12 max-w-md">
+                <p className="text-muted-foreground text-lg mb-12 max-w-md text-pretty">
                   Intelligent answers powered by decentralized AI
                 </p>
                 
