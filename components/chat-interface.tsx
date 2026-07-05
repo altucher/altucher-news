@@ -1332,11 +1332,11 @@ export default function ChatInterface() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowMemoryPanel(true)}
-                className="text-violet-400 hover:text-violet-300 flex"
+                onClick={() => setCodeMode(true)}
+                className="text-white hover:text-white/80 flex font-semibold tracking-wide"
               >
-                <Brain className="w-4 h-4 mr-1" />
-                Memory
+                <Code className="w-4 h-4 mr-1" />
+                CODE
               </Button>
               <Link href="/mining">
                 <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
