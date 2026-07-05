@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, Copy, Eye, Code2, Download, ExternalLink, Save, Loader2 } from 'lucide-react'
+import { Check, Copy, Eye, Code2, Download, ExternalLink, Save, Loader2, Rocket, Globe, Link2 } from 'lucide-react'
 
 interface CodeBlockProps {
   code: string
@@ -45,6 +45,10 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+  const [publishError, setPublishError] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
   const previewable = useMemo(() => isPreviewable(code, language), [code, language])
   // For previewable code, default to showing the running result first.
   const [tab, setTab] = useState<'preview' | 'code'>(previewable ? 'preview' : 'code')
@@ -92,6 +96,41 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
     }
   }
 
+  // One-click deploy: uploads the HTML and returns a real, shareable live URL.
+  const handlePublish = async () => {
+    if (publishing) return
+    setPublishing(true)
+    setPublishError(null)
+    try {
+      const titleMatch = doc.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+      const res = await fetch('/api/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: doc, title: titleMatch?.[1]?.trim() || null }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error || 'Could not publish')
+      }
+      setPublishedUrl(data.url as string)
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Could not publish')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const handleCopyLink = async () => {
+    if (!publishedUrl) return
+    try {
+      await navigator.clipboard.writeText(publishedUrl)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1800)
+    } catch {
+      // Clipboard may be unavailable; ignore silently.
+    }
+  }
+
   const label = (language || 'code').toLowerCase()
 
   return (
@@ -130,6 +169,32 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
         )}
 
         <div className="flex items-center gap-1">
+          {previewable && (
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={publishing}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-60"
+              aria-label="Publish to a real live web page"
+            >
+              {publishing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Publishing
+                </>
+              ) : publishedUrl ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Published
+                </>
+              ) : (
+                <>
+                  <Rocket className="h-3.5 w-3.5" />
+                  Publish
+                </>
+              )}
+            </button>
+          )}
           {previewable && onSave && (
             <button
               type="button"
@@ -198,6 +263,54 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
           </button>
         </div>
       </div>
+
+      {/* Live URL banner: shown after a successful publish */}
+      {publishedUrl && (
+        <div className="flex flex-col gap-2 border-b border-emerald-800/60 bg-emerald-950/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Globe className="h-4 w-4 shrink-0 text-emerald-400" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-emerald-300">Your site is live</p>
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block truncate text-xs text-emerald-100 underline underline-offset-2 hover:text-white"
+              >
+                {publishedUrl}
+              </a>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-800/60 px-2 py-1 text-xs font-medium text-emerald-100 transition-colors hover:bg-emerald-700"
+              aria-label="Copy live link"
+            >
+              {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+              {linkCopied ? 'Copied' : 'Copy link'}
+            </button>
+            <a
+              href={publishedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-emerald-500"
+              aria-label="Visit your live site"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Visit
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Publish error message */}
+      {publishError && (
+        <div className="border-b border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+          {publishError}
+        </div>
+      )}
 
       {/* Body: live preview or source code */}
       {previewable && tab === 'preview' ? (
