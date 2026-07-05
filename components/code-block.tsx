@@ -12,6 +12,10 @@ interface CodeBlockProps {
   // successful publish, so the live link is stored alongside the project.
   onSave?: (code: string, language: string, publishedUrl?: string) => Promise<void> | void
   saveLabel?: string
+  // True while the code is still streaming in. We suppress the live preview
+  // iframe until the code is complete, otherwise the iframe reloads on every
+  // chunk and the half-built page/game visibly flashes.
+  isStreaming?: boolean
 }
 
 // Decide whether a block is previewable web code (HTML we can render live).
@@ -43,7 +47,7 @@ ${code}
 // A Cursor/v0-style code block. For web (HTML) code it also offers a live
 // Preview tab plus Download and Open-in-new-tab actions, so people with no
 // coding experience can see, save, and share the result immediately.
-export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps) {
+export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -330,8 +334,20 @@ export function CodeBlock({ code, language, onSave, saveLabel }: CodeBlockProps)
         </div>
       )}
 
-      {/* Body: live preview or source code */}
-      {previewable && tab === 'preview' ? (
+      {/* Body: live preview or source code.
+          While streaming, never mount the iframe — show the code building
+          instead so the half-finished page doesn't flash on every chunk. */}
+      {previewable && isStreaming ? (
+        <div className="relative">
+          <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+            Building your app… preview will appear when it&apos;s ready
+          </div>
+          <pre className="max-h-96 overflow-y-auto p-4 text-sm leading-relaxed">
+            <code className="font-mono">{code}</code>
+          </pre>
+        </div>
+      ) : previewable && tab === 'preview' ? (
         <div className="bg-white">
           <iframe
             title="Live preview"
