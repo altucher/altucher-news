@@ -433,13 +433,14 @@ export async function POST(req: Request) {
 
     // Model selection - using available Chutes models
     const modelOptions: Record<string, string> = {
+      'qwen3.5': 'Qwen/Qwen3.5-397B-A17B-TEE',
       'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.2-TEE',
       'kimi-k2.6': 'moonshotai/Kimi-K2.6-TEE',
       'kimi-k2.5': 'moonshotai/Kimi-K2.5-TEE',
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
     }
     
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'moonshotai/Kimi-K2.6-TEE'
+    const selectedModel = model && modelOptions[model] ? modelOptions[model] : 'Qwen/Qwen3.5-397B-A17B-TEE'
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
@@ -455,6 +456,9 @@ export async function POST(req: Request) {
     const targonApiKey = process.env.TARGON_API_KEY
     // Map our model ids to equivalent open models served on Targon
     const targonModelOptions: Record<string, string> = {
+      // Targon doesn't serve the 397B Qwen 3.5, so failover uses a validated
+      // open model to keep the site online when Chutes is at capacity.
+      'qwen3.5': 'moonshotai/Kimi-K2-Instruct',
       'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.1',
       'kimi-k2.6': 'moonshotai/Kimi-K2-Instruct',
       'kimi-k2.5': 'moonshotai/Kimi-K2-Instruct',
@@ -492,7 +496,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-- You are powered by Kimi K2.6, a large language model running on Bittensor Subnet 64 (Chutes)
+- You are powered by Qwen 3.5, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
@@ -515,7 +519,7 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by the same Chutes (SN64) coding-capable models (Kimi K2.6 etc).
+    // Powered by the same Chutes (SN64) coding-capable models (Qwen 3.5 etc).
     if (codeMode) {
       systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
 
