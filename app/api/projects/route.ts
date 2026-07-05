@@ -13,7 +13,7 @@ export async function GET() {
   // Only list metadata (not the full code) so the panel loads fast
   const { data: projects, error } = await supabase
     .from('projects')
-    .select('id, title, language, created_at, updated_at')
+    .select('id, title, language, published_url, created_at, updated_at')
     .order('updated_at', { ascending: false })
 
   if (error) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { title, code, language } = await req.json()
+  const { title, code, language, publishedUrl } = await req.json()
 
   if (typeof code !== 'string' || code.trim().length === 0) {
     return NextResponse.json({ error: 'Code is required' }, { status: 400 })
@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       title: title?.trim() || 'Untitled project',
       current_code: code,
       language: language || 'html',
+      published_url: typeof publishedUrl === 'string' && publishedUrl.trim() ? publishedUrl.trim() : null,
       user_id: user.id,
     })
     .select()

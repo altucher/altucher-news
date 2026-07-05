@@ -50,7 +50,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { title, code, language, label } = await req.json()
+  const { title, code, language, label, publishedUrl } = await req.json()
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (typeof title === 'string' && title.trim().length > 0) {
@@ -58,6 +58,9 @@ export async function PATCH(
   }
   if (typeof language === 'string' && language.length > 0) {
     updates.language = language
+  }
+  if (typeof publishedUrl === 'string' && publishedUrl.trim().length > 0) {
+    updates.published_url = publishedUrl.trim()
   }
 
   // If new code is provided, snapshot a new version

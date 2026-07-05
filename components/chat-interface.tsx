@@ -726,7 +726,7 @@ export default function ChatInterface() {
 
   // Save a generated build. If we're already editing a saved project, store a
   // new version of it; otherwise create a brand-new project.
-  const handleSaveProject = async (code: string, language: string) => {
+  const handleSaveProject = async (code: string, language: string, publishedUrl?: string) => {
     if (!user) {
       setShowLoginPrompt(true)
       setTimeout(() => setShowLoginPrompt(false), 3000)
@@ -737,7 +737,7 @@ export default function ChatInterface() {
         const res = await fetch(`/api/projects/${activeProject.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, language }),
+          body: JSON.stringify({ code, language, publishedUrl }),
         })
         if (!res.ok) throw new Error('save failed')
         setActiveProject({ ...activeProject, code })
@@ -750,7 +750,7 @@ export default function ChatInterface() {
         const res = await fetch('/api/projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, code, language }),
+          body: JSON.stringify({ title, code, language, publishedUrl }),
         })
         if (!res.ok) throw new Error('save failed')
         const data = await res.json()

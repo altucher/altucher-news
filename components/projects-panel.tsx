@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, FolderCode, Trash2, Loader2, History, ArrowLeft, RotateCcw, Pencil } from 'lucide-react'
+import { X, FolderCode, Trash2, Loader2, History, ArrowLeft, RotateCcw, Pencil, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Project {
   id: string
   title: string
   language: string
+  published_url: string | null
   created_at: string
   updated_at: string
 }
@@ -191,16 +192,30 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
                   key={project.id}
                   className="flex items-center justify-between gap-2 p-3 bg-background/50 rounded-lg border border-border/50 group"
                 >
-                  <button
-                    type="button"
-                    onClick={() => onOpenProject(project.id)}
-                    className="flex-1 min-w-0 text-left"
-                  >
-                    <p className="text-sm font-medium text-foreground truncate">{project.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Updated {formatDate(project.updated_at)}
-                    </p>
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onOpenProject(project.id)}
+                      className="w-full text-left"
+                    >
+                      <p className="text-sm font-medium text-foreground truncate">{project.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Updated {formatDate(project.updated_at)}
+                      </p>
+                    </button>
+                    {project.published_url && (
+                      <a
+                        href={project.published_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-sky-500 hover:text-sky-400 hover:underline max-w-full"
+                      >
+                        <Globe className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{project.published_url.replace(/^https?:\/\//, '')}</span>
+                      </a>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Button
                       variant="ghost"
