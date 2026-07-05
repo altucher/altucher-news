@@ -99,6 +99,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ slug, url: `${origin}/s/${slug}`, path: `/s/${slug}`, title })
   } catch (error) {
     console.error('[Publish] POST error:', error)
-    return NextResponse.json({ error: 'Could not publish page' }, { status: 500 })
+    return NextResponse.json({ error: 'Could not publish page', debugOuter: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }
