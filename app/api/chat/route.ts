@@ -179,7 +179,7 @@ async function searchWeb(query: string): Promise<string> {
   // If it doesn't return within the window, we proceed with the model's own
   // knowledge instead of blocking the stream.
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8000)
+  const timeout = setTimeout(() => controller.abort(), 20000)
   
   try {
     // Use Desearch AI Search - with twitter tool if it's a social media query
@@ -209,37 +209,59 @@ async function searchWeb(query: string): Promise<string> {
     clearTimeout(timeout)
     const lines = text.split('\n').filter(l => l.startsWith('data: '))
     
-    let summary = ''
+    // Desearch's AI Search now streams Server-Sent Events with these event types:
+    //  - "search": { content: [{ title, link, snippet, text }] }  -> web results
+    //  - "text":   { content: "..." } (many, streamed)             -> AI answer chunks
+    //  - "tweets"/"twitter": { content: [ ...tweet objects ] }     -> social results
+    let answer = ''
+    const webResults: string[] = []
     const tweets: string[] = []
     const sources: string[] = []
     
     for (const line of lines) {
       try {
-        const data = JSON.parse(line.replace('data: ', ''))
+        const data = JSON.parse(line.replace(/^data: /, ''))
+        const type = data.type
         
-        // Extract summary/answer
-        if (data.type === 'summary' || data.type === 'answer') {
-          summary = data.content || ''
+        // Streamed AI answer text
+        if (type === 'text' && typeof data.content === 'string') {
+          answer += data.content
         }
         
-        // Extract tweets
-        if (data.type === 'tweets' && data.content) {
-          for (const tweet of data.content.slice(0, 5)) {
-            tweets.push(`@${tweet.user?.username || 'unknown'}: ${tweet.text || tweet.full_text || ''}`)
+        // Older single-shot answer events (kept for safety)
+        if ((type === 'summary' || type === 'answer' || type === 'completion') && typeof data.content === 'string') {
+          if (data.content.length > answer.length) answer = data.content
+        }
+        
+        // Web search results
+        if (type === 'search' && Array.isArray(data.content)) {
+          for (const item of data.content.slice(0, 5)) {
+            const title = item.title || ''
+            const link = item.link || item.url || ''
+            const body = item.snippet || item.text || item.description || ''
+            const trimmed = typeof body === 'string' ? body.slice(0, 500) : ''
+            webResults.push([title, trimmed, link ? `(${link})` : ''].filter(Boolean).join('\n'))
+            if (link) sources.push(link)
           }
         }
         
-        // Extract sources
-        if (data.type === 'flow' && data.content?.type === 'Sources') {
-          sources.push(...(data.content.content || []).slice(0, 5))
+        // Tweets / social results
+        if ((type === 'tweets' || type === 'twitter') && Array.isArray(data.content)) {
+          for (const tweet of data.content.slice(0, 5)) {
+            tweets.push(`@${tweet.user?.username || tweet.username || 'unknown'}: ${tweet.text || tweet.full_text || ''}`)
+          }
         }
       } catch {
         // Ignore parsing errors for individual lines
       }
     }
     
-    if (summary) {
-      results.push(summary)
+    if (answer.trim()) {
+      results.push(answer.trim())
+    }
+    
+    if (webResults.length > 0) {
+      results.push('Web results:\n\n' + webResults.join('\n\n'))
     }
     
     if (tweets.length > 0) {
@@ -247,10 +269,10 @@ async function searchWeb(query: string): Promise<string> {
     }
     
     if (sources.length > 0) {
-      results.push('\nSources: ' + sources.join(', '))
+      results.push('\nSources: ' + Array.from(new Set(sources)).slice(0, 8).join(', '))
     }
     
-    console.log('[v0] Desearch results:', results.length > 0 ? 'Found data' : 'No results')
+    console.log('[v0] Desearch results:', results.length > 0 ? `Found data (answer:${answer.length} web:${webResults.length} tweets:${tweets.length})` : 'No results')
     
     return results.join('\n\n')
   } catch (e) {
