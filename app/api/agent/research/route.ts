@@ -2,7 +2,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { generateText } from 'ai'
 import sgMail from '@sendgrid/mail'
 
-export const maxDuration = 120 // 2 minutes for research tasks
+export const maxDuration = 300 // 5 minutes — Qwen 3.5 (397B) is slower and non-streaming here
 
 // Initialize SendGrid lazily
 function initSendGrid() {
@@ -101,9 +101,9 @@ Format your response in clean, readable markdown. Be thorough and informative.`
     console.log('[v0] Starting research generation...')
     console.log('[v0] CHUTES_API_KEY exists:', !!process.env.CHUTES_API_KEY)
 
-    // Generate research using Kimi K2.6 (Chutes SN64)
+    // Generate research using Qwen 3.5 (Chutes SN64)
     const { text: researchResult } = await generateText({
-      model: chutes.chatModel('moonshotai/Kimi-K2.6-TEE'),
+      model: chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'),
       prompt: researchPrompt,
       maxTokens: depth === 'quick' ? 1500 : 4000,
     })

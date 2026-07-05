@@ -298,7 +298,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: 'Processing with Kimi K2.6...', details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
+          { status: 'Processing with Qwen 3.5...', details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
