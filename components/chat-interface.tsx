@@ -705,7 +705,17 @@ export default function ChatInterface() {
     setMessages([])
     setNewsHeadlines([])
     lastSavedMessageRef.current = null
+    // Leaving the current session ends any project-editing context, so the
+    // next build starts fresh instead of silently editing the old project.
+    setActiveProject(null)
     setSidebarOpen(false)
+  }
+
+  // Stop editing the current saved project and return to a fresh build,
+  // without wiping the whole chat. Follow-up code-mode messages will create a
+  // brand-new build again instead of editing the previous project.
+  const handleExitEditing = () => {
+    setActiveProject(null)
   }
 
   const handleSignOut = async () => {
@@ -1437,8 +1447,26 @@ export default function ChatInterface() {
                     <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
                   </div>
 
-                  {/* Build-mode helper banner */}
-                  {codeMode && (
+                  {/* Build-mode helper banner. Switches to an "editing" state
+                      when the user is continuing a saved project, so it's always
+                      clear whether the next message builds new or edits. */}
+                  {codeMode && activeProject && (
+                    <div className="mb-3 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+                      <Pencil className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span className="min-w-0 flex-1">
+                        <strong>Editing:</strong> <span className="truncate">{activeProject.title}</span>
+                        {' '}&mdash; tell me what to change and I&apos;ll update this project.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleExitEditing}
+                        className="flex-shrink-0 rounded-full border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                      >
+                        Start a new build
+                      </button>
+                    </div>
+                  )}
+                  {codeMode && !activeProject && (
                     <div className="mb-3 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
                       <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
                       <span>
@@ -1969,7 +1997,20 @@ export default function ChatInterface() {
               {/* Mode switcher: Chat vs. BlueTAO Code */}
               <div className="mb-2 flex items-center justify-center gap-2">
                 <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />
-                {codeMode && (
+                {codeMode && activeProject && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                    <Pencil className="h-3 w-3" />
+                    Editing {activeProject.title}
+                    <button
+                      type="button"
+                      onClick={handleExitEditing}
+                      className="rounded-full border border-emerald-300 px-2 py-0.5 font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                    >
+                      New build
+                    </button>
+                  </span>
+                )}
+                {codeMode && !activeProject && (
                   <span className="hidden sm:inline text-xs text-sky-700 dark:text-sky-400">
                     Build mode: describe a website or app to preview it live
                   </span>
