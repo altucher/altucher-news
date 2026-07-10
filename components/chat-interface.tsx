@@ -14,6 +14,7 @@ import { MemoryPanel } from '@/components/memory-panel'
 import { ProjectsPanel } from '@/components/projects-panel'
 import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import { CodeBlock } from '@/components/code-block'
+import { CodeTemplates } from '@/components/code-templates'
 import Link from 'next/link'
 
 // Lightweight hover tooltip. Wrapping span catches the hover so the label
@@ -1650,6 +1651,14 @@ export default function ChatInterface() {
                     </button>
                   ))}
                 </div>
+
+                {/* Starter template gallery — only in Build mode when starting
+                    a fresh build. Clicking a card auto-sends a rich prompt. */}
+                {codeMode && !activeProject && (
+                  <div className="mt-8 flex justify-center">
+                    <CodeTemplates onSelect={handleSuggestionClick} />
+                  </div>
+                )}
 
                 {/* Mining CTA */}
                 <div className="mt-16">
