@@ -131,6 +131,8 @@ export default function DetectPage() {
   }
 
   const heatmapColor = (score: number) => {
+    // score < 0 marks whitespace — render with no highlight
+    if (score < 0) return ''
     // green (human) -> red (AI)
     if (score >= 0.75) return 'bg-red-500/30 text-red-100'
     if (score >= 0.5) return 'bg-orange-500/25 text-orange-100'
@@ -221,7 +223,7 @@ export default function DetectPage() {
                     onChange={(e) => setDeepScan(e.target.checked)}
                     className="accent-cyan-500 w-4 h-4"
                   />
-                  Deep scan (per-sentence heatmap)
+                  Deep scan (per-word heatmap)
                 </label>
                 <span className="text-xs text-gray-500">{text.length.toLocaleString()} chars</span>
               </div>
@@ -343,27 +345,31 @@ export default function DetectPage() {
                 </div>
               </div>
 
-              {/* Sentence-level heatmap */}
+              {/* Word-level heatmap */}
               {mode === 'text' && result.sentences && result.sentences.length > 0 && (
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-gray-300 text-sm font-medium">Sentence breakdown</span>
+                    <span className="text-gray-300 text-sm font-medium">Word-level breakdown</span>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span>Human</span>
                       <span className="inline-block h-2 w-20 rounded-full bg-gradient-to-r from-green-500/60 via-yellow-500/60 to-red-500/60" />
                       <span>AI</span>
                     </div>
                   </div>
-                  <p className="leading-relaxed text-sm">
-                    {result.sentences.map((s, i) => (
-                      <span
-                        key={i}
-                        className={`rounded px-1 py-0.5 mr-0.5 ${heatmapColor(s.score)}`}
-                        title={`${Math.round(s.score * 100)}% AI`}
-                      >
-                        {s.text}
-                      </span>
-                    ))}
+                  <p className="leading-loose text-sm whitespace-pre-wrap break-words">
+                    {result.sentences.map((s, i) =>
+                      s.score < 0 ? (
+                        <span key={i}>{s.text}</span>
+                      ) : (
+                        <span
+                          key={i}
+                          className={`rounded py-0.5 ${heatmapColor(s.score)}`}
+                          title={`${Math.round(s.score * 100)}% AI`}
+                        >
+                          {s.text}
+                        </span>
+                      ),
+                    )}
                   </p>
                 </div>
               )}

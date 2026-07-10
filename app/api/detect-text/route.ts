@@ -76,68 +76,68 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const response = await fetch('https://api.its-ai.org/analyze-text', {
+    // It's AI (Bittensor Subnet 32) API contract:
+    //   POST https://api.its-ai.org/api/text
+    //   headers: Authorization: APIKey <key>
+    //   body: { text, deep_scan }
+    //   response: { status, answer: float[0,1] (AI probability),
+    //               segmentation_tokens: float[] aligned to words (deep scan) }
+    const response = await fetch('https://api.its-ai.org/api/text', {
       method: 'POST',
       headers: {
-        'X-API-Key': apiKey,
+        Authorization: `APIKey ${apiKey}`,
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ text: trimmed, deep_scan: deepScan }),
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[v0] Its AI API error:', response.status, errorText)
+    const data = await response.json().catch(() => null)
+
+    if (!response.ok || (data && data.status === 'error')) {
+      const apiMsg: string | undefined =
+        data?.error?.message || (typeof data?.error === 'string' ? data.error : undefined)
+      console.error('[v0] Its AI API error:', response.status, JSON.stringify(data))
+
+      // Surface auth/config problems clearly so they can be fixed.
+      if (response.status === 401 || response.status === 403) {
+        return NextResponse.json(
+          {
+            error:
+              "It's AI rejected the API key. Add a valid ITS_AI_API_KEY from your its-ai.org account.",
+          },
+          { status: 502 },
+        )
+      }
       return NextResponse.json(
-        { error: 'Failed to analyze text. Please try again.' },
-        { status: response.status },
+        { error: apiMsg || 'Failed to analyze text. Please try again.' },
+        { status: 502 },
       )
     }
 
-    const data = await response.json()
+    // `answer` is the probability the text is AI-generated, in [0, 1].
+    const aiProbability = toProbability(data?.answer) ?? 0
+    const isAI = aiProbability >= 0.5
 
-    // Be defensive about the response shape — normalize the AI probability
-    // from whichever field the API returns it in.
-    const aiProbability =
-      toProbability(data?.ai_probability) ??
-      toProbability(data?.probability) ??
-      toProbability(data?.machine_generated_probability) ??
-      toProbability(data?.score) ??
-      toProbability(data?.fake_probability) ??
-      0
-
-    // A label may be provided directly; otherwise fall back to a 0.5 threshold.
-    const labelSaysAI =
-      typeof data?.label === 'string'
-        ? /ai|machine|fake|generated/i.test(data.label)
-        : typeof data?.is_ai === 'boolean'
-          ? data.is_ai
-          : undefined
-    const isAI = labelSaysAI ?? aiProbability >= 0.5
-
-    // Sentence-level heatmap (if returned by deep scan).
-    const rawSentences: unknown =
-      data?.sentences ?? data?.sentence_scores ?? data?.spans ?? null
+    // Deep scan returns per-word scores in `segmentation_tokens`, aligned to
+    // whitespace-separated words. Build a word-level heatmap from them.
     let sentences: Sentence[] | undefined
-    if (Array.isArray(rawSentences)) {
-      sentences = rawSentences
-        .map((s: any): Sentence | null => {
-          const sText =
-            typeof s?.text === 'string'
-              ? s.text
-              : typeof s?.sentence === 'string'
-                ? s.sentence
-                : null
-          const sScore =
-            toProbability(s?.ai_probability) ??
-            toProbability(s?.probability) ??
-            toProbability(s?.score) ??
-            0
-          if (!sText) return null
-          return { text: sText, score: sScore }
-        })
-        .filter((s): s is Sentence => s !== null)
-      if (sentences.length === 0) sentences = undefined
+    const tokens: unknown = data?.segmentation_tokens
+    if (Array.isArray(tokens) && tokens.length > 0) {
+      const words = trimmed.split(/(\s+)/) // keep whitespace to preserve spacing
+      const wordScores: Sentence[] = []
+      let tokenIndex = 0
+      for (const chunk of words) {
+        if (/^\s+$/.test(chunk) || chunk === '') {
+          wordScores.push({ text: chunk, score: -1 }) // whitespace, no color
+        } else {
+          const raw = tokens[tokenIndex]
+          const score = toProbability(raw) ?? 0
+          wordScores.push({ text: chunk, score })
+          tokenIndex++
+        }
+      }
+      sentences = wordScores
     }
 
     trackDetectTextEvent(
