@@ -1588,7 +1588,7 @@ export default function ChatInterface() {
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingVideo
                               ? 'bg-rose-600 text-white hover:bg-rose-500'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-rose-500/25 text-rose-300 disabled:opacity-100'
                           )}
                         >
                           {generatingVideo ? (
@@ -1616,7 +1616,7 @@ export default function ChatInterface() {
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingMusic
                               ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-emerald-500/25 text-emerald-300 disabled:opacity-100'
                           )}
                         >
                           {generatingMusic ? (
@@ -1644,7 +1644,7 @@ export default function ChatInterface() {
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingImage
                               ? 'bg-violet-600 text-white hover:bg-violet-500'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-violet-500/25 text-violet-300 disabled:opacity-100'
                           )}
                         >
                           {generatingImage ? (
@@ -2154,7 +2154,7 @@ export default function ChatInterface() {
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingVideo
                           ? 'bg-rose-600 text-white hover:bg-rose-500'
-                          : 'bg-muted text-muted-foreground'
+                          : 'bg-rose-500/25 text-rose-300 disabled:opacity-100'
                       )}
                     >
                       {generatingVideo ? (
@@ -2182,7 +2182,7 @@ export default function ChatInterface() {
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingMusic
                           ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                          : 'bg-muted text-muted-foreground'
+                          : 'bg-emerald-500/25 text-emerald-300 disabled:opacity-100'
                       )}
                     >
                       {generatingMusic ? (
@@ -2210,7 +2210,7 @@ export default function ChatInterface() {
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingImage
                           ? 'bg-violet-600 text-white hover:bg-violet-500'
-                          : 'bg-muted text-muted-foreground'
+                          : 'bg-violet-500/25 text-violet-300 disabled:opacity-100'
                       )}
                     >
                       {generatingImage ? (
