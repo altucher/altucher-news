@@ -543,16 +543,48 @@ export default function ChatInterface() {
     const el = scrollContainerRef.current
     if (!el) return
     updatePinnedState()
-    el.addEventListener('scroll', updatePinnedState, { passive: true })
-    return () => el.removeEventListener('scroll', updatePinnedState)
+
+    // Position-based sync (covers scrollbar drags, keyboard, momentum).
+    const onScroll = () => updatePinnedState()
+
+    // Intent-based unpin: the instant the user scrolls UP (wheel or touch) we
+    // stop following the stream, so the auto-scroll never fights them. This is
+    // immediate and doesn't wait for a re-render, which is what made the
+    // previous threshold-only approach feel like it "kept pulling down".
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) isPinnedToBottomRef.current = false
+      else updatePinnedState()
+    }
+    let lastTouchY = 0
+    const onTouchStart = (e: TouchEvent) => {
+      lastTouchY = e.touches[0]?.clientY ?? 0
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY ?? 0
+      if (y > lastTouchY) isPinnedToBottomRef.current = false // finger down = scroll up
+      lastTouchY = y
+    }
+
+    el.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+    }
   }, [])
 
   useEffect(() => {
-    // Only follow the stream to the bottom if the user hasn't scrolled up.
+    // Follow the stream/typewriter to the bottom ONLY while the user is pinned.
+    // Depends on displayedContent (the 60fps typewriter reveal) so following is
+    // smooth, and on messages for non-streamed updates.
     if (isPinnedToBottomRef.current) {
       scrollToBottom('auto')
     }
-  }, [messages, newsHeadlines, generatedImages, generatingImage])
+  }, [messages, displayedContent, newsHeadlines, generatedImages, generatingImage])
 
   // Track timestamps for new messages
   useEffect(() => {
