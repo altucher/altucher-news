@@ -1216,7 +1216,7 @@ export default function ChatInterface() {
                 setCodeMode(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <Code className="w-4 h-4 flex-shrink-0" />
               code
@@ -1228,32 +1228,32 @@ export default function ChatInterface() {
                 setShowProjectsPanel(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <FolderCode className="w-4 h-4 flex-shrink-0" />
               projects
             </button>
           )}
           <Link href="/detect" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Sparkles className="w-4 h-4 flex-shrink-0" />
               is it ai?
             </span>
           </Link>
           <Link href="/mining" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Pickaxe className="w-4 h-4 flex-shrink-0" />
               mining
             </span>
           </Link>
           <Link href="/fun" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <PartyPopper className="w-4 h-4 flex-shrink-0" />
               fun
             </span>
           </Link>
           <Link href="/developers" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Code className="w-4 h-4 flex-shrink-0" />
               embed
             </span>
@@ -1292,6 +1292,9 @@ export default function ChatInterface() {
 
         {/* Chat List */}
         <div className="flex-1 overflow-y-auto p-2">
+          <p className="px-2 pt-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Chats:
+          </p>
           {!user ? (
             <div className="text-center py-8 px-4">
               <p className="text-muted-foreground text-sm mb-3">Sign in to save your chat history</p>
@@ -1585,7 +1588,7 @@ export default function ChatInterface() {
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingVideo
                               ? 'bg-rose-600 text-white hover:bg-rose-500'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-rose-500/25 text-rose-300 disabled:opacity-100'
                           )}
                         >
                           {generatingVideo ? (
@@ -1613,7 +1616,7 @@ export default function ChatInterface() {
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingMusic
                               ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-emerald-500/25 text-emerald-300 disabled:opacity-100'
                           )}
                         >
                           {generatingMusic ? (
@@ -1641,7 +1644,7 @@ export default function ChatInterface() {
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingImage
                               ? 'bg-violet-600 text-white hover:bg-violet-500'
-                              : 'bg-muted text-muted-foreground'
+                              : 'bg-violet-500/25 text-violet-300 disabled:opacity-100'
                           )}
                         >
                           {generatingImage ? (
@@ -2151,7 +2154,7 @@ export default function ChatInterface() {
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingVideo
                           ? 'bg-rose-600 text-white hover:bg-rose-500'
-                          : 'bg-muted text-muted-foreground'
+                          : 'bg-rose-500/25 text-rose-300 disabled:opacity-100'
                       )}
                     >
                       {generatingVideo ? (
@@ -2179,7 +2182,7 @@ export default function ChatInterface() {
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingMusic
                           ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                          : 'bg-muted text-muted-foreground'
+                          : 'bg-emerald-500/25 text-emerald-300 disabled:opacity-100'
                       )}
                     >
                       {generatingMusic ? (
@@ -2207,7 +2210,7 @@ export default function ChatInterface() {
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingImage
                           ? 'bg-violet-600 text-white hover:bg-violet-500'
-                          : 'bg-muted text-muted-foreground'
+                          : 'bg-violet-500/25 text-violet-300 disabled:opacity-100'
                       )}
                     >
                       {generatingImage ? (
