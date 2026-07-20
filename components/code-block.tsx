@@ -216,7 +216,7 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
                 type="button"
                 onClick={handleOpen}
                 className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
-                aria-label="Open preview in a new tab"
+                aria-label="Open in a new tab"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open
