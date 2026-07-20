@@ -114,10 +114,21 @@ interface DbMessage {
 function getMessageText(message: UIMessage): string {
   if (!message.parts || !Array.isArray(message.parts)) return ''
   return message.parts
-    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-    .map((p) => p.text)
-    .join('')
-}
+  .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+  .map((p) => p.text)
+  .join('')
+  }
+
+  // Reasoning models (e.g. Kimi K2.6) stream their actual thinking as
+  // `reasoning` parts before any visible answer text. Surfacing this gives the
+  // user REAL progress instead of a synthetic loading animation.
+  function getMessageReasoning(message: UIMessage): string {
+  if (!message.parts || !Array.isArray(message.parts)) return ''
+  return message.parts
+  .filter((p): p is { type: 'reasoning'; text: string } => p.type === 'reasoning')
+  .map((p) => p.text)
+  .join('')
+  }
 
 function isNewsQuery(text: string): boolean {
   const lowerText = text.toLowerCase()
@@ -202,10 +213,34 @@ export default function ChatInterface() {
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
+
+  // Elapsed-time ticker: runs for the full duration of a request (both the
+  // "submitted" reasoning phase and the "streaming" answer phase).
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsedSeconds(0)
+      return
+    }
+    const start = Date.now()
+    setElapsedSeconds(0)
+    const id = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - start) / 1000))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [isLoading])
+
+  // The model's real, live thinking (reasoning-part text) for the in-flight turn.
+  const _streamingMsg = messages[messages.length - 1]
+  const liveReasoning =
+    _streamingMsg?.role === 'assistant' ? getMessageReasoning(_streamingMsg) : ''
+
   const [thinkingStatus, setThinkingStatus] = useState<string>('Thinking...')
   const [thinkingDetails, setThinkingDetails] = useState<string[]>([])
   const [thinkingLog, setThinkingLog] = useState<string[]>([])
   const [hasStartedStreaming, setHasStartedStreaming] = useState(false)
+  // Seconds elapsed since the current request started — gives the user honest
+  // feedback that a long code build is still actively working.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [bufferedContent, setBufferedContent] = useState<string>('')
   const [displayedContent, setDisplayedContent] = useState<string>('')
   const bufferRef = useRef<string>('')
@@ -2015,20 +2050,42 @@ export default function ChatInterface() {
                         <div className="w-2 h-2 bg-sky-500 rounded-full animate-ping absolute" />
                         <div className="w-2 h-2 bg-sky-500 rounded-full" />
                       </div>
-                      <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">{thinkingStatus}</span>
+                      <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">
+                        {liveReasoning ? 'Thinking it through...' : thinkingStatus}
+                      </span>
+                      <span className="ml-auto text-xs font-medium text-muted-foreground tabular-nums">
+                        {elapsedSeconds >= 60
+                          ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+                          : `${elapsedSeconds}s`}
+                      </span>
                     </div>
-                    <div className="space-y-2 ml-5">
-                      {thinkingDetails.map((detail, i) => (
-                        <div 
-                          key={i} 
-                          className="flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in slide-in-from-left-2 duration-300"
-                          style={{ animationDelay: `${i * 150}ms` }}
-                        >
-                          <div className="w-1 h-1 bg-sky-400 rounded-full" />
-                          <span>{detail}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {liveReasoning ? (
+                      // Real model thinking — show the most recent portion, live.
+                      <div
+                        className="ml-5 max-h-40 overflow-hidden text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed"
+                        style={{
+                          WebkitMaskImage:
+                            'linear-gradient(to bottom, transparent 0, black 24px)',
+                          maskImage:
+                            'linear-gradient(to bottom, transparent 0, black 24px)',
+                        }}
+                      >
+                        {liveReasoning.slice(-900)}
+                      </div>
+                    ) : (
+                      <div className="space-y-2 ml-5">
+                        {thinkingDetails.map((detail, i) => (
+                          <div 
+                            key={i} 
+                            className="flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in slide-in-from-left-2 duration-300"
+                            style={{ animationDelay: `${i * 150}ms` }}
+                          >
+                            <div className="w-1 h-1 bg-sky-400 rounded-full" />
+                            <span>{detail}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-3 pt-3 border-t border-sky-200/50 dark:border-sky-700/50">
                       <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
                         <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
