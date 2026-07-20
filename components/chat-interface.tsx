@@ -14,6 +14,7 @@ import { MemoryPanel } from '@/components/memory-panel'
 import { ProjectsPanel } from '@/components/projects-panel'
 import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import { CodeBlock } from '@/components/code-block'
+import { CodeTemplates } from '@/components/code-templates'
 import Link from 'next/link'
 
 // Lightweight hover tooltip. Wrapping span catches the hover so the label
@@ -72,7 +73,7 @@ function ModeToggle({
           'font-semibold',
           codeMode
             ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 ring-1 ring-sky-300/60'
-            : 'text-sky-600 hover:bg-sky-500/10 hover:text-sky-700'
+            : 'bg-sky-600 text-white shadow-sm hover:bg-sky-500'
         )}
       >
         <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
@@ -173,6 +174,11 @@ export default function ChatInterface() {
     setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // Scroll container + whether the user is "pinned" to the bottom. While a
+  // response streams we only auto-scroll if they're already at the bottom, so
+  // scrolling up to re-read earlier output isn't constantly interrupted.
+  const scrollContainerRef = useRef<HTMLElement>(null)
+  const isPinnedToBottomRef = useRef(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -521,13 +527,64 @@ export default function ChatInterface() {
     }
   }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior })
+  }
+
+  // Consider the user "pinned" when they're within ~120px of the bottom.
+  const updatePinnedState = () => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    isPinnedToBottomRef.current = distanceFromBottom < 120
   }
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, newsHeadlines, generatedImages, generatingImage])
+    const el = scrollContainerRef.current
+    if (!el) return
+    updatePinnedState()
+
+    // Position-based sync (covers scrollbar drags, keyboard, momentum).
+    const onScroll = () => updatePinnedState()
+
+    // Intent-based unpin: the instant the user scrolls UP (wheel or touch) we
+    // stop following the stream, so the auto-scroll never fights them. This is
+    // immediate and doesn't wait for a re-render, which is what made the
+    // previous threshold-only approach feel like it "kept pulling down".
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) isPinnedToBottomRef.current = false
+      else updatePinnedState()
+    }
+    let lastTouchY = 0
+    const onTouchStart = (e: TouchEvent) => {
+      lastTouchY = e.touches[0]?.clientY ?? 0
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY ?? 0
+      if (y > lastTouchY) isPinnedToBottomRef.current = false // finger down = scroll up
+      lastTouchY = y
+    }
+
+    el.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Follow the stream/typewriter to the bottom ONLY while the user is pinned.
+    // Depends on displayedContent (the 60fps typewriter reveal) so following is
+    // smooth, and on messages for non-streamed updates.
+    if (isPinnedToBottomRef.current) {
+      scrollToBottom('auto')
+    }
+  }, [messages, displayedContent, newsHeadlines, generatedImages, generatingImage])
 
   // Track timestamps for new messages
   useEffect(() => {
@@ -614,6 +671,9 @@ export default function ChatInterface() {
     
     const userMessage = input
     setInput('')
+
+    // A brand-new request re-pins to the bottom so the incoming answer follows.
+    isPinnedToBottomRef.current = true
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -705,7 +765,17 @@ export default function ChatInterface() {
     setMessages([])
     setNewsHeadlines([])
     lastSavedMessageRef.current = null
+    // Leaving the current session ends any project-editing context, so the
+    // next build starts fresh instead of silently editing the old project.
+    setActiveProject(null)
     setSidebarOpen(false)
+  }
+
+  // Stop editing the current saved project and return to a fresh build,
+  // without wiping the whole chat. Follow-up code-mode messages will create a
+  // brand-new build again instead of editing the previous project.
+  const handleExitEditing = () => {
+    setActiveProject(null)
   }
 
   const handleSignOut = async () => {
@@ -1410,8 +1480,8 @@ export default function ChatInterface() {
           )}
         </header>
 
-        {/* Main Content */}
-        <main className="relative z-10 flex-1 overflow-y-auto">
+      {/* Main Content */}
+      <main ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
                 {messages.length === 0 && generatedImages.length === 0 && !generatingImage && generatedMusic.length === 0 && !generatingMusic && generatedVideos.length === 0 && !generatingVideo ? (
               /* Welcome Screen */
@@ -1437,8 +1507,26 @@ export default function ChatInterface() {
                     <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
                   </div>
 
-                  {/* Build-mode helper banner */}
-                  {codeMode && (
+                  {/* Build-mode helper banner. Switches to an "editing" state
+                      when the user is continuing a saved project, so it's always
+                      clear whether the next message builds new or edits. */}
+                  {codeMode && activeProject && (
+                    <div className="mb-3 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+                      <Pencil className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span className="min-w-0 flex-1">
+                        <strong>Editing:</strong> <span className="truncate">{activeProject.title}</span>
+                        {' '}&mdash; tell me what to change and I&apos;ll update this project.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleExitEditing}
+                        className="flex-shrink-0 rounded-full border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                      >
+                        Start a new build
+                      </button>
+                    </div>
+                  )}
+                  {codeMode && !activeProject && (
                     <div className="mb-3 flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-left text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
                       <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
                       <span>
@@ -1622,6 +1710,14 @@ export default function ChatInterface() {
                     </button>
                   ))}
                 </div>
+
+                {/* Starter template gallery — only in Build mode when starting
+                    a fresh build. Clicking a card auto-sends a rich prompt. */}
+                {codeMode && !activeProject && (
+                  <div className="mt-8 flex justify-center">
+                    <CodeTemplates onSelect={handleSuggestionClick} />
+                  </div>
+                )}
 
                 {/* Mining CTA */}
                 <div className="mt-16">
@@ -1969,7 +2065,20 @@ export default function ChatInterface() {
               {/* Mode switcher: Chat vs. BlueTAO Code */}
               <div className="mb-2 flex items-center justify-center gap-2">
                 <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />
-                {codeMode && (
+                {codeMode && activeProject && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                    <Pencil className="h-3 w-3" />
+                    Editing {activeProject.title}
+                    <button
+                      type="button"
+                      onClick={handleExitEditing}
+                      className="rounded-full border border-emerald-300 px-2 py-0.5 font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                    >
+                      New build
+                    </button>
+                  </span>
+                )}
+                {codeMode && !activeProject && (
                   <span className="hidden sm:inline text-xs text-sky-700 dark:text-sky-400">
                     Build mode: describe a website or app to preview it live
                   </span>
