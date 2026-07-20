@@ -1207,6 +1207,59 @@ export default function ChatInterface() {
           )}
         </div>
 
+        {/* Primary navigation — moved from the top header. Minimal, lowercase,
+            uniform-muted rows with a single gold accent, saygm-style. */}
+        <nav className="px-3 pb-3 space-y-0.5">
+          {user && (
+            <button
+              onClick={() => {
+                setCodeMode(true)
+                setSidebarOpen(false)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <Code className="w-4 h-4 flex-shrink-0" />
+              code
+            </button>
+          )}
+          {user && (
+            <button
+              onClick={() => {
+                setShowProjectsPanel(true)
+                setSidebarOpen(false)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <FolderCode className="w-4 h-4 flex-shrink-0" />
+              projects
+            </button>
+          )}
+          <Link href="/detect" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <Sparkles className="w-4 h-4 flex-shrink-0" />
+              is it ai?
+            </span>
+          </Link>
+          <Link href="/mining" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <Pickaxe className="w-4 h-4 flex-shrink-0" />
+              mining
+            </span>
+          </Link>
+          <Link href="/fun" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <PartyPopper className="w-4 h-4 flex-shrink-0" />
+              fun
+            </span>
+          </Link>
+          <Link href="/developers" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <Code className="w-4 h-4 flex-shrink-0" />
+              embed
+            </span>
+          </Link>
+        </nav>
+
         {/* Usage Indicator */}
         {user && usage && (
           <div className="px-3 pb-3">
@@ -1377,59 +1430,17 @@ export default function ChatInterface() {
             </button>
           </div>
 
-          {/* Right: minimal, lowercase, uniform-muted nav with a single gold accent */}
+          {/* Right: quiet "new chat" plus a single gold accent CTA. All other
+              destinations now live in the left sidebar. */}
           <nav className="flex items-center gap-1">
             <button
               onClick={handleNewChat}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <Plus className="w-4 h-4" />
               new chat
             </button>
-            {user && (
-              <button
-                onClick={() => setCodeMode(true)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Code className="w-4 h-4" />
-                code
-              </button>
-            )}
-            <Link href="/mining" className="hidden md:block">
-              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <Pickaxe className="w-4 h-4" />
-                mining
-              </span>
-            </Link>
-            <Link href="/fun" className="hidden md:block">
-              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <PartyPopper className="w-4 h-4" />
-                fun
-              </span>
-            </Link>
-            {user && (
-              <button
-                onClick={() => setShowProjectsPanel(true)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <FolderCode className="w-4 h-4" />
-                projects
-              </button>
-            )}
-            <Link href="/developers" className="hidden lg:block">
-              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <Code className="w-4 h-4" />
-                embed
-              </span>
-            </Link>
-            <Link href="/detect">
-              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <Sparkles className="w-4 h-4" />
-                is it ai?
-              </span>
-            </Link>
 
-            {/* Single gold accent CTA (saygm's gold button) */}
             {user ? (
               <>
                 <Link href="/pricing" className="hidden sm:block ml-1">
