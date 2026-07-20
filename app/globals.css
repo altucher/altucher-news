@@ -13,6 +13,9 @@
   --popover-foreground: oklch(0.2 0.02 260);
   --primary: oklch(0.55 0.19 255);
   --primary-foreground: oklch(0.99 0.005 250);
+  /* Warm gold secondary accent (saygm-inspired) */
+  --gold: oklch(0.72 0.13 78);
+  --gold-foreground: oklch(0.25 0.05 70);
   --secondary: oklch(0.965 0.006 250);
   --secondary-foreground: oklch(0.3 0.02 260);
   --muted: oklch(0.965 0.006 250);
@@ -50,6 +53,9 @@
   --popover-foreground: oklch(0.97 0.004 250);
   --primary: oklch(0.62 0.2 258);
   --primary-foreground: oklch(0.99 0.005 250);
+  /* Warm gold secondary accent (saygm-inspired) */
+  --gold: oklch(0.8 0.13 82);
+  --gold-foreground: oklch(0.2 0.04 70);
   --secondary: oklch(0.24 0.018 265);
   --secondary-foreground: oklch(0.97 0.004 250);
   --muted: oklch(0.24 0.018 265);
@@ -88,6 +94,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -161,6 +169,31 @@
   background:
     radial-gradient(60% 45% at 50% 0%, color-mix(in oklch, var(--primary) 22%, transparent) 0%, transparent 70%),
     radial-gradient(40% 30% at 85% 12%, color-mix(in oklch, var(--primary) 10%, transparent) 0%, transparent 75%);
+}
+
+/* saygm-inspired radiating sunburst line texture behind the hero.
+   Repeating conic gradient of faint rays, masked to fade out from the top. */
+.hero-sunburst {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    repeating-conic-gradient(
+      from 0deg at 50% 8%,
+      color-mix(in oklch, var(--gold) 14%, transparent) 0deg,
+      color-mix(in oklch, var(--gold) 14%, transparent) 0.35deg,
+      transparent 0.35deg,
+      transparent 5deg
+    );
+  -webkit-mask-image: radial-gradient(70% 55% at 50% 8%, black 0%, transparent 72%);
+  mask-image: radial-gradient(70% 55% at 50% 8%, black 0%, transparent 72%);
+  opacity: 0.5;
+}
+
+/* Warm gold text glow for accent (serif-italic) headline words */
+.gold-glow {
+  text-shadow: 0 0 38px color-mix(in oklch, var(--gold) 45%, transparent);
 }
 
 /* Glassy floating surface (input bars, cards) */

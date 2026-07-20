@@ -1207,6 +1207,59 @@ export default function ChatInterface() {
           )}
         </div>
 
+        {/* Primary navigation — moved from the top header. Minimal, lowercase,
+            uniform-muted rows with a single gold accent, saygm-style. */}
+        <nav className="px-3 pb-3 space-y-0.5">
+          {user && (
+            <button
+              onClick={() => {
+                setCodeMode(true)
+                setSidebarOpen(false)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <Code className="w-4 h-4 flex-shrink-0" />
+              code
+            </button>
+          )}
+          {user && (
+            <button
+              onClick={() => {
+                setShowProjectsPanel(true)
+                setSidebarOpen(false)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <FolderCode className="w-4 h-4 flex-shrink-0" />
+              projects
+            </button>
+          )}
+          <Link href="/detect" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <Sparkles className="w-4 h-4 flex-shrink-0" />
+              is it ai?
+            </span>
+          </Link>
+          <Link href="/mining" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <Pickaxe className="w-4 h-4 flex-shrink-0" />
+              mining
+            </span>
+          </Link>
+          <Link href="/fun" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <PartyPopper className="w-4 h-4 flex-shrink-0" />
+              fun
+            </span>
+          </Link>
+          <Link href="/developers" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+              <Code className="w-4 h-4 flex-shrink-0" />
+              embed
+            </span>
+          </Link>
+        </nav>
+
         {/* Usage Indicator */}
         {user && usage && (
           <div className="px-3 pb-3">
@@ -1356,6 +1409,7 @@ export default function ChatInterface() {
 
         {/* Header */}
         <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/30 bg-background/80 backdrop-blur-md">
+          {/* Left: saygm-style logo lockup — gold mark + lowercase wordmark */}
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -1365,119 +1419,49 @@ export default function ChatInterface() {
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <button 
+            <button
               onClick={handleNewChat}
-                className="text-xl font-bold text-foreground hover:text-primary transition-colors hidden lg:block tracking-tight"
+              className="flex items-center gap-2.5 group"
             >
-              a front end to bittensor
+              <BlueTaoLogo className="w-7 h-7 text-[var(--gold)] drop-shadow-[0_0_12px_var(--gold)]" />
+              <span className="text-lg font-semibold tracking-tight text-foreground group-hover:text-[var(--gold)] transition-colors hidden sm:block">
+                bluetao
+              </span>
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
+
+          {/* Right: quiet "new chat" plus a single gold accent CTA. All other
+              destinations now live in the left sidebar. */}
+          <nav className="flex items-center gap-1">
+            <button
               onClick={handleNewChat}
-              className="rounded-full border-border/50 bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground text-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              New Chat
-            </Button>
-            {showLoginPrompt && (
-              <span className="text-xs text-amber-600 animate-pulse hidden sm:block">
-                Log in to create a chat history
-              </span>
-            )}
-          </div>
-          {user ? (
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setCodeMode(true)}
-                className="text-white hover:text-white/80 flex font-semibold tracking-wide"
-              >
-                <Code className="w-4 h-4 mr-1" />
-                CODE
-              </Button>
-              <Link href="/mining">
-                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
-                  <Pickaxe className="w-4 h-4 mr-1" />
-                  MINING
-                </Button>
-              </Link>
-              <Link href="/fun">
-                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
-                  <PartyPopper className="w-4 h-4 mr-1" />
-                  FUN
-                </Button>
-              </Link>
-              <Link href="/detect">
-                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
-                  <Sparkles className="w-4 h-4 mr-1.5" />
-                  Is it AI?
-                </Button>
-              </Link>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowProjectsPanel(true)}
-                className="text-sky-500 hover:text-sky-400 flex"
-              >
-                <FolderCode className="w-4 h-4 mr-1" />
-                Projects
-              </Button>
-              <Link href="/developers">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
-                  <Code className="w-4 h-4 mr-1" />
-                  Embed
-                </Button>
-              </Link>
-              <Link href="/pricing">
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden sm:flex">
-                  <Zap className="w-4 h-4 mr-1" />
-                  Upgrade
-                </Button>
-              </Link>
-              <span className="text-sm text-muted-foreground hidden sm:block">
-                {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/mining">
-                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
-                  <Pickaxe className="w-4 h-4 mr-1" />
-                  MINING
-                </Button>
-              </Link>
-              <Link href="/fun">
-                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
-                  <PartyPopper className="w-4 h-4 mr-1" />
-                  FUN
-                </Button>
-              </Link>
-              <Link href="/detect">
-                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
-                  <Sparkles className="w-4 h-4 mr-1.5" />
-                  Is it AI?
-                </Button>
-              </Link>
-              <Link href="/developers">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
-                  <Code className="w-4 h-4 mr-1" />
-                  Embed
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="sm"
+              <Plus className="w-4 h-4" />
+              new chat
+            </button>
+
+            {user ? (
+              <>
+                <Link href="/pricing" className="hidden sm:block ml-1">
+                  <span className="flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity">
+                    <Zap className="w-4 h-4" />
+                    upgrade
+                  </span>
+                </Link>
+                <span className="text-sm text-muted-foreground hidden sm:block ml-2">
+                  {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
+                </span>
+              </>
+            ) : (
+              <button
                 onClick={() => router.push('/auth/login')}
-                className="ml-2 text-muted-foreground hover:text-foreground hidden sm:flex"
+                className="ml-1 rounded-full bg-[var(--gold)] px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity"
               >
-                Sign in
-              </Button>
-            </div>
-          )}
+                sign in
+              </button>
+            )}
+          </nav>
         </header>
 
       {/* Main Content */}
@@ -1487,17 +1471,24 @@ export default function ChatInterface() {
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
+                {/* saygm-inspired radiating sunburst texture behind the hero */}
+                <div className="hero-sunburst" aria-hidden="true" />
+
                 <div className="mb-8 relative">
                   <div className="absolute inset-0 -z-10 blur-2xl opacity-60 bg-primary/30 rounded-full" aria-hidden="true" />
                   <BlueTaoLogo className="w-20 h-20 text-primary drop-shadow-[0_0_25px_var(--primary)]" />
                 </div>
 
-                {/* Title */}
+                {/* Title: bold sans paired with a serif-italic gold accent word */}
                 <h1 className="text-5xl md:text-7xl text-foreground font-bold tracking-tighter mb-4 text-balance hero-glow">
-                  Ask anything
+                  Ask{' '}
+                  <span className="font-serif italic font-medium tracking-normal text-[var(--gold)] gold-glow">
+                    anything
+                  </span>
                 </h1>
                 <p className="text-muted-foreground text-lg mb-12 max-w-md text-pretty">
-                  Intelligent answers powered by decentralized AI
+                  Intelligent answers powered by{' '}
+                  <span className="font-serif italic text-foreground/90">decentralized AI</span>
                 </p>
                 
                 {/* Input Area */}
