@@ -174,6 +174,11 @@ export default function ChatInterface() {
     setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // Scroll container + whether the user is "pinned" to the bottom. While a
+  // response streams we only auto-scroll if they're already at the bottom, so
+  // scrolling up to re-read earlier output isn't constantly interrupted.
+  const scrollContainerRef = useRef<HTMLElement>(null)
+  const isPinnedToBottomRef = useRef(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
@@ -522,12 +527,31 @@ export default function ChatInterface() {
     }
   }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior })
+  }
+
+  // Consider the user "pinned" when they're within ~120px of the bottom.
+  const updatePinnedState = () => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    isPinnedToBottomRef.current = distanceFromBottom < 120
   }
 
   useEffect(() => {
-    scrollToBottom()
+    const el = scrollContainerRef.current
+    if (!el) return
+    updatePinnedState()
+    el.addEventListener('scroll', updatePinnedState, { passive: true })
+    return () => el.removeEventListener('scroll', updatePinnedState)
+  }, [])
+
+  useEffect(() => {
+    // Only follow the stream to the bottom if the user hasn't scrolled up.
+    if (isPinnedToBottomRef.current) {
+      scrollToBottom('auto')
+    }
   }, [messages, newsHeadlines, generatedImages, generatingImage])
 
   // Track timestamps for new messages
@@ -615,6 +639,9 @@ export default function ChatInterface() {
     
     const userMessage = input
     setInput('')
+
+    // A brand-new request re-pins to the bottom so the incoming answer follows.
+    isPinnedToBottomRef.current = true
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -1421,8 +1448,8 @@ export default function ChatInterface() {
           )}
         </header>
 
-        {/* Main Content */}
-        <main className="relative z-10 flex-1 overflow-y-auto">
+      {/* Main Content */}
+      <main ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4">
                 {messages.length === 0 && generatedImages.length === 0 && !generatingImage && generatedMusic.length === 0 && !generatingMusic && generatedVideos.length === 0 && !generatingVideo ? (
               /* Welcome Screen */
