@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode, PartyPopper } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode, PartyPopper, Gem } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -78,6 +78,58 @@ function ModeToggle({
       >
         <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
         BlueTAO Code
+      </button>
+    </div>
+  )
+}
+
+// Lets the user trade speed for quality in Build mode. "Quick" runs the faster
+// Kimi K2.5 for a fast first version; "Best" runs the deeper-reasoning K2.6 for
+// a more complete, correct, polished build (slower). Default is Quick.
+function BuildQualityToggle({
+  quality,
+  setQuality,
+  compact = false,
+}: {
+  quality: 'quick' | 'best'
+  setQuality: (v: 'quick' | 'best') => void
+  compact?: boolean
+}) {
+  const base = cn(
+    'inline-flex items-center gap-1.5 rounded-full font-medium transition-all',
+    compact ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'
+  )
+  return (
+    <div className="inline-flex items-center rounded-full border border-border bg-card p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setQuality('quick')}
+        aria-pressed={quality === 'quick'}
+        title="A fast first version"
+        className={cn(
+          base,
+          quality === 'quick'
+            ? 'bg-sky-500 text-white shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <Zap className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        Quick Build
+      </button>
+      <button
+        type="button"
+        onClick={() => setQuality('best')}
+        aria-pressed={quality === 'best'}
+        title="Slower, but more complete and polished"
+        className={cn(
+          base,
+          quality === 'best'
+            ? 'bg-[var(--gold)] text-black shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <Gem className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        Best Quality
       </button>
     </div>
   )
@@ -170,6 +222,10 @@ export default function ChatInterface() {
   const [currentVideoPrompt, setCurrentVideoPrompt] = useState<string | null>(null)
   // Code mode: routes chat to a coding-optimized system prompt on Chutes (SN64)
   const [codeMode, setCodeMode] = useState(false)
+  // Build-mode speed/quality trade-off. Default to Quick: most first attempts
+  // are exploratory, and users can opt up to Best Quality when they know what
+  // they want (it will then refine their existing build).
+  const [buildQuality, setBuildQuality] = useState<'quick' | 'best'>('quick')
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
@@ -329,7 +385,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? 'Kimi K2.6' : 'Kimi K2.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Kimi K2.5') : 'Kimi K2.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
@@ -781,7 +837,7 @@ export default function ChatInterface() {
     
     sendMessage(
       { text: messageToSend },
-      { body: { codeMode, editingCode: activeProject?.code ?? null } }
+      { body: { codeMode, buildQuality, editingCode: activeProject?.code ?? null } }
     )
     
     // Refresh usage after sending
@@ -1537,8 +1593,11 @@ export default function ChatInterface() {
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
                   {/* Mode switcher: Chat vs. BlueTAO Code */}
-                  <div className="mb-3 flex justify-center">
+                  <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
                     <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
+                    {codeMode && (
+                      <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} />
+                    )}
                   </div>
 
                   {/* Build-mode helper banner. Switches to an "editing" state
@@ -2119,8 +2178,11 @@ export default function ChatInterface() {
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
               {/* Mode switcher: Chat vs. BlueTAO Code */}
-              <div className="mb-2 flex items-center justify-center gap-2">
+              <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
                 <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />
+                {codeMode && (
+                  <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} compact />
+                )}
                 {codeMode && activeProject && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
                     <Pencil className="h-3 w-3" />
