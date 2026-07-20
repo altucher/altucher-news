@@ -1216,7 +1216,7 @@ export default function ChatInterface() {
                 setCodeMode(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <Code className="w-4 h-4 flex-shrink-0" />
               code
@@ -1228,32 +1228,32 @@ export default function ChatInterface() {
                 setShowProjectsPanel(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <FolderCode className="w-4 h-4 flex-shrink-0" />
               projects
             </button>
           )}
           <Link href="/detect" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Sparkles className="w-4 h-4 flex-shrink-0" />
               is it ai?
             </span>
           </Link>
           <Link href="/mining" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Pickaxe className="w-4 h-4 flex-shrink-0" />
               mining
             </span>
           </Link>
           <Link href="/fun" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <PartyPopper className="w-4 h-4 flex-shrink-0" />
               fun
             </span>
           </Link>
           <Link href="/developers" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Code className="w-4 h-4 flex-shrink-0" />
               embed
             </span>
@@ -1435,7 +1435,7 @@ export default function ChatInterface() {
           <nav className="flex items-center gap-1">
             <button
               onClick={handleNewChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground hover:text-[var(--gold)] transition-colors"
             >
               <Plus className="w-4 h-4" />
               new chat
@@ -1449,7 +1449,7 @@ export default function ChatInterface() {
                     upgrade
                   </span>
                 </Link>
-                <span className="text-sm text-muted-foreground hidden sm:block ml-2">
+                <span className="text-sm font-medium text-foreground hidden sm:block ml-2">
                   {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
                 </span>
               </>
