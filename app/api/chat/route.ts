@@ -381,13 +381,14 @@ export async function POST(req: Request) {
     const region = req.headers.get('x-vercel-ip-country-region') || undefined
     const location = { country, city, region }
 
-    const { messages, model, userId, fileContext, customContext, codeMode, editingCode }: { 
+    const { messages, model, userId, fileContext, customContext, codeMode, buildQuality, editingCode }: { 
       messages: UIMessage[]; 
       model?: string; 
       userId?: string;
       fileContext?: { name: string; content: string } | null;
       customContext?: { company: string; context: string } | null;
       codeMode?: boolean;
+      buildQuality?: 'quick' | 'best';
       editingCode?: string | null;
     } = await req.json()
 
@@ -464,11 +465,15 @@ export async function POST(req: Request) {
     }
     
     // Model-aware defaults (benchmarked on Chutes SN64):
-    //  - Code mode uses Kimi K2.6 for the highest code-generation quality.
-    //  - Normal chat is short, where Kimi K2.5 currently runs ~2x faster than
-    //    K2.6 on Chutes while staying just as capable for conversational use.
+    //  - Code mode exposes a user speed/quality choice:
+    //      "quick" -> Kimi K2.5 (faster first version)
+    //      "best"  -> Kimi K2.6 (deeper reasoning, more complete/polished, slower)
+    //    Default is "quick" so exploratory builds stay fast.
+    //  - Normal chat is short, where Kimi K2.5 runs ~2x faster than K2.6.
     // An explicit `model` from the client always overrides these defaults.
-    const defaultModel = codeMode ? 'moonshotai/Kimi-K2.6-TEE' : 'moonshotai/Kimi-K2.5-TEE'
+    const defaultModel = codeMode
+      ? (buildQuality === 'best' ? 'moonshotai/Kimi-K2.6-TEE' : 'moonshotai/Kimi-K2.5-TEE')
+      : 'moonshotai/Kimi-K2.5-TEE'
     const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
 
     // Create a Chutes client
@@ -525,7 +530,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-- You are powered by ${codeMode ? 'Kimi K2.6' : 'Kimi K2.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
+- You are powered by ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Kimi K2.5') : 'Kimi K2.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
@@ -589,6 +594,16 @@ CURRENT PROJECT CODE:
 \`\`\`html
 ${editingCode}
 \`\`\``
+
+        // Best Quality handoff: when the user upgrades a fast Quick Build to
+        // Best Quality, treat the existing code as a REFERENCE/starting point
+        // that captures their intended scope and layout — but be free to
+        // substantially rework it for correctness, completeness, and polish.
+        if (buildQuality === 'best') {
+          systemPrompt += `
+
+QUALITY UPGRADE MODE: The code above was a fast first draft. The user now wants your best work. Use it to understand their intended scope, features, and layout, but you MAY substantially refactor, restructure, complete, and polish it. Fix any weak or incorrect logic, add missing functionality implied by the concept, and elevate the visual design per the design rules above. Deliver a genuinely better, more complete version — not just cosmetic tweaks.`
+        }
       }
     }
 
