@@ -1487,17 +1487,24 @@ export default function ChatInterface() {
               /* Welcome Screen */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] text-center">
                 {/* Logo Icon */}
+                {/* saygm-inspired radiating sunburst texture behind the hero */}
+                <div className="hero-sunburst" aria-hidden="true" />
+
                 <div className="mb-8 relative">
                   <div className="absolute inset-0 -z-10 blur-2xl opacity-60 bg-primary/30 rounded-full" aria-hidden="true" />
                   <BlueTaoLogo className="w-20 h-20 text-primary drop-shadow-[0_0_25px_var(--primary)]" />
                 </div>
 
-                {/* Title */}
+                {/* Title: bold sans paired with a serif-italic gold accent word */}
                 <h1 className="text-5xl md:text-7xl text-foreground font-bold tracking-tighter mb-4 text-balance hero-glow">
-                  Ask anything
+                  Ask{' '}
+                  <span className="font-serif italic font-medium tracking-normal text-[var(--gold)] gold-glow">
+                    anything
+                  </span>
                 </h1>
                 <p className="text-muted-foreground text-lg mb-12 max-w-md text-pretty">
-                  Intelligent answers powered by decentralized AI
+                  Intelligent answers powered by{' '}
+                  <span className="font-serif italic text-foreground/90">decentralized AI</span>
                 </p>
                 
                 {/* Input Area */}
