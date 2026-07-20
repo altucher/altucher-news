@@ -531,12 +531,17 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior })
   }
 
-  // Consider the user "pinned" when they're within ~120px of the bottom.
+  // Consider the user "pinned" only when they're essentially AT the bottom.
+  // A small epsilon (not ~120px) is critical: during fast code streaming the
+  // view sits right at the bottom, and a large threshold let the scroll event
+  // re-pin the user the instant they tried to scroll up, fighting them back
+  // down. With a tight epsilon, any deliberate scroll-up escapes the pin and
+  // stays escaped until they return to the very bottom.
   const updatePinnedState = () => {
     const el = scrollContainerRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    isPinnedToBottomRef.current = distanceFromBottom < 120
+    isPinnedToBottomRef.current = distanceFromBottom < 32
   }
 
   useEffect(() => {
