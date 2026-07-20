@@ -1221,9 +1221,9 @@ export default function ChatInterface() {
                 setCodeMode(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
-              <Code className="w-4 h-4 flex-shrink-0" />
+              <Code className="w-5 h-5 flex-shrink-0" />
               code
             </button>
           )}
@@ -1233,33 +1233,33 @@ export default function ChatInterface() {
                 setShowProjectsPanel(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
-              <FolderCode className="w-4 h-4 flex-shrink-0" />
+              <FolderCode className="w-5 h-5 flex-shrink-0" />
               projects
             </button>
           )}
           <Link href="/detect" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
-              <Sparkles className="w-4 h-4 flex-shrink-0" />
+            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+              <Sparkles className="w-5 h-5 flex-shrink-0" />
               is it ai?
             </span>
           </Link>
           <Link href="/mining" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
-              <Pickaxe className="w-4 h-4 flex-shrink-0" />
+            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+              <Pickaxe className="w-5 h-5 flex-shrink-0" />
               mining
             </span>
           </Link>
           <Link href="/fun" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
-              <PartyPopper className="w-4 h-4 flex-shrink-0" />
+            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+              <PartyPopper className="w-5 h-5 flex-shrink-0" />
               fun
             </span>
           </Link>
           <Link href="/developers" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
-              <Code className="w-4 h-4 flex-shrink-0" />
+            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+              <Code className="w-5 h-5 flex-shrink-0" />
               embed
             </span>
           </Link>
