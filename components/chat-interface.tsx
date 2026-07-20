@@ -1593,12 +1593,15 @@ export default function ChatInterface() {
                 {/* Input Area */}
                 <div className="w-full max-w-2xl mb-6">
                   {/* Mode switcher: Chat vs. BlueTAO Code */}
-                  <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+                  <div className="mb-3 flex justify-center">
                     <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
-                    {codeMode && (
-                      <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} />
-                    )}
                   </div>
+                  {codeMode && (
+                    <div className="mb-3 flex flex-col items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Do you want this built:</span>
+                      <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} />
+                    </div>
+                  )}
 
                   {/* Build-mode helper banner. Switches to an "editing" state
                       when the user is continuing a saved project, so it's always
@@ -2180,9 +2183,6 @@ export default function ChatInterface() {
               {/* Mode switcher: Chat vs. BlueTAO Code */}
               <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
                 <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />
-                {codeMode && (
-                  <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} compact />
-                )}
                 {codeMode && activeProject && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
                     <Pencil className="h-3 w-3" />
@@ -2202,6 +2202,13 @@ export default function ChatInterface() {
                   </span>
                 )}
               </div>
+              {/* Build quality choice — its own line so it reads as a choice, not a third mode */}
+              {codeMode && (
+                <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-xs text-muted-foreground">Build this:</span>
+                  <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} compact />
+                </div>
+              )}
               {/* File upload indicator */}
               {uploadedFile && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
