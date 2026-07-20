@@ -294,7 +294,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? 'Qwen 3.5' : 'Kimi K2.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? 'Kimi K2.6' : 'Kimi K2.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
