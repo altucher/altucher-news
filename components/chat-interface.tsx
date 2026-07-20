@@ -1356,6 +1356,7 @@ export default function ChatInterface() {
 
         {/* Header */}
         <header className="relative z-10 flex items-center justify-between px-4 lg:px-6 py-4 border-b border-border/30 bg-background/80 backdrop-blur-md">
+          {/* Left: saygm-style logo lockup — gold mark + lowercase wordmark */}
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -1365,119 +1366,91 @@ export default function ChatInterface() {
             >
               <Menu className="w-5 h-5" />
             </Button>
-            <button 
+            <button
               onClick={handleNewChat}
-                className="text-xl font-bold text-foreground hover:text-primary transition-colors hidden lg:block tracking-tight"
+              className="flex items-center gap-2.5 group"
             >
-              a front end to bittensor
+              <BlueTaoLogo className="w-7 h-7 text-[var(--gold)] drop-shadow-[0_0_12px_var(--gold)]" />
+              <span className="text-lg font-semibold tracking-tight text-foreground group-hover:text-[var(--gold)] transition-colors hidden sm:block">
+                bluetao
+              </span>
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
+
+          {/* Right: minimal, lowercase, uniform-muted nav with a single gold accent */}
+          <nav className="flex items-center gap-1">
+            <button
               onClick={handleNewChat}
-              className="rounded-full border-border/50 bg-background/80 backdrop-blur-sm text-foreground hover:bg-accent hover:text-accent-foreground text-sm"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              New Chat
-            </Button>
-            {showLoginPrompt && (
-              <span className="text-xs text-amber-600 animate-pulse hidden sm:block">
-                Log in to create a chat history
-              </span>
-            )}
-          </div>
-          {user ? (
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Plus className="w-4 h-4" />
+              new chat
+            </button>
+            {user && (
+              <button
                 onClick={() => setCodeMode(true)}
-                className="text-white hover:text-white/80 flex font-semibold tracking-wide"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                <Code className="w-4 h-4 mr-1" />
-                CODE
-              </Button>
-              <Link href="/mining">
-                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
-                  <Pickaxe className="w-4 h-4 mr-1" />
-                  MINING
-                </Button>
-              </Link>
-              <Link href="/fun">
-                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
-                  <PartyPopper className="w-4 h-4 mr-1" />
-                  FUN
-                </Button>
-              </Link>
-              <Link href="/detect">
-                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
-                  <Sparkles className="w-4 h-4 mr-1.5" />
-                  Is it AI?
-                </Button>
-              </Link>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowProjectsPanel(true)}
-                className="text-sky-500 hover:text-sky-400 flex"
-              >
-                <FolderCode className="w-4 h-4 mr-1" />
-                Projects
-              </Button>
-              <Link href="/developers">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
-                  <Code className="w-4 h-4 mr-1" />
-                  Embed
-                </Button>
-              </Link>
-              <Link href="/pricing">
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 hidden sm:flex">
-                  <Zap className="w-4 h-4 mr-1" />
-                  Upgrade
-                </Button>
-              </Link>
-              <span className="text-sm text-muted-foreground hidden sm:block">
-                {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
+                <Code className="w-4 h-4" />
+                code
+              </button>
+            )}
+            <Link href="/mining" className="hidden md:block">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <Pickaxe className="w-4 h-4" />
+                mining
               </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/mining">
-                <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex">
-                  <Pickaxe className="w-4 h-4 mr-1" />
-                  MINING
-                </Button>
-              </Link>
-              <Link href="/fun">
-                <Button variant="ghost" size="sm" className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 flex">
-                  <PartyPopper className="w-4 h-4 mr-1" />
-                  FUN
-                </Button>
-              </Link>
-              <Link href="/detect">
-                <Button variant="outline" size="default" className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-600 dark:hover:bg-blue-950/50 font-medium">
-                  <Sparkles className="w-4 h-4 mr-1.5" />
-                  Is it AI?
-                </Button>
-              </Link>
-              <Link href="/developers">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground flex">
-                  <Code className="w-4 h-4 mr-1" />
-                  Embed
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push('/auth/login')}
-                className="ml-2 text-muted-foreground hover:text-foreground hidden sm:flex"
+            </Link>
+            <Link href="/fun" className="hidden md:block">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <PartyPopper className="w-4 h-4" />
+                fun
+              </span>
+            </Link>
+            {user && (
+              <button
+                onClick={() => setShowProjectsPanel(true)}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                Sign in
-              </Button>
-            </div>
-          )}
+                <FolderCode className="w-4 h-4" />
+                projects
+              </button>
+            )}
+            <Link href="/developers" className="hidden lg:block">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <Code className="w-4 h-4" />
+                embed
+              </span>
+            </Link>
+            <Link href="/detect">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <Sparkles className="w-4 h-4" />
+                is it ai?
+              </span>
+            </Link>
+
+            {/* Single gold accent CTA (saygm's gold button) */}
+            {user ? (
+              <>
+                <Link href="/pricing" className="hidden sm:block ml-1">
+                  <span className="flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity">
+                    <Zap className="w-4 h-4" />
+                    upgrade
+                  </span>
+                </Link>
+                <span className="text-sm text-muted-foreground hidden sm:block ml-2">
+                  {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
+                </span>
+              </>
+            ) : (
+              <button
+                onClick={() => router.push('/auth/login')}
+                className="ml-1 rounded-full bg-[var(--gold)] px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity"
+              >
+                sign in
+              </button>
+            )}
+          </nav>
         </header>
 
       {/* Main Content */}
