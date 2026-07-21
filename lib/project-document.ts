@@ -147,11 +147,57 @@ export function serializeProject(project: ProjectDocument): string {
   return `${PROJECT_MARKER}\n${JSON.stringify(project)}`
 }
 
+function extractJsonObject(value: string): string | null {
+  const start = value.indexOf('{')
+  if (start < 0) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < value.length; index += 1) {
+    const character = value[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') inString = false
+      continue
+    }
+    if (character === '"') inString = true
+    else if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) return value.slice(start, index + 1)
+    }
+  }
+  return null
+}
+
+function parseRawFileProject(value: string): ProjectDocument | null {
+  const labels = PROJECT_PATHS.map((path) => `=== ${path} ===`)
+  const positions = labels.map((label) => value.indexOf(label))
+  if (positions.some((position) => position < 0) || positions[0] >= positions[1] || positions[1] >= positions[2]) return null
+
+  const files = {} as Record<ProjectPath, string>
+  for (let index = 0; index < PROJECT_PATHS.length; index += 1) {
+    const start = positions[index] + labels[index].length
+    const end = index + 1 < positions.length ? positions[index + 1] : value.length
+    files[PROJECT_PATHS[index]] = value.slice(start, end).replace(/^\s*\n/, '').replace(/\n?```[\s\S]*$/, '').trimEnd()
+  }
+  const project = normalizeGeneratedProject(createProject(files))
+  return validateProject(project).length ? null : project
+}
+
 export function parseProject(value: string): ProjectDocument | null {
-  const trimmed = value.trim()
-  if (!trimmed.startsWith(PROJECT_MARKER)) return null
+  const markerIndex = value.indexOf(PROJECT_MARKER)
+  if (markerIndex < 0) return null
+  const artifact = value.slice(markerIndex + PROJECT_MARKER.length)
+  const rawProject = parseRawFileProject(artifact)
+  if (rawProject) return rawProject
+
+  const json = extractJsonObject(artifact)
+  if (!json) return null
   try {
-    const parsed = normalizeGeneratedProject(JSON.parse(trimmed.slice(PROJECT_MARKER.length).trim()) as ProjectDocument)
+    const parsed = normalizeGeneratedProject(JSON.parse(json) as ProjectDocument)
     return validateProject(parsed).length ? null : parsed
   } catch {
     return null
@@ -188,8 +234,8 @@ export function normalizeProject(value: string): ProjectDocument {
 
 export function bundleProject(project: ProjectDocument): string {
   let html = project.files['index.html']
-  const css = project.files['styles.css']
-  const js = project.files['app.js']
+  const css = project.files['styles.css'].replace(/<\/style/gi, '<\\/style')
+  const js = project.files['app.js'].replace(/<\/script/gi, '<\\/script')
   html = html.replace(/<link\b[^>]*href=["']styles\.css["'][^>]*>/gi, css ? `<style data-bluetao-file="styles.css">\n${css}\n</style>` : '')
   html = html.replace(/<script\b[^>]*src=["']app\.js["'][^>]*><\/script>/gi, js ? `<script data-bluetao-file="app.js">\n${js}\n</script>` : '')
   if (css && !html.includes('data-bluetao-file="styles.css"')) html = html.replace(/<\/head>/i, `<style data-bluetao-file="styles.css">\n${css}\n</style>\n</head>`)
@@ -202,13 +248,14 @@ export function projectFromBundledHtml(html: string): ProjectDocument {
 }
 
 export function extractProjectArtifact(text: string): ProjectDocument | null {
-  const markerIndex = text.indexOf(PROJECT_MARKER)
-  if (markerIndex >= 0) {
-    const candidate = text.slice(markerIndex)
-    const fencedEnd = candidate.indexOf('\n```')
-    const parsed = parseProject(fencedEnd >= 0 ? candidate.slice(0, fencedEnd) : candidate)
-    if (parsed) return parsed
-  }
+  const parsedProject = parseProject(text)
+  if (parsedProject) return parsedProject
+
+  // Legacy single-file HTML remains supported, but only when no multi-file
+  // marker is present. A truncated project may contain complete HTML inside its
+  // JSON string; treating that fragment as the whole build creates blank or
+  // broken previews instead of allowing the repair path to run.
+  if (text.includes(PROJECT_MARKER)) return null
   const htmlStart = text.search(/<!doctype html|<html[\s>]/i)
   if (htmlStart >= 0) {
     const endMatch = text.slice(htmlStart).match(/<\/html\s*>/i)
