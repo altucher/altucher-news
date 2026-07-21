@@ -84,8 +84,8 @@ function ModeToggle({
 }
 
 // Lets the user trade speed for quality in Build mode. "Quick" runs the faster
-// Kimi K2.5 for a fast first version; "Best" runs the deeper-reasoning K2.6 for
-// a more complete, correct, polished build (slower). Default is Quick.
+// Qwen 3.5 for a fast first version; "Best" runs the deeper-reasoning Kimi K2.6
+// for a more complete, correct, polished build (slower). Default is Quick.
 function BuildQualityToggle({
   quality,
   setQuality,
@@ -385,7 +385,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Kimi K2.5') : 'Kimi K2.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5') : 'Kimi K2.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
