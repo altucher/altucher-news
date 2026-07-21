@@ -623,8 +623,30 @@ EMOTIONAL FIT
 - Match the mood to the subject. Sensitive topics (wills, health, grief) should feel calm,
   warm, and human — not clinical or transactional.
 
-Before finishing, mentally review the page: Is the palette purposeful? Is there real type
-hierarchy? Is there imagery? Does the composition look designed, not defaulted? If not, revise.
+DESIGN KITS (pick the ONE that best fits the subject, then customize — do not mix kits)
+Each kit = [primary, dark neutral, light neutral, accent] + heading/body font pairing.
+1. Warm Editorial (bakeries, wellness, wills, lifestyle): #7C4A32 / #2B2420 / #F7F1E8 / #C98A3B — Playfair Display + Inter
+2. Clean SaaS (software, startups, dashboards): #2563EB / #0F172A / #F8FAFC / #14B8A6 — Space Grotesk + Inter
+3. Deep Luxury (premium brands, finance, spirits): #1A1A1A / #0A0A0A / #F5F5F0 / #C6A667 — Cormorant Garamond + Jost
+4. Fresh Organic (food, health, eco, outdoors): #2F6B4F / #1C2B24 / #F3F7F0 / #E0A458 — Fraunces + Nunito Sans
+5. Bold Playful (kids, games, events, consumer): #FF5A5F / #22223B / #FFF8F0 / #FFB400 — Poppins + Poppins
+6. Calm Medical (health, clinics, sensitive care): #3E7CB1 / #1F2A37 / #F6F9FC / #6FB3A0 — Sora + Inter
+7. Modern Tech/Dark (AI, crypto, developer tools): #10B981 / #0B0F14 / #E5E9F0 / #38BDF8 — Space Grotesk + IBM Plex Sans
+8. Elegant Neutral (portfolios, agencies, architecture): #B08968 / #262220 / #FAF7F2 / #7D8471 — Cormorant + Work Sans
+- Wire the kit into CSS custom properties (:root { --primary, --ink, --paper, --accent }) and use them consistently for buttons, links, headings, and section backgrounds.
+
+COMPONENT PATTERNS (build these properly — they are what separate a real site from a demo)
+- NAV: sticky top bar, logo/wordmark left, links + a primary CTA button right; subtle shadow/blur on scroll; collapses to a working hamburger menu on mobile.
+- HERO: composed, not a lone centered card. Two-column (headline + subcopy + 1-2 CTAs on one side, a real topical image on the other) OR a full-bleed image with an overlay and readable text. Include a clear primary + secondary CTA.
+- SECTIONS: use a consistent max-width container (~1100-1200px), generous vertical padding (e.g. 5-7rem), and a short eyebrow label + heading + supporting copy to introduce each.
+- CARDS (features/services/pricing): equal-height grid, consistent padding/radius, a Lucide icon or image, title, and description; subtle border or shadow; hover lift.
+- TESTIMONIALS: quote + pravatar avatar + name + role; card or slider.
+- FOOTER: multi-column (brand blurb, link groups, contact/social), a divider, and a copyright line — never a single bare line.
+- BUTTONS & INTERACTIVES: every clickable element needs clear default/hover/focus-visible states and a 150-250ms transition. Buttons use the kit's primary/accent with readable text.
+
+Before finishing, mentally review the page: Did you pick a fitting design kit and apply it via
+CSS variables? Is there real type hierarchy? Is there imagery? Are nav/hero/sections/footer all
+present and composed (not a lone centered card)? Does it look designed, not defaulted? If not, revise.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
 
       // If the user is continuing a saved project, give the model the current
