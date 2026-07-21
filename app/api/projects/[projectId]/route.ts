@@ -69,6 +69,8 @@ export async function PATCH(
     const parsedProject = parseProject(code)
     const storedCode = parsedProject ? serializeProject(parsedProject) : code
     updates.current_code = storedCode
+    updates.project_type = parsedProject?.type === 'agent' ? 'agent' : 'site'
+    updates.agent_manifest = parsedProject?.type === 'agent' ? parsedProject.agent : null
 
     const { data: lastVersion } = await supabase
       .from('project_versions')

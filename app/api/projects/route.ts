@@ -14,7 +14,7 @@ export async function GET() {
   // Only list metadata (not the full code) so the panel loads fast
   const { data: projects, error } = await supabase
     .from('projects')
-    .select('id, title, language, published_url, created_at, updated_at')
+    .select('id, title, language, project_type, published_url, created_at, updated_at')
     .order('updated_at', { ascending: false })
 
   if (error) {
@@ -40,6 +40,7 @@ export async function POST(req: Request) {
   }
   const parsedProject = parseProject(code)
   const storedCode = parsedProject ? serializeProject(parsedProject) : code
+  const projectType = parsedProject?.type === 'agent' ? 'agent' : 'site'
 
   const { data: project, error } = await supabase
     .from('projects')
@@ -47,6 +48,8 @@ export async function POST(req: Request) {
       title: title?.trim() || 'Untitled project',
       current_code: storedCode,
       language: language || 'html',
+      project_type: projectType,
+      agent_manifest: parsedProject?.type === 'agent' ? parsedProject.agent : null,
       published_url: typeof publishedUrl === 'string' && publishedUrl.trim() ? publishedUrl.trim() : null,
       user_id: user.id,
     })

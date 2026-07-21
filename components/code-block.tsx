@@ -17,6 +17,7 @@ interface CodeBlockProps {
   // iframe until the code is complete, otherwise the iframe reloads on every
   // chunk and the half-built page/game visibly flashes.
   isStreaming?: boolean
+  projectId?: string
 }
 
 // Decide whether a block is previewable web code (HTML we can render live).
@@ -48,7 +49,7 @@ ${code}
 // A Cursor/v0-style code block. For web (HTML) code it also offers a live
 // Preview tab plus Download and Open-in-new-tab actions, so people with no
 // coding experience can see, save, and share the result immediately.
-export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: CodeBlockProps) {
+export function CodeBlock({ code, language, onSave, saveLabel, isStreaming, projectId }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -131,7 +132,7 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
       const res = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html: doc, title: titleMatch?.[1]?.trim() || null }),
+        body: JSON.stringify({ html: doc, title: titleMatch?.[1]?.trim() || null, project: project ? serializeProject(project) : null, projectId }),
       })
       const data = await res.json()
       if (!res.ok || !data?.url) {
