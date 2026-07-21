@@ -11,7 +11,9 @@ function getAdmin() {
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const origin = new URL(request.url).origin
-  if (!/^[a-z0-9]{8,10}$/.test(slug)) return NextResponse.redirect(`${origin}/agents`)
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(slug)) {
+    return NextResponse.redirect(`${origin}/agents`)
+  }
 
   try {
     const admin = getAdmin()
