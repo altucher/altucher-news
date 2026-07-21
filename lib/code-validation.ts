@@ -29,6 +29,10 @@ export function extractHtmlDocument(text: string): string | null {
   return close ? tail.slice(0, (close.index ?? 0) + close[0].length).trim() : tail.trim()
 }
 
+function countTag(html: string, tag: string) {
+  return [...html.matchAll(new RegExp(`<${tag}\\b`, 'gi'))].length
+}
+
 function add(
   findings: ValidationFinding[],
   severity: ValidationFinding['severity'],
@@ -47,7 +51,19 @@ export function validateHtmlDocument(html: string): ValidationResult {
   if (!/<body[\s>][\s\S]*\S[\s\S]*<\/body\s*>/i.test(html)) add(findings, 'error', 'missing-body', 'Include a non-empty, closed <body>.')
   if (!/<style[\s>]|rel=["']stylesheet["']/i.test(html)) add(findings, 'warning', 'missing-styles', 'Include complete styling for the page.')
   if (!/<meta[^>]+name=["']viewport["']/i.test(html)) add(findings, 'warning', 'missing-viewport', 'Add a responsive viewport meta tag.')
-  if (/\b(?:todo|fixme|coming soon|placeholder implementation)\b/i.test(html)) add(findings, 'warning', 'placeholder-content', 'Replace TODOs and placeholder implementations with finished behavior.')
+  if (/\b(?:todo|fixme|coming soon|placeholder implementation|lorem ipsum|your (?:business|company|address|phone))\b/i.test(html)) add(findings, 'warning', 'placeholder-content', 'Replace placeholders with finished, subject-specific content.')
+
+  // Treat documents with conventional site chrome as full websites. Games and
+  // single-purpose tools intentionally do not need this marketing-site contract.
+  const isBusinessSite = /<nav\b|<footer\b/i.test(html) || countTag(html, 'section') >= 3
+  if (isBusinessSite) {
+    if (!/<h1[\s>][\s\S]*?<\/h1>/i.test(html)) add(findings, 'error', 'missing-primary-heading', 'Add one clear, specific H1 in a finished hero section.')
+    if (!/<main[\s>][\s\S]*?<\/main>/i.test(html)) add(findings, 'warning', 'missing-main', 'Wrap the primary page content in a semantic <main>.')
+    if (!/<nav[\s>][\s\S]*?<\/nav>/i.test(html)) add(findings, 'warning', 'missing-navigation', 'Add usable desktop and mobile navigation.')
+    if (!/<footer[\s>][\s\S]*?<\/footer>/i.test(html)) add(findings, 'warning', 'missing-footer', 'Add a complete footer with business contact details.')
+    if (countTag(html, 'section') < 4) add(findings, 'warning', 'thin-site', 'Build at least four meaningful sections: hero, offering, trust/proof, and conversion/contact.')
+    if (!/\b(?:book|schedule|contact|call|request|start|get a quote|appointment)\b/i.test(html)) add(findings, 'warning', 'missing-conversion-path', 'Add a clear conversion path and repeated primary call to action.')
+  }
 
   const ids = [...html.matchAll(/\sid=["']([^"']+)["']/gi)].map((match) => match[1])
   const duplicates = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))]

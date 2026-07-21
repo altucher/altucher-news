@@ -264,6 +264,7 @@ export default function ChatInterface() {
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const [buildIssue, setBuildIssue] = useState<string | null>(null)
   const requestStartedAtRef = useRef(0)
+  const currentBuildRequestRef = useRef('')
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -318,10 +319,34 @@ export default function ChatInterface() {
     }
   }
 
+  let artifact = extractProjectArtifact(getMessageText(finalMessage))
+  const containsProjectMarker = getMessageText(finalMessage).includes('BLUETAO_PROJECT_V1')
+  if (codeMode && containsProjectMarker && !artifact) {
+    try {
+      setReviewPhase('repairing')
+      const repairResponse = await fetch('/api/code-repair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responseText: getMessageText(finalMessage), instruction: currentBuildRequestRef.current }),
+      })
+      const repair = await repairResponse.json() as { code?: string; error?: string }
+      if (!repairResponse.ok || !repair.code) throw new Error(repair.error || 'Repair failed')
+      finalMessage = { ...finalMessage, parts: [{ type: 'text', text: `\`\`\`bluetao-project\n${repair.code}\n\`\`\`` }] }
+      artifact = extractProjectArtifact(getMessageText(finalMessage))
+      setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
+    } catch {
+      setReviewPhase('idle')
+      setBuildIssue('BlueTAO detected an incomplete build and could not safely repair it. Your prompt is preserved—click Retry build to try again.')
+      return
+    }
+  }
+
   if (!shouldReview) return
-  const artifact = extractProjectArtifact(getMessageText(finalMessage))
   const reviewHtml = artifact ? bundleProject(artifact) : extractHtmlDocument(getMessageText(finalMessage))
-  if (!reviewHtml) return
+  if (!reviewHtml) {
+    setBuildIssue('BlueTAO did not receive a complete website project. Your prompt is preserved—click Retry build to try again.')
+    return
+  }
   setPendingReviewMessage(finalMessage)
   setReviewPhase('validating')
   setReviewNotice(null)
@@ -977,9 +1002,11 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
- // Only Best Quality code builds enter the automatic validation + visual review gate.
- shouldReviewNextResponseRef.current = codeMode && buildQuality === 'best'
- editContextRef.current = codeMode && activeProject
+  // Every code build enters structural and visual review. Best Quality still
+  // uses the deeper generation model before this shared completion gate.
+  shouldReviewNextResponseRef.current = codeMode
+  currentBuildRequestRef.current = codeMode ? userMessage : ''
+  editContextRef.current = codeMode && activeProject
    ? { code: activeProject.code, instruction: userMessage, quality: buildQuality }
    : null
  setReviewNotice(null)
