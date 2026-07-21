@@ -1,5 +1,7 @@
+import { createHash, randomBytes } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { parseProject } from '@/lib/project-document'
 
 // Lazy init so builds don't fail when env vars are absent.
 function getSupabaseAdmin() {
@@ -61,7 +63,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'This page is too large to publish' }, { status: 413 })
     }
 
-    const html = toDocument(rawHtml)
+    let html = toDocument(rawHtml)
+    const project = typeof body.project === 'string' ? parseProject(body.project) : null
+    const projectId = typeof body.projectId === 'string' && /^[0-9a-f-]{36}$/i.test(body.projectId) ? body.projectId : null
+    const isAgent = project?.type === 'agent' && project.agent
+    const runtimeToken = isAgent ? randomBytes(32).toString('base64url') : null
+    if (runtimeToken) {
+      const config = JSON.stringify({ endpoint: '/api/agent/runtime', token: runtimeToken })
+      html = html.replace(/<\/head>/i, `<script>window.__BLUETAO_AGENT__=${config};</script></head>`)
+    }
     const title =
       (typeof body.title === 'string' && body.title.trim()
         ? body.title.trim().slice(0, 200)
@@ -74,7 +84,15 @@ export async function POST(req: Request) {
       const candidate = makeSlug(attempt < 3 ? 8 : 10)
       const { error } = await supabaseAdmin
         .from('published_sites')
-        .insert({ slug: candidate, title, html })
+        .insert({
+          slug: candidate,
+          title,
+          html,
+          project_id: projectId,
+          project_type: isAgent ? 'agent' : 'site',
+          agent_manifest: isAgent ? project.agent : null,
+          runtime_token_hash: runtimeToken ? createHash('sha256').update(runtimeToken).digest('hex') : null,
+        })
       if (!error) {
         slug = candidate
         break

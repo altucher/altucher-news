@@ -2,9 +2,19 @@ export const PROJECT_MARKER = 'BLUETAO_PROJECT_V1'
 export const PROJECT_PATHS = ['index.html', 'styles.css', 'app.js'] as const
 export type ProjectPath = (typeof PROJECT_PATHS)[number]
 
+export interface AgentManifest {
+  name: string
+  instructions: string
+  welcomeMessage: string
+  suggestedPrompts: string[]
+  tools: ['web_search']
+}
+
 export interface ProjectDocument {
   version: 1
   entry: 'index.html'
+  type?: 'site' | 'agent'
+  agent?: AgentManifest
   files: Record<ProjectPath, string>
 }
 
@@ -32,6 +42,13 @@ export function createProject(files: Partial<Record<ProjectPath, string>>): Proj
 export function validateProject(project: ProjectDocument): string[] {
   const errors: string[] = []
   if (project.version !== 1 || project.entry !== 'index.html') errors.push('Unsupported project format.')
+  if (project.type === 'agent') {
+    if (!project.agent || typeof project.agent.name !== 'string' || !project.agent.name.trim()) errors.push('Agent name is required.')
+    if (!project.agent || typeof project.agent.instructions !== 'string' || project.agent.instructions.trim().length < 20) errors.push('Agent instructions are required.')
+    if (!project.agent || typeof project.agent.welcomeMessage !== 'string') errors.push('Agent welcome message is required.')
+    if (!project.agent || !Array.isArray(project.agent.suggestedPrompts) || project.agent.suggestedPrompts.length > 6) errors.push('Invalid suggested prompts.')
+    if (!project.agent || !Array.isArray(project.agent.tools) || project.agent.tools.some((tool) => tool !== 'web_search')) errors.push('Unsupported agent tool.')
+  }
   for (const path of PROJECT_PATHS) {
     if (typeof project.files?.[path] !== 'string') errors.push(`Missing ${path}.`)
     else if (project.files[path].length > MAX_FILE_LENGTH) errors.push(`${path} is too large.`)
@@ -118,7 +135,11 @@ export function extractProjectArtifact(text: string): ProjectDocument | null {
 
 export function applyProjectPatches(project: ProjectDocument, patches: ProjectPatch[]): ProjectDocument {
   if (!Array.isArray(patches) || patches.length === 0) throw new Error('No patches supplied.')
-  const next = createProject({ ...project.files })
+  const next: ProjectDocument = {
+    ...createProject({ ...project.files }),
+    type: project.type,
+    agent: project.agent ? { ...project.agent, suggestedPrompts: [...project.agent.suggestedPrompts], tools: [...project.agent.tools] } : undefined,
+  }
   for (const patch of patches) {
     if (!PROJECT_PATHS.includes(patch.file) || !patch.find || patch.expectedOccurrences < 1) throw new Error('Invalid patch.')
     const count = next.files[patch.file].split(patch.find).length - 1

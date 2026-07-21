@@ -2110,6 +2110,7 @@ export default function ChatInterface() {
                             ttsLoadingId={ttsLoadingId}
                             onSaveCode={user ? handleSaveProject : undefined}
                             saveActive={!!activeProject}
+                            projectId={activeProject?.id}
                           />
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
@@ -2587,14 +2588,16 @@ function MessageBubble({
   ttsLoadingId,
   onSaveCode,
   saveActive,
-}: { 
+  projectId,
+  }: {
   message: UIMessage
   onSpeak?: (text: string, id: string) => void
   speakingId?: string | null
   ttsLoadingId?: string | null
-  onSaveCode?: (code: string, language: string) => Promise<void> | void
+  onSaveCode?: (code: string, language: string, publishedUrl?: string) => Promise<void> | void
   saveActive?: boolean
-}) {
+  projectId?: string
+  }) {
   const isUser = message.role === 'user'
   const parts = message.parts || []
 
@@ -2705,7 +2708,7 @@ function MessageBubble({
             const formatMarkdown = (text: string): React.ReactNode => {
               const project = extractProjectArtifact(text)
               if (project) {
-                return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} />
+                return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} projectId={projectId} />
               }
               if (extractPatchArtifact(text)) {
                 return <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">Applying targeted project changes…</div>
