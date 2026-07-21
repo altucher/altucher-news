@@ -473,9 +473,15 @@ export async function POST(req: Request) {
     //      "best"  -> Kimi K2.6 (deeper reasoning, more complete/polished, slower)
     //    Default is "quick" so exploratory builds stay fast.
     //  - Normal chat is short, where Kimi K2.5 runs ~2x faster than K2.6.
+    // Agent builds require a large, strictly valid JSON project document. Qwen
+    // has proven substantially more reliable for this structured first pass;
+    // Best Quality still runs the automatic visual validation/repair gate after it.
+    const requestText = getLastUserMessage(messages)
+    const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
+
     // An explicit `model` from the client always overrides these defaults.
     const defaultModel = codeMode
-      ? (buildQuality === 'best' ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
+      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
       : 'moonshotai/Kimi-K2.5-TEE'
     const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
 
