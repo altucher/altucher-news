@@ -17,6 +17,7 @@ import { CodeBlock } from '@/components/code-block'
 import { CodeTemplates } from '@/components/code-templates'
 import Link from 'next/link'
 import { extractHtmlDocument } from '@/lib/code-validation'
+import { bundleProject, extractPatchArtifact, extractProjectArtifact, normalizeProject, serializeProject } from '@/lib/project-document'
 
 function replaceHtmlDocument(text: string, originalHtml: string, reviewedHtml: string) {
   return text.replace(originalHtml, reviewedHtml)
@@ -255,8 +256,9 @@ export default function ChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
   const miningTriggeredRef = useRef(false)
-  const shouldReviewNextResponseRef = useRef(false)
-  const reviewedMessageIdsRef = useRef(new Set<string>())
+ const shouldReviewNextResponseRef = useRef(false)
+ const editContextRef = useRef<{ code: string; instruction: string; quality: 'quick' | 'best' } | null>(null)
+ const reviewedMessageIdsRef = useRef(new Set<string>())
   const [pendingReviewMessage, setPendingReviewMessage] = useState<UIMessage | null>(null)
   const [reviewPhase, setReviewPhase] = useState<'idle' | 'validating' | 'reviewing' | 'repairing' | 'finalizing'>('idle')
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
@@ -276,15 +278,40 @@ export default function ChatInterface() {
         fetchUsage() // Refresh usage data
       }
     },
-    onFinish: ({ message, isError, isAbort }) => {
-      const shouldReview = shouldReviewNextResponseRef.current
-      shouldReviewNextResponseRef.current = false
-      if (!shouldReview || isError || isAbort || message.role !== 'assistant') return
-      if (!extractHtmlDocument(getMessageText(message))) return
-      setPendingReviewMessage(message)
-      setReviewPhase('validating')
-      setReviewNotice(null)
-    },
+  onFinish: async ({ message, isError, isAbort }) => {
+  const shouldReview = shouldReviewNextResponseRef.current
+  shouldReviewNextResponseRef.current = false
+  if (isError || isAbort || message.role !== 'assistant') return
+
+  let finalMessage = message
+  const responseText = getMessageText(message)
+  const editContext = editContextRef.current
+  editContextRef.current = null
+  if (editContext && (extractPatchArtifact(responseText) || extractProjectArtifact(responseText))) {
+    try {
+      const response = await fetch('/api/code-patch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalCode: editContext.code, responseText, instruction: editContext.instruction, buildQuality: editContext.quality }),
+      })
+      const data = await response.json()
+      if (response.ok && data.code) {
+        finalMessage = { ...message, parts: [{ type: 'text', text: `\`\`\`bluetao-project\n${data.code}\n\`\`\`` }] }
+        setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
+      }
+    } catch {
+      // Preserve the original streamed response when resolution is unavailable.
+    }
+  }
+
+  if (!shouldReview) return
+  const artifact = extractProjectArtifact(getMessageText(finalMessage))
+  const reviewHtml = artifact ? bundleProject(artifact) : extractHtmlDocument(getMessageText(finalMessage))
+  if (!reviewHtml) return
+  setPendingReviewMessage(finalMessage)
+  setReviewPhase('validating')
+  setReviewNotice(null)
+  },
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
@@ -297,7 +324,8 @@ export default function ChatInterface() {
 
     const reviewBuild = async () => {
       const originalText = getMessageText(pendingReviewMessage)
-      const originalHtml = extractHtmlDocument(originalText)
+      const originalProject = extractProjectArtifact(originalText)
+      const originalHtml = originalProject ? bundleProject(originalProject) : extractHtmlDocument(originalText)
       if (!originalHtml) {
         setReviewPhase('idle')
         setPendingReviewMessage(null)
@@ -325,7 +353,9 @@ export default function ChatInterface() {
         await new Promise((resolve) => setTimeout(resolve, 400))
 
         if (result.status !== 'fallback' && result.html) {
-          const reviewedText = replaceHtmlDocument(originalText, originalHtml, result.html)
+          const reviewedText = originalProject
+            ? `\`\`\`bluetao-project\n${serializeProject(normalizeProject(result.html))}\n\`\`\``
+            : replaceHtmlDocument(originalText, originalHtml, result.html)
           setMessages((current) => current.map((message) => message.id === pendingReviewMessage.id
             ? { ...message, parts: message.parts.map((part) => part.type === 'text' ? { ...part, text: reviewedText } : part) }
             : message))
@@ -910,9 +940,12 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
-    // Only Best Quality code builds enter the automatic validation + visual review gate.
-    shouldReviewNextResponseRef.current = codeMode && buildQuality === 'best'
-    setReviewNotice(null)
+ // Only Best Quality code builds enter the automatic validation + visual review gate.
+ shouldReviewNextResponseRef.current = codeMode && buildQuality === 'best'
+ editContextRef.current = codeMode && activeProject
+   ? { code: activeProject.code, instruction: userMessage, quality: buildQuality }
+   : null
+ setReviewNotice(null)
     sendMessage(
       { text: messageToSend },
       { body: { codeMode, buildQuality, editingCode: activeProject?.code ?? null } }
@@ -2670,6 +2703,13 @@ function MessageBubble({
             
             // Parse markdown and render formatted text
             const formatMarkdown = (text: string): React.ReactNode => {
+              const project = extractProjectArtifact(text)
+              if (project) {
+                return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} />
+              }
+              if (extractPatchArtifact(text)) {
+                return <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">Applying targeted project changes…</div>
+              }
               // Handle fenced code blocks (```lang ... ```) first, rendering them
               // with the CodeBlock component. Non-code text is passed back through
               // this same formatter (safe: those segments contain no fences).

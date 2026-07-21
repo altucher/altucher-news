@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, Copy, Download, ExternalLink, Save, Loader2, Rocket, Globe, Link2 } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, Save, Loader2, Rocket, Globe, Link2, FileCode2 } from 'lucide-react'
+import { bundleProject, normalizeProject, parseProject, PROJECT_PATHS, serializeProject, type ProjectPath } from '@/lib/project-document'
 
 interface CodeBlockProps {
   code: string
@@ -21,7 +22,7 @@ interface CodeBlockProps {
 // Decide whether a block is previewable web code (HTML we can render live).
 function isPreviewable(code: string, language?: string): boolean {
   const lang = (language || '').toLowerCase()
-  if (lang === 'html' || lang === 'htm') return true
+  if (lang === 'html' || lang === 'htm' || lang === 'bluetao-project') return true
   // Also catch full HTML documents even if the model omitted the language tag.
   const head = code.trimStart().slice(0, 400).toLowerCase()
   return head.includes('<!doctype html') || head.includes('<html')
@@ -55,13 +56,19 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [activeFile, setActiveFile] = useState<ProjectPath>('index.html')
+  const project = useMemo(() => parseProject(code), [code])
   const previewable = useMemo(() => isPreviewable(code, language), [code, language])
+  const displayedCode = project ? project.files[activeFile] : code
 
-  const doc = useMemo(() => (previewable ? toDocument(code) : ''), [previewable, code])
+  const doc = useMemo(() => {
+    if (!previewable) return ''
+    return project ? bundleProject(project) : toDocument(code)
+  }, [previewable, project, code])
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code)
+      await navigator.clipboard.writeText(displayedCode)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch {
@@ -75,6 +82,18 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
     const a = document.createElement('a')
     a.href = url
     a.download = 'index.html'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
+
+  const handleProjectDownload = () => {
+    if (!project) return
+    const manifest = JSON.stringify(project, null, 2)
+    const blob = new Blob([manifest], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'bluetao-project.json'
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 2000)
   }
@@ -223,12 +242,12 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
               </button>
               <button
                 type="button"
-                onClick={handleDownload}
+                onClick={project ? handleProjectDownload : handleDownload}
                 className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
-                aria-label="Download as an HTML file"
+                aria-label={project ? 'Download the multi-file project' : 'Download as an HTML file'}
               >
                 <Download className="h-3.5 w-3.5" />
-                Download
+                {project ? 'Project' : 'Download'}
               </button>
             </>
           )}
@@ -311,8 +330,25 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming }: Co
           Building your app… press &quot;Open&quot; to view it when it&apos;s ready
         </div>
       )}
-      <pre className="max-h-96 overflow-auto p-4 text-sm leading-relaxed">
-        <code className="font-mono">{code}</code>
+      {project && (
+        <div className="flex overflow-x-auto border-b border-zinc-800 bg-zinc-950 px-2" role="tablist" aria-label="Project files">
+          {PROJECT_PATHS.map((path) => (
+            <button
+              key={path}
+              type="button"
+              role="tab"
+              aria-selected={activeFile === path}
+              onClick={() => setActiveFile(path)}
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${activeFile === path ? 'border-sky-400 text-sky-300' : 'border-transparent text-zinc-500 hover:text-zinc-200'}`}
+            >
+              <FileCode2 className="h-3.5 w-3.5" />
+              {path}
+            </button>
+          ))}
+        </div>
+      )}
+      <pre className="max-h-96 overflow-auto p-4 text-sm leading-relaxed" role={project ? 'tabpanel' : undefined}>
+        <code className="font-mono">{displayedCode}</code>
       </pre>
     </div>
   )

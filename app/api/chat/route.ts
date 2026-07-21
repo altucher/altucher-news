@@ -8,6 +8,7 @@ import type { UIMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
 import { stripKimiToolTokens } from '@/lib/strip-kimi-tokens'
+import { normalizeProject, serializeProject } from '@/lib/project-document'
 
 // Chutes streams tokens slowly and routes to variable-speed instances, so a
 // long code generation can run well past 5 minutes. 300s was cutting some
@@ -563,7 +564,7 @@ You are a senior software engineer helping people build things. Many of your use
 
 RULES:
 - ALWAYS put code inside fenced markdown code blocks with the correct language tag, e.g. \`\`\`html, \`\`\`ts, \`\`\`python. This is required so the UI can render, preview, and offer copy/download buttons.
-- WHEN THE USER ASKS TO BUILD A WEBSITE, PAGE, APP, GAME, LANDING PAGE, TOOL, OR ANY VISUAL/INTERACTIVE UI: output ONE complete, self-contained HTML file in a single \`\`\`html block. Put all CSS inside a <style> tag and all JavaScript inside a <script> tag in that same file. Start with <!DOCTYPE html>. Do NOT split it into multiple files and do NOT rely on external build tools. This lets the user see it live, download it as one file, and publish it anywhere. You may load libraries/fonts from a CDN via <script>/<link> tags.
+- WHEN THE USER ASKS TO BUILD A WEBSITE, PAGE, APP, GAME, LANDING PAGE, TOOL, OR ANY VISUAL/INTERACTIVE UI: output a BlueTAO three-file project in ONE fenced \`\`\`bluetao-project block. The block must contain exactly the marker BLUETAO_PROJECT_V1 followed by strict JSON with this shape: {"version":1,"entry":"index.html","files":{"index.html":"...","styles.css":"...","app.js":"..."}}. Put markup in index.html, all authored CSS in styles.css, and all authored JavaScript in app.js. index.html MUST link href="styles.css" and load src="app.js". Do not add other local file paths or external build tools. This lets the user inspect files separately while BlueTAO bundles them for preview and publishing. You may load libraries/fonts from a CDN.
 - DESIGN QUALITY IS A TOP PRIORITY — make every build look like it was crafted by a senior product designer, not a generic template. Follow the DESIGN IS NON-NEGOTIABLE rules below.
 - After a build, add ONE short, plain-English sentence telling the user they can press "Open" to view it live, "Download" to save it as index.html, or "Copy" to reuse it. Then briefly say how to change it (e.g. "just tell me what to add or change").
 - For non-website coding help (scripts, functions, debugging, other languages), write clean idiomatic code in the appropriate language with a brief explanation.
@@ -652,13 +653,14 @@ present and composed (not a lone centered card)? Does it look designed, not defa
       // If the user is continuing a saved project, give the model the current
       // code as the starting point so it EDITS rather than rebuilding blindly.
       if (editingCode && editingCode.trim().length > 0) {
+        const currentProject = normalizeProject(editingCode)
         systemPrompt += `
 
-YOU ARE EDITING AN EXISTING PROJECT. Below is the user's current saved code. Apply the requested change to THIS code and return the ENTIRE updated file in one \`\`\`html block (never a fragment or a diff). Preserve everything the user did not ask to change.
+YOU ARE EDITING AN EXISTING THREE-FILE PROJECT. Make the smallest safe change and preserve every unrelated byte/file. Return ONE fenced \`\`\`bluetao-patch block containing exactly BLUETAO_PATCH_V1 followed by strict JSON: {"patches":[{"file":"index.html|styles.css|app.js","find":"exact existing text","replace":"replacement text","expectedOccurrences":1}]}. Use exact text from the current project; never use line numbers, ellipses, regex, invented paths, or a full project artifact. Each find string must match exactly the stated number of times. If a surgical patch is genuinely impossible, return a complete BLUETAO_PROJECT_V1 project instead.
 
-CURRENT PROJECT CODE:
-\`\`\`html
-${editingCode}
+CURRENT PROJECT:
+\`\`\`bluetao-project
+${serializeProject(currentProject)}
 \`\`\``
 
         // Best Quality handoff: when the user upgrades a fast Quick Build to

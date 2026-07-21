@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { parseProject, serializeProject } from '@/lib/project-document'
 
 // GET /api/projects/[projectId] - Get a project with its full code + version history
 export async function GET(
@@ -65,7 +66,9 @@ export async function PATCH(
 
   // If new code is provided, snapshot a new version
   if (typeof code === 'string' && code.trim().length > 0) {
-    updates.current_code = code
+    const parsedProject = parseProject(code)
+    const storedCode = parsedProject ? serializeProject(parsedProject) : code
+    updates.current_code = storedCode
 
     const { data: lastVersion } = await supabase
       .from('project_versions')
@@ -82,7 +85,7 @@ export async function PATCH(
       .insert({
         project_id: projectId,
         user_id: user.id,
-        code,
+        code: storedCode,
         label: label?.trim() || `Version ${nextVersion}`,
         version_number: nextVersion,
       })
