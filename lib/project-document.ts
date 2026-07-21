@@ -1,4 +1,5 @@
 export const PROJECT_MARKER = 'BLUETAO_PROJECT_V1'
+export const AGENT_MARKER = 'BLUETAO_AGENT_V1'
 export const PROJECT_PATHS = ['index.html', 'styles.css', 'app.js'] as const
 export type ProjectPath = (typeof PROJECT_PATHS)[number]
 
@@ -26,6 +27,42 @@ export interface ProjectPatch {
 }
 
 const MAX_FILE_LENGTH = 1_000_000
+const MAX_AGENT_NAME_LENGTH = 100
+const MAX_AGENT_INSTRUCTIONS_LENGTH = 12_000
+const MAX_AGENT_WELCOME_LENGTH = 1_000
+const MAX_SUGGESTED_PROMPT_LENGTH = 300
+
+function normalizeAgentManifest(value: unknown): AgentManifest | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Partial<AgentManifest>
+  if (typeof candidate.name !== 'string' || !candidate.name.trim()) return null
+  if (typeof candidate.instructions !== 'string' || candidate.instructions.trim().length < 20) return null
+  if (typeof candidate.welcomeMessage !== 'string' || !candidate.welcomeMessage.trim()) return null
+  if (!Array.isArray(candidate.suggestedPrompts) || candidate.suggestedPrompts.length > 6) return null
+  if (candidate.suggestedPrompts.some((prompt) => typeof prompt !== 'string' || !prompt.trim() || prompt.length > MAX_SUGGESTED_PROMPT_LENGTH)) return null
+  if (!Array.isArray(candidate.tools) || candidate.tools.length !== 1 || candidate.tools[0] !== 'web_search') return null
+  if (candidate.name.length > MAX_AGENT_NAME_LENGTH || candidate.instructions.length > MAX_AGENT_INSTRUCTIONS_LENGTH || candidate.welcomeMessage.length > MAX_AGENT_WELCOME_LENGTH) return null
+
+  return {
+    name: candidate.name.trim(),
+    instructions: candidate.instructions.trim(),
+    welcomeMessage: candidate.welcomeMessage.trim(),
+    suggestedPrompts: candidate.suggestedPrompts.map((prompt) => prompt.trim()),
+    tools: ['web_search'],
+  }
+}
+
+export function extractAgentManifest(value: string): AgentManifest | null {
+  const markerIndex = value.indexOf(AGENT_MARKER)
+  if (markerIndex < 0) return null
+  const json = extractJsonObject(value.slice(markerIndex + AGENT_MARKER.length))
+  if (!json) return null
+  try {
+    return normalizeAgentManifest(JSON.parse(json))
+  } catch {
+    return null
+  }
+}
 
 function decodeAccidentallyEscapedSource(value: string): string {
   const escapedNewlines = (value.match(/\\n/g) || []).length
@@ -62,10 +99,12 @@ function hasBalancedDelimiters(value: string, open: string, close: string): bool
 export function normalizeGeneratedProject(project: ProjectDocument): ProjectDocument {
   const files = Object.fromEntries(PROJECT_PATHS.map((path) => [path, decodeAccidentallyEscapedSource(project.files?.[path] || '')])) as Record<ProjectPath, string>
   files['index.html'] = deduplicateLocalAssets(files['index.html'])
+  const agent = normalizeAgentManifest(project.agent)
   return {
     ...project,
+    type: project.type === 'agent' && agent ? 'agent' : 'site',
     files,
-    agent: project.agent ? { ...project.agent, suggestedPrompts: [...project.agent.suggestedPrompts], tools: [...project.agent.tools] } : undefined,
+    agent: agent || undefined,
   }
 }
 
@@ -144,7 +183,7 @@ export function validateInteractiveBuild(project: ProjectDocument, instruction: 
 export function serializeProject(project: ProjectDocument): string {
   const errors = validateProject(project)
   if (errors.length) throw new Error(errors.join(' '))
-  return [
+  const sections = [
     PROJECT_MARKER,
     '=== index.html ===',
     project.files['index.html'],
@@ -152,7 +191,11 @@ export function serializeProject(project: ProjectDocument): string {
     project.files['styles.css'],
     '=== app.js ===',
     project.files['app.js'],
-  ].join('\n')
+  ]
+  if (project.type === 'agent' && project.agent) {
+    sections.push(AGENT_MARKER, JSON.stringify(project.agent))
+  }
+  return sections.join('\n')
 }
 
 function extractJsonObject(value: string): string | null {
@@ -185,13 +228,21 @@ function parseRawFileProject(value: string): ProjectDocument | null {
   const positions = labels.map((label) => value.indexOf(label))
   if (positions.some((position) => position < 0) || positions[0] >= positions[1] || positions[1] >= positions[2]) return null
 
+  const manifest = extractAgentManifest(value)
+  const manifestIndex = value.indexOf(AGENT_MARKER)
+  if (manifestIndex >= 0 && !manifest) return null
   const files = {} as Record<ProjectPath, string>
   for (let index = 0; index < PROJECT_PATHS.length; index += 1) {
     const start = positions[index] + labels[index].length
-    const end = index + 1 < positions.length ? positions[index + 1] : value.length
+    const nextFile = index + 1 < positions.length ? positions[index + 1] : value.length
+    const end = index === PROJECT_PATHS.length - 1 && manifestIndex > start ? manifestIndex : nextFile
     files[PROJECT_PATHS[index]] = value.slice(start, end).replace(/^\s*\n/, '').replace(/\n?```[\s\S]*$/, '').trimEnd()
   }
-  const project = normalizeGeneratedProject(createProject(files))
+  const project = normalizeGeneratedProject({
+    ...createProject(files),
+    type: manifest ? 'agent' : 'site',
+    agent: manifest || undefined,
+  })
   return validateProject(project).length ? null : project
 }
 
@@ -274,11 +325,17 @@ export function extractProjectArtifact(text: string): ProjectDocument | null {
   // JSON string; treating that fragment as the whole build creates blank or
   // broken previews instead of allowing the repair path to run.
   if (text.includes(PROJECT_MARKER)) return null
+  const manifest = extractAgentManifest(text)
+  if (text.includes(AGENT_MARKER) && !manifest) return null
   const htmlStart = text.search(/<!doctype html|<html[\s>]/i)
   if (htmlStart >= 0) {
     const endMatch = text.slice(htmlStart).match(/<\/html\s*>/i)
     if (endMatch) {
       const project = legacyHtmlToProject(text.slice(htmlStart, htmlStart + (endMatch.index || 0) + endMatch[0].length))
+      if (manifest) {
+        project.type = 'agent'
+        project.agent = manifest
+      }
       return validateProject(project).length ? null : project
     }
   }
