@@ -602,10 +602,22 @@ LAYOUT
 - Consistent spacing scale; generous whitespace; mobile-first, then enhance for wider screens.
 
 IMAGERY (critical — this is the #1 thing that makes pages feel real)
-- Do NOT ship a page that is all solid colors and empty space at the top.
-- Include real imagery in hero/section areas. Use the provided image URLs when available;
-  otherwise use tasteful, relevant stock imagery. Never leave decorative blobs or gradient
-  circles as filler, and never use emojis as icons — use an icon set (e.g. Lucide via CDN).
+- Do NOT ship a page that is all solid colors and empty space at the top. Real pages have photos.
+- Use these EXACT image sources — they are verified to load. Do NOT invent other image URLs:
+  - TOPICAL PHOTOS (heroes, sections, cards): https://loremflickr.com/<width>/<height>/<keywords>?lock=<n>
+    • <keywords> = comma-separated subject terms, e.g. bakery,bread or law,office or yoga,studio
+    • <n> = any integer. Use a DIFFERENT lock number for each image so they differ, and keep a
+      given image's lock fixed so it stays the same on reload.
+    • Example hero image: https://loremflickr.com/1600/900/coffee,shop?lock=7
+  - ABSTRACT / TEXTURE / NEUTRAL backgrounds (when no real subject photo fits):
+    https://picsum.photos/seed/<uniqueword>/<width>/<height>
+  - PEOPLE / TESTIMONIAL AVATARS: https://i.pravatar.cc/150?img=<1-70> (realistic faces)
+- NEVER use source.unsplash.com — it is DEAD and returns errors. Never guess images.unsplash.com photo IDs.
+- On every <img>: set width/height (or aspect-ratio) + object-fit: cover so images never stretch
+  or cause layout shift, and include descriptive alt text.
+- Never leave decorative blobs or gradient circles as filler, and never use emojis as icons —
+  use an icon set: Lucide via CDN (<script src="https://unpkg.com/lucide@latest"></script>, then
+  call lucide.createIcons() and use <i data-lucide="name"></i>).
 
 EMOTIONAL FIT
 - Match the mood to the subject. Sensitive topics (wills, health, grief) should feel calm,
