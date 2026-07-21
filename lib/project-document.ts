@@ -144,7 +144,15 @@ export function validateInteractiveBuild(project: ProjectDocument, instruction: 
 export function serializeProject(project: ProjectDocument): string {
   const errors = validateProject(project)
   if (errors.length) throw new Error(errors.join(' '))
-  return `${PROJECT_MARKER}\n${JSON.stringify(project)}`
+  return [
+    PROJECT_MARKER,
+    '=== index.html ===',
+    project.files['index.html'],
+    '=== styles.css ===',
+    project.files['styles.css'],
+    '=== app.js ===',
+    project.files['app.js'],
+  ].join('\n')
 }
 
 function extractJsonObject(value: string): string | null {

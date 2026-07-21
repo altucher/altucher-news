@@ -659,19 +659,19 @@ COMPONENT PATTERNS (build these properly — they are what separate a real site 
 - FOOTER: multi-column (brand blurb, link groups, contact/social), a divider, and a copyright line — never a single bare line.
 - BUTTONS & INTERACTIVES: every clickable element needs clear default/hover/focus-visible states and a 150-250ms transition. Buttons use the kit's primary/accent with readable text.
 
-Before finishing, mentally review the page: Did you pick a fitting design kit and apply it via
-CSS variables? Is there real type hierarchy? Is there imagery? Are nav/hero/sections/footer all
-present and composed (not a lone centered card)? Does it look designed, not defaulted? If not, revise.
+Before finishing, inspect the actual HTML and CSS you wrote—not just your intent. Confirm all of these are present in code: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. If any item is missing, revise the project before closing the artifact. A technically valid but visually generic page has failed this review.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
 
       if (buildQuality === 'quick' && !/\b(game|space\s*invaders?|shooter|arcade|pong|snake|tetris|platformer)\b/i.test(lastMessage)) {
         systemPrompt += `
 
 QUICK BUILD DELIVERY CONTRACT:
-- Deliver a complete, attractive first version fast. Keep the project compact enough to finish in one response.
-- For a simple website, use only the sections the user requested plus a concise nav and footer. Do not add testimonials, sliders, secondary galleries, decorative copy, or extra feature sections unless requested.
-- Keep HTML semantic and concise, CSS purposeful, and JavaScript minimal. Use at most one hero image, omit code comments, and avoid repeated selectors. Aim for 120-160 lines total across all three files.
-- Complete all three raw-file sections and close the project fence before any explanation. Never JSON-encode the files. A smaller finished site is better than a larger truncated site. Do not narrate or explain until the closing project fence has been emitted.`
+- Deliver a complete, visually distinctive first version fast. Speed may reduce decorative iteration, but it must NEVER override the DESIGN IS NON-NEGOTIABLE rules above.
+- Pick one fitting design kit and fully express it through CSS variables, a meaningful 3-5 color palette, heading/body typography, a composed hero, and consistent spacing. Do not fall back to a generic centered card or default dark SaaS template.
+- For a simple website, include the requested content plus a polished responsive nav, a real topical hero image, enough visual structure to make the subject feel credible, and a complete multi-column footer. Add only supporting sections that materially improve the story; limit repetition, not design quality.
+- Before closing the artifact, perform a lightweight design-compliance pass: verify CSS variables; readable contrast; real heading/body hierarchy; asymmetric or otherwise intentionally composed hero; working topical imagery with dimensions, object-fit, and alt text; responsive nav and mobile layout; footer; and hover/focus-visible states. Revise any missing item before returning.
+- Keep HTML semantic, CSS purposeful, and JavaScript focused on required interactions. Omit code comments and duplicated rules, but do not impose a line count or image cap.
+- Complete all three raw-file sections and close the project fence before any explanation. Never JSON-encode the files. A finished, designed site is better than a larger truncated site. Do not narrate or explain until the closing project fence has been emitted.`
       }
 
       // If the user is continuing a saved project, give the model the current

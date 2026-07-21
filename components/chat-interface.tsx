@@ -2865,14 +2865,10 @@ function MessageBubble({
             
             // Parse markdown and render formatted text
             const formatMarkdown = (text: string): React.ReactNode => {
-              const project = extractProjectArtifact(text)
-              if (project) {
-                try {
-                  return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} projectId={projectId} />
-                } catch {
-                  return <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">Checking and repairing the generated project…</div>
-                }
-              }
+  const project = extractProjectArtifact(text)
+  if (project) {
+  return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} projectId={projectId} />
+  }
               if (extractPatchArtifact(text)) {
                 return <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">Applying targeted project changes…</div>
               }
