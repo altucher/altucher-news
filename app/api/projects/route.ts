@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { parseProject, serializeProject } from '@/lib/project-document'
 
 // GET /api/projects - List all saved projects for the authenticated user
 export async function GET() {
@@ -37,12 +38,14 @@ export async function POST(req: Request) {
   if (typeof code !== 'string' || code.trim().length === 0) {
     return NextResponse.json({ error: 'Code is required' }, { status: 400 })
   }
+  const parsedProject = parseProject(code)
+  const storedCode = parsedProject ? serializeProject(parsedProject) : code
 
   const { data: project, error } = await supabase
     .from('projects')
     .insert({
       title: title?.trim() || 'Untitled project',
-      current_code: code,
+      current_code: storedCode,
       language: language || 'html',
       published_url: typeof publishedUrl === 'string' && publishedUrl.trim() ? publishedUrl.trim() : null,
       user_id: user.id,
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
     .insert({
       project_id: project.id,
       user_id: user.id,
-      code,
+      code: storedCode,
       label: 'Initial version',
       version_number: 1,
     })
