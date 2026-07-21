@@ -265,6 +265,7 @@ export default function ChatInterface() {
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const [buildIssue, setBuildIssue] = useState<string | null>(null)
   const requestStartedAtRef = useRef(0)
+  const repairAbortControllerRef = useRef<AbortController | null>(null)
   const currentBuildRequestRef = useRef('')
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -336,6 +337,9 @@ export default function ChatInterface() {
       setReviewPhase(repairIssues.length ? 'validating' : 'repairing')
       if (repairIssues.length) await new Promise((resolve) => setTimeout(resolve, 250))
       setReviewPhase('repairing')
+      const repairController = new AbortController()
+      repairAbortControllerRef.current = repairController
+      const repairTimeout = window.setTimeout(() => repairController.abort(), 30_000)
       const repairResponse = await fetch('/api/code-repair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -343,6 +347,10 @@ export default function ChatInterface() {
           responseText: getMessageText(finalMessage),
           instruction: `${currentBuildRequestRef.current}\n\nQUALITY ISSUES TO FIX:\n${repairIssues.join('\n')}`,
         }),
+        signal: repairController.signal,
+      }).finally(() => {
+        window.clearTimeout(repairTimeout)
+        if (repairAbortControllerRef.current === repairController) repairAbortControllerRef.current = null
       })
       const repair = await repairResponse.json() as { code?: string; error?: string }
       if (!repairResponse.ok || !repair.code) throw new Error(repair.error || 'Repair failed')
@@ -377,6 +385,12 @@ export default function ChatInterface() {
 
   const isLoading = status === 'streaming' || status === 'submitted'
   const isReviewing = reviewPhase !== 'idle'
+  const handleStopGeneration = () => {
+    repairAbortControllerRef.current?.abort()
+    repairAbortControllerRef.current = null
+    setReviewPhase('idle')
+    stop()
+  }
 
   // Keep the browser alive long enough for the server to time out a stalled
   // primary provider and run its failover chain. This guard only stops the
@@ -387,11 +401,14 @@ export default function ChatInterface() {
       return
     }
     if (!requestStartedAtRef.current) return
-    const timeoutMs = codeMode ? (buildQuality === 'best' ? 12 * 60_000 : 6 * 60_000) : 8 * 60_000
+    const timeoutMs = codeMode ? (buildQuality === 'best' ? 12 * 60_000 : 3 * 60_000) : 8 * 60_000
     const timeout = window.setTimeout(() => {
+      repairAbortControllerRef.current?.abort()
+      repairAbortControllerRef.current = null
+      setReviewPhase('idle')
       stop()
       setBuildIssue(codeMode
-        ? 'This build stalled at the AI provider and was stopped. Your prompt is preserved below—click Retry build to run it again.'
+        ? 'Quick Build exceeded three minutes and was stopped instead of leaving you waiting. Your prompt is preserved below—click Retry build to run it again.'
         : 'This response stalled at the AI provider and was stopped. Please retry.')
     }, Math.max(0, timeoutMs - (Date.now() - requestStartedAtRef.current)))
     return () => window.clearTimeout(timeout)
@@ -1848,8 +1865,21 @@ export default function ChatInterface() {
                       </button>
                     </div>
                   )}
-                  <form onSubmit={handleSubmit} className="relative">
-                    <div className="glass-panel relative flex items-center rounded-full transition-all">
+ {isLoading && (
+  <div role="status" aria-live="polite" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/60">
+   <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
+    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+    <span className="truncate">{status === 'submitted' ? 'Starting Quick Build…' : 'Receiving your website…'}</span>
+    <span className="shrink-0 text-xs tabular-nums text-sky-700 dark:text-sky-300">{elapsedSeconds}s</span>
+   </div>
+   <Button type="button" size="sm" variant="outline" onClick={handleStopGeneration} className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10">
+    <Square className="h-3.5 w-3.5 fill-current" />
+    Stop
+   </Button>
+  </div>
+ )}
+ <form onSubmit={handleSubmit} className="relative">
+  <div className="glass-panel relative flex items-center rounded-full transition-all">
                       <Button
                         type="button"
                         size="icon"
@@ -2400,18 +2430,6 @@ export default function ChatInterface() {
                   </Button>
                 </div>
               )}
-              {/* Stop button - visible during entire loading/streaming phase */}
-              {isLoading && (
-                <div className="flex justify-center mt-4">
-                  <button
-                    onClick={() => stop()}
-                    className="px-4 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-600 rounded-full transition-colors flex items-center gap-2 shadow-sm"
-                  >
-                    <Square className="w-4 h-4 fill-current" />
-                    Stop generating
-                  </button>
-                </div>
-              )}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
@@ -2423,6 +2441,21 @@ export default function ChatInterface() {
                 {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic || generatedVideos.length > 0 || generatingVideo) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
             <div className="max-w-3xl mx-auto px-4 py-4">
+              {isLoading && (
+                <div role="status" aria-live="polite" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/60">
+                  <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                    <span className="truncate">
+                      {status === 'submitted' ? 'Starting Quick Build…' : 'Receiving your website…'}
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-sky-700 dark:text-sky-300">{elapsedSeconds}s</span>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={handleStopGeneration} className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10">
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                    Stop
+                  </Button>
+                </div>
+              )}
               {/* Mode switcher: Chat vs. BlueTAO Code */}
               <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
                 <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} compact />

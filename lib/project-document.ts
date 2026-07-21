@@ -29,7 +29,6 @@ const MAX_FILE_LENGTH = 1_000_000
 
 function decodeAccidentallyEscapedSource(value: string): string {
   const escapedNewlines = (value.match(/\\n/g) || []).length
-  const escapedQuotes = (value.match(/\\["']/g) || []).length
   const realNewlines = (value.match(/\n/g) || []).length
   if (escapedNewlines < 3 || realNewlines > 2) return value
 

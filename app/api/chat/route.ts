@@ -486,7 +486,9 @@ export async function POST(req: Request) {
     const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
-    const providerTimeoutMs = codeMode && buildQuality === 'best' ? 10 * 60_000 : 3 * 60_000
+    const providerTimeoutMs = codeMode
+    ? (buildQuality === 'best' ? 10 * 60_000 : 165_000)
+    : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
     // Create a Chutes client
@@ -662,6 +664,16 @@ CSS variables? Is there real type hierarchy? Is there imagery? Are nav/hero/sect
 present and composed (not a lone centered card)? Does it look designed, not defaulted? If not, revise.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
 
+      if (buildQuality === 'quick' && !/\b(game|space\s*invaders?|shooter|arcade|pong|snake|tetris|platformer)\b/i.test(lastMessage)) {
+        systemPrompt += `
+
+QUICK BUILD DELIVERY CONTRACT:
+- Deliver a complete, attractive first version fast. Keep the project compact enough to finish in one response.
+- For a simple website, use only the sections the user requested plus a concise nav and footer. Do not add testimonials, sliders, secondary galleries, decorative copy, or extra feature sections unless requested.
+- Keep HTML semantic and concise, CSS purposeful, and JavaScript minimal. Use at most one hero image, omit code comments, and avoid repeated selectors. Aim for 120-160 lines total across all three files.
+- Complete and close the strict JSON artifact before any explanation. A smaller finished site is better than a larger truncated site. Do not narrate or explain until the closing project fence has been emitted.`
+      }
+
       // If the user is continuing a saved project, give the model the current
       // code as the starting point so it EDITS rather than rebuilding blindly.
       if (editingCode && editingCode.trim().length > 0) {
@@ -809,7 +821,10 @@ When answering questions, refer to this document content. You can summarize it, 
             system: systemPrompt + fileContextSection,
             messages: modelMessages,
             maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
-            abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(3 * 60_000)]),
+            abortSignal: AbortSignal.any([
+              req.signal,
+              AbortSignal.timeout(codeMode && buildQuality === 'quick' ? 75_000 : 3 * 60_000),
+            ]),
             experimental_transform: stripKimiToolTokens(),
           })
 
@@ -861,6 +876,7 @@ When answering questions, refer to this document content. You can summarize it, 
           messages: fallbackModelMessages,
           // gpt-4o-mini caps output at 16,384 tokens, so stay under that.
           maxOutputTokens: codeMode ? 16000 : MAX_OUTPUT_TOKENS_DEFAULT,
+          abortSignal: req.signal,
         })
         
         // Extract location from headers
