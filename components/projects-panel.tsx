@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, FolderCode, Trash2, Loader2, History, ArrowLeft, RotateCcw, Pencil, Globe } from 'lucide-react'
+import { X, FolderCode, Trash2, Loader2, History, ArrowLeft, RotateCcw, Pencil, Globe, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Project {
   id: string
   title: string
   language: string
+  project_type: 'site' | 'agent'
   published_url: string | null
+  marketplace_listed: boolean
   created_at: string
   updated_at: string
 }
@@ -46,6 +48,7 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [updatingListing, setUpdatingListing] = useState<string | null>(null)
   // When set, we're viewing the version history of a single project.
   const [historyFor, setHistoryFor] = useState<Project | null>(null)
   const [versions, setVersions] = useState<Version[]>([])
@@ -85,6 +88,25 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
       console.error('Failed to delete project:', err)
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const toggleMarketplaceListing = async (project: Project) => {
+    setUpdatingListing(project.id)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/marketplace`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listed: !project.marketplace_listed }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setProjects((current) => current.map((item) => item.id === project.id ? { ...item, marketplace_listed: data.listed } : item))
+      }
+    } catch (err) {
+      console.error('Failed to update marketplace listing:', err)
+    } finally {
+      setUpdatingListing(null)
     }
   }
 
@@ -204,16 +226,29 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
                       </p>
                     </button>
                     {project.published_url && (
-                      <a
-                        href={project.published_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 inline-flex items-center gap-1 text-xs text-sky-500 hover:text-sky-400 hover:underline max-w-full"
-                      >
-                        <Globe className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{project.published_url.replace(/^https?:\/\//, '')}</span>
-                      </a>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <a
+                          href={project.published_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-xs text-sky-500 hover:text-sky-400 hover:underline max-w-full"
+                        >
+                          <Globe className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{project.published_url.replace(/^https?:\/\//, '')}</span>
+                        </a>
+                        {project.project_type === 'agent' && (
+                          <button
+                            type="button"
+                            onClick={() => toggleMarketplaceListing(project)}
+                            disabled={updatingListing === project.id}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-60 ${project.marketplace_listed ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                          >
+                            {updatingListing === project.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Store className="h-3 w-3" />}
+                            {project.marketplace_listed ? 'Listed' : 'List agent'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">

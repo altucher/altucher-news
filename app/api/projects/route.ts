@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { parseProject, serializeProject } from '@/lib/project-document'
 
@@ -21,7 +22,27 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ projects })
+  const publishedUrls = (projects || []).map((project) => project.published_url).filter((value): value is string => Boolean(value))
+  const slugByUrl = new Map(publishedUrls.map((value) => {
+    try {
+      const parts = new URL(value).pathname.split('/').filter(Boolean)
+      return [value, parts[0] === 's' ? parts[1] : null] as const
+    } catch {
+      return [value, null] as const
+    }
+  }))
+  const slugs = [...new Set([...slugByUrl.values()].filter((value): value is string => Boolean(value)))]
+  let listedSlugs = new Set<string>()
+  if (slugs.length && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    const { data: listings } = await admin.from('published_sites').select('slug').in('slug', slugs).eq('marketplace_listed', true)
+    listedSlugs = new Set((listings || []).map((listing) => listing.slug))
+  }
+
+  return NextResponse.json({ projects: (projects || []).map((project) => ({
+    ...project,
+    marketplace_listed: project.published_url ? listedSlugs.has(slugByUrl.get(project.published_url) || '') : false,
+  })) })
 }
 
 // POST /api/projects - Save a build as a new project (with its first version)
