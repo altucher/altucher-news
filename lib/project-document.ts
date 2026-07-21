@@ -104,7 +104,7 @@ export function validateProject(project: ProjectDocument): string[] {
   if ((html.match(/href=["']styles\.css["']/gi) || []).length !== 1) errors.push('index.html must reference styles.css exactly once.')
   if ((html.match(/src=["']app\.js["']/gi) || []).length !== 1) errors.push('index.html must reference app.js exactly once.')
   if ((html.match(/\\n/g) || []).length >= 3) errors.push('index.html contains escaped source instead of executable markup.')
-  if (/\b(?:TODO|FIXME|lorem ipsum|your (?:business|company|address|phone)|placeholder)\b/i.test(`${html}\n${css}\n${js}`)) errors.push('Project contains unfinished placeholder content.')
+  if (/\b(?:TODO|FIXME|lorem ipsum|your (?:business|company|address|phone))\b/i.test(`${html}\n${css}\n${js}`)) errors.push('Project contains unfinished placeholder content.')
   if (!hasBalancedDelimiters(css.replace(/\/\*[\s\S]*?\*\//g, ''), '{', '}')) errors.push('styles.css appears truncated or malformed.')
   if (!hasBalancedDelimiters(js.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''), '{', '}')) errors.push('app.js appears truncated or malformed.')
   return errors
@@ -223,8 +223,13 @@ export function legacyHtmlToProject(html: string): ProjectDocument {
     return ''
   })
   const scripts: string[] = []
-  document = document.replace(/<script(?![^>]*\bsrc=)(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi, (_match, js: string) => {
-    scripts.push(js.trim())
+  document = document.replace(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi, (_match, attributes: string, js: string) => {
+    const source = js.trim()
+    if (!source) return ''
+    const typeMatch = attributes.match(/\btype=["']([^"']+)["']/i)
+    const type = typeMatch?.[1]?.toLowerCase()
+    if (type && type !== 'text/javascript' && type !== 'application/javascript' && type !== 'module') return _match
+    scripts.push(type === 'module' ? `/* bluetao-module */\n${source}` : source)
     return ''
   })
   if (!/href=["']styles\.css["']/i.test(document)) {
@@ -245,9 +250,14 @@ export function bundleProject(project: ProjectDocument): string {
   const css = project.files['styles.css'].replace(/<\/style/gi, '<\\/style')
   const js = project.files['app.js'].replace(/<\/script/gi, '<\\/script')
   html = html.replace(/<link\b[^>]*href=["']styles\.css["'][^>]*>/gi, css ? `<style data-bluetao-file="styles.css">\n${css}\n</style>` : '')
-  html = html.replace(/<script\b[^>]*src=["']app\.js["'][^>]*><\/script>/gi, js ? `<script data-bluetao-file="app.js">\n${js}\n</script>` : '')
+  html = html.replace(/<script\b[^>]*src=["']app\.js["'][^>]*><\/script>/gi, js ? (js.startsWith('/* bluetao-module */') ? `<script type="module" data-bluetao-file="app.js">\n${js.replace(/^\/\* bluetao-module \*\/\n?/, '')}\n</script>` : `<script data-bluetao-file="app.js">\n${js}\n</script>`) : '')
   if (css && !html.includes('data-bluetao-file="styles.css"')) html = html.replace(/<\/head>/i, `<style data-bluetao-file="styles.css">\n${css}\n</style>\n</head>`)
-  if (js && !html.includes('data-bluetao-file="app.js"')) html = html.replace(/<\/body>/i, `<script data-bluetao-file="app.js">\n${js}\n</script>\n</body>`)
+  if (js && !html.includes('data-bluetao-file="app.js"')) {
+    const bundledScript = js.startsWith('/* bluetao-module */')
+      ? `<script type="module" data-bluetao-file="app.js">\n${js.replace(/^\/\* bluetao-module \*\/\n?/, '')}\n</script>`
+      : `<script data-bluetao-file="app.js">\n${js}\n</script>`
+    html = html.replace(/<\/body>/i, `${bundledScript}\n</body>`)
+  }
   return html
 }
 
@@ -267,7 +277,10 @@ export function extractProjectArtifact(text: string): ProjectDocument | null {
   const htmlStart = text.search(/<!doctype html|<html[\s>]/i)
   if (htmlStart >= 0) {
     const endMatch = text.slice(htmlStart).match(/<\/html\s*>/i)
-    if (endMatch) return legacyHtmlToProject(text.slice(htmlStart, htmlStart + (endMatch.index || 0) + endMatch[0].length))
+    if (endMatch) {
+      const project = legacyHtmlToProject(text.slice(htmlStart, htmlStart + (endMatch.index || 0) + endMatch[0].length))
+      return validateProject(project).length ? null : project
+    }
   }
   return null
 }

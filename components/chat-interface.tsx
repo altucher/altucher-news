@@ -2885,7 +2885,14 @@ function MessageBubble({
                   if (m.index > last) {
                     nodes.push(<span key={`ct-${k}`}>{formatMarkdown(text.slice(last, m.index))}</span>)
                   }
-                  nodes.push(<CodeBlock key={`cb-${k}`} language={m[1]} code={m[2].replace(/\n$/, '')} onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} />)
+                  const fencedCode = m[2].replace(/\n$/, '')
+                  const fencedLanguage = m[1]?.toLowerCase()
+                  const fencedProject = fencedLanguage === 'html' ? extractProjectArtifact(fencedCode) : null
+                  nodes.push(
+                    fencedProject
+                      ? <CodeBlock key={`cb-${k}`} language="bluetao-project" code={serializeProject(fencedProject)} onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} projectId={projectId} />
+                      : <CodeBlock key={`cb-${k}`} language={m[1]} code={fencedCode} onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} />
+                  )
                   last = m.index + m[0].length
                   k++
                 }
