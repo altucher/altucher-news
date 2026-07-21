@@ -107,7 +107,7 @@ async function reviewVisually(html: string, deterministicSummary: string) {
       content: [
         {
           type: 'text',
-          text: `Review these desktop and mobile screenshots of a generated web page. Be practical, not subjective. Flag only meaningful problems: broken rendering/images, overlap, clipping, horizontal overflow, unreadable contrast, weak hierarchy, excessive empty space, inconsistent spacing, or unusable mobile controls.\n\nDeterministic checks:\n${deterministicSummary || 'No deterministic findings.'}\n\nReturn passed=true only when no meaningful repair is needed.`,
+          text: `Review these desktop and mobile screenshots of a generated web page. Be practical and strict. Flag meaningful problems: broken rendering/images, overlap, clipping, horizontal overflow, unreadable contrast, weak hierarchy, generic or visibly unfinished content, excessive empty space, inconsistent spacing, unusable mobile controls, a missing conversion path, or a business site that looks like a thin template rather than a finished launch-ready page. A complete business website needs a clear hero, meaningful offering, trust/proof, contact details, and an obvious call to action.\n\nDeterministic checks:\n${deterministicSummary || 'No deterministic findings.'}\n\nReturn passed=true only when the page is complete, credible, responsive, and no meaningful repair is needed.`,
         },
         { type: 'image', image: screenshots.desktop },
         { type: 'image', image: screenshots.mobile },
@@ -127,7 +127,7 @@ async function repairHtml(html: string, instructions: string) {
     model,
     maxOutputTokens: 32_000,
     temperature: 0.2,
-    prompt: `You are repairing one self-contained HTML build after automated quality review.\n\nFix every issue below without removing working features or changing the product's intent. Preserve the existing visual direction unless the critique explicitly identifies a visual problem. Return ONLY one complete <!DOCTYPE html> document, with all CSS and JavaScript inline. No markdown fence and no explanation.\n\nISSUES TO FIX:\n${instructions}\n\nCURRENT HTML:\n${html}`,
+    prompt: `You are repairing one self-contained HTML build after automated quality review.\n\nFix every issue below without removing working features or changing the product's intent. The result must be a complete, launch-ready responsive page—not a fragment, wireframe, or thin template. For a business website, preserve or add a strong hero, meaningful services or offering, trust/proof, real-looking contact details, repeated conversion CTA, complete footer, mobile navigation, accessible controls, and subject-appropriate reliable imagery. Preserve the existing visual direction unless the critique identifies a visual problem. Do not leave TODOs, placeholders, dead controls, or false capability claims. Return ONLY one complete <!DOCTYPE html> document, with all CSS and JavaScript inline. No markdown fence and no explanation.\n\nISSUES TO FIX:\n${instructions}\n\nCURRENT HTML:\n${html}`,
   })
   return extractHtmlDocument(text)
 }

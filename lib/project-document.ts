@@ -27,6 +27,49 @@ export interface ProjectPatch {
 
 const MAX_FILE_LENGTH = 1_000_000
 
+function decodeAccidentallyEscapedSource(value: string): string {
+  const escapedNewlines = (value.match(/\\n/g) || []).length
+  const escapedQuotes = (value.match(/\\["']/g) || []).length
+  const realNewlines = (value.match(/\n/g) || []).length
+  if (escapedNewlines < 3 || escapedQuotes < 2 || realNewlines > 2) return value
+
+  return value
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\(["'])/g, '$1')
+}
+
+function deduplicateLocalAssets(html: string): string {
+  let stylesheetSeen = false
+  let scriptSeen = false
+  return html
+    .replace(/<link\b[^>]*href=["']styles\.css["'][^>]*>/gi, (tag) => {
+      if (stylesheetSeen) return ''
+      stylesheetSeen = true
+      return tag
+    })
+    .replace(/<script\b[^>]*src=["']app\.js["'][^>]*><\/script>/gi, (tag) => {
+      if (scriptSeen) return ''
+      scriptSeen = true
+      return tag
+    })
+}
+
+function hasBalancedDelimiters(value: string, open: string, close: string): boolean {
+  return value.split(open).length - 1 === value.split(close).length - 1
+}
+
+export function normalizeGeneratedProject(project: ProjectDocument): ProjectDocument {
+  const files = Object.fromEntries(PROJECT_PATHS.map((path) => [path, decodeAccidentallyEscapedSource(project.files?.[path] || '')])) as Record<ProjectPath, string>
+  files['index.html'] = deduplicateLocalAssets(files['index.html'])
+  return {
+    ...project,
+    files,
+    agent: project.agent ? { ...project.agent, suggestedPrompts: [...project.agent.suggestedPrompts], tools: [...project.agent.tools] } : undefined,
+  }
+}
+
 export function createProject(files: Partial<Record<ProjectPath, string>>): ProjectDocument {
   return {
     version: 1,
@@ -53,7 +96,18 @@ export function validateProject(project: ProjectDocument): string[] {
     if (typeof project.files?.[path] !== 'string') errors.push(`Missing ${path}.`)
     else if (project.files[path].length > MAX_FILE_LENGTH) errors.push(`${path} is too large.`)
   }
-  if (!/<html[\s>]/i.test(project.files?.['index.html'] || '')) errors.push('index.html must contain a complete HTML document.')
+  const html = project.files?.['index.html'] || ''
+  const css = project.files?.['styles.css'] || ''
+  const js = project.files?.['app.js'] || ''
+  if (!/<!doctype html/i.test(html) || !/<html[\s>]/i.test(html) || !/<\/html\s*>/i.test(html) || !/<body[\s>]/i.test(html) || !/<\/body\s*>/i.test(html)) {
+    errors.push('index.html must contain a complete HTML document.')
+  }
+  if ((html.match(/href=["']styles\.css["']/gi) || []).length !== 1) errors.push('index.html must reference styles.css exactly once.')
+  if ((html.match(/src=["']app\.js["']/gi) || []).length !== 1) errors.push('index.html must reference app.js exactly once.')
+  if (/\\n|\\["']/.test(html) && (html.match(/\\n/g) || []).length >= 3) errors.push('index.html contains escaped source instead of executable markup.')
+  if (/\b(?:TODO|FIXME|lorem ipsum|your (?:business|company|address|phone)|placeholder)\b/i.test(`${html}\n${css}\n${js}`)) errors.push('Project contains unfinished placeholder content.')
+  if (!hasBalancedDelimiters(css.replace(/\/\*[\s\S]*?\*\//g, ''), '{', '}')) errors.push('styles.css appears truncated or malformed.')
+  if (!hasBalancedDelimiters(js.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''), '{', '}')) errors.push('app.js appears truncated or malformed.')
   return errors
 }
 
@@ -67,7 +121,7 @@ export function parseProject(value: string): ProjectDocument | null {
   const trimmed = value.trim()
   if (!trimmed.startsWith(PROJECT_MARKER)) return null
   try {
-    const parsed = JSON.parse(trimmed.slice(PROJECT_MARKER.length).trim()) as ProjectDocument
+    const parsed = normalizeGeneratedProject(JSON.parse(trimmed.slice(PROJECT_MARKER.length).trim()) as ProjectDocument)
     return validateProject(parsed).length ? null : parsed
   } catch {
     return null
