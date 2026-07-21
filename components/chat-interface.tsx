@@ -247,6 +247,8 @@ export default function ChatInterface() {
     setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const completedBuildRef = useRef<HTMLDivElement>(null)
+  const completedBuildMessageIdRef = useRef<string | null>(null)
   // Scroll container + whether the user is "pinned" to the bottom. While a
   // response streams we only auto-scroll if they're already at the bottom, so
   // scrolling up to re-read earlier output isn't constantly interrupted.
@@ -366,12 +368,23 @@ export default function ChatInterface() {
     }
   }
 
-  if (!shouldReview) {
-    setReviewPhase('idle')
-    setReviewNotice(artifact ? 'Quick quality check passed.' : null)
-    requestStartedAtRef.current = 0
-    return
-  }
+ if (!shouldReview) {
+ setReviewPhase('idle')
+ if (artifact) {
+ completedBuildMessageIdRef.current = finalMessage.id
+ setReviewNotice('Quick quality check passed. Your preview is ready below.')
+ window.requestAnimationFrame(() => {
+ window.requestAnimationFrame(() => {
+ completedBuildRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+ isPinnedToBottomRef.current = false
+ })
+ })
+ } else {
+ setReviewNotice(null)
+ }
+ requestStartedAtRef.current = 0
+ return
+ }
   const reviewHtml = artifact ? bundleProject(artifact) : extractHtmlDocument(getMessageText(finalMessage))
   if (!reviewHtml) {
     setBuildIssue('BlueTAO did not receive a complete website project. Your prompt is preserved—click Retry build to try again.')
@@ -1054,6 +1067,7 @@ export default function ChatInterface() {
    ? { code: activeProject.code, instruction: userMessage, quality: buildQuality }
    : null
  setReviewNotice(null)
+ completedBuildMessageIdRef.current = null
     sendMessage(
       { text: messageToSend },
       { body: { codeMode, buildQuality, editingCode: activeProject?.code ?? null } }
@@ -2223,7 +2237,11 @@ export default function ChatInterface() {
                           : message
                         
                         return (
-                          <div key={message.id}>
+                          <div
+                            key={message.id}
+                            ref={message.id === completedBuildMessageIdRef.current ? completedBuildRef : undefined}
+                            className={message.id === completedBuildMessageIdRef.current ? 'scroll-mt-4' : undefined}
+                          >
                           <MessageBubble
                             message={displayMessage}
                             onSpeak={speak}
@@ -2233,6 +2251,12 @@ export default function ChatInterface() {
                             saveActive={!!activeProject}
                             projectId={activeProject?.id}
                           />
+                          {message.id === completedBuildMessageIdRef.current && reviewNotice && !isReviewing && (
+                            <div role="status" className="mt-2 flex items-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300">
+                              <Check className="h-3.5 w-3.5" />
+                              <span>{reviewNotice}</span>
+                            </div>
+                          )}
                             {message.role === 'user' && 
                              isNewsQuery(getMessageText(message)) && 
                              idx === messages.length - 1 && (
@@ -2405,12 +2429,6 @@ export default function ChatInterface() {
                       </span>
                     </div>
                   </div>
-                </div>
-              )}
-              {reviewNotice && !isReviewing && (
-                <div role="status" className="ml-12 flex items-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300">
-                  <Check className="h-3.5 w-3.5" />
-                  <span>{reviewNotice}</span>
                 </div>
               )}
               {buildIssue && !isLoading && (
