@@ -58,6 +58,7 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming, proj
   const [publishError, setPublishError] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [activeFile, setActiveFile] = useState<ProjectPath>('index.html')
+  const [activeView, setActiveView] = useState<'preview' | 'code'>('preview')
   const project = useMemo(() => parseProject(code), [code])
   const previewable = useMemo(() => isPreviewable(code, language), [code, language])
   const displayedCode = project ? project.files[activeFile] : code
@@ -323,34 +324,51 @@ export function CodeBlock({ code, language, onSave, saveLabel, isStreaming, proj
         </div>
       )}
 
-      {/* Body: source code. Use the "Open" button to view the live result in a
-          new tab (the inline preview tab was removed). */}
-      {previewable && isStreaming && (
-        <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-400">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
-          Building your app… press &quot;Open&quot; to view it when it&apos;s ready
+      {previewable && (
+        <div className="flex border-b border-zinc-700 bg-zinc-950 px-2" role="tablist" aria-label="Build view">
+          <button type="button" role="tab" aria-selected={activeView === 'preview'} onClick={() => setActiveView('preview')} className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors ${activeView === 'preview' ? 'border-sky-400 text-sky-300' : 'border-transparent text-zinc-500 hover:text-zinc-200'}`}>
+            Preview
+          </button>
+          <button type="button" role="tab" aria-selected={activeView === 'code'} onClick={() => setActiveView('code')} className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors ${activeView === 'code' ? 'border-sky-400 text-sky-300' : 'border-transparent text-zinc-500 hover:text-zinc-200'}`}>
+            Code
+          </button>
         </div>
       )}
-      {project && (
-        <div className="flex overflow-x-auto border-b border-zinc-800 bg-zinc-950 px-2" role="tablist" aria-label="Project files">
-          {PROJECT_PATHS.map((path) => (
-            <button
-              key={path}
-              type="button"
-              role="tab"
-              aria-selected={activeFile === path}
-              onClick={() => setActiveFile(path)}
-              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${activeFile === path ? 'border-sky-400 text-sky-300' : 'border-transparent text-zinc-500 hover:text-zinc-200'}`}
-            >
-              <FileCode2 className="h-3.5 w-3.5" />
-              {path}
-            </button>
-          ))}
-        </div>
+      {previewable && activeView === 'preview' ? (
+        isStreaming ? (
+          <div className="flex min-h-72 flex-col items-center justify-center gap-3 bg-zinc-950 px-4 py-10 text-sm text-zinc-400" role="status">
+            <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+            Building your app…
+          </div>
+        ) : doc ? (
+          <iframe title="Generated app preview" srcDoc={doc} sandbox="allow-scripts allow-forms allow-modals allow-popups" className="h-[32rem] w-full border-0 bg-white" />
+        ) : (
+          <div className="flex min-h-72 items-center justify-center bg-zinc-950 px-4 text-sm text-zinc-400">Preview unavailable. Retry this build.</div>
+        )
+      ) : (
+        <>
+          {project && (
+            <div className="flex overflow-x-auto border-b border-zinc-800 bg-zinc-950 px-2" role="tablist" aria-label="Project files">
+              {PROJECT_PATHS.map((path) => (
+                <button
+                  key={path}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeFile === path}
+                  onClick={() => setActiveFile(path)}
+                  className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${activeFile === path ? 'border-sky-400 text-sky-300' : 'border-transparent text-zinc-500 hover:text-zinc-200'}`}
+                >
+                  <FileCode2 className="h-3.5 w-3.5" />
+                  {path}
+                </button>
+              ))}
+            </div>
+          )}
+          <pre className="max-h-96 overflow-auto p-4 text-sm leading-relaxed" role={project ? 'tabpanel' : undefined}>
+            <code className="font-mono">{displayedCode}</code>
+          </pre>
+        </>
       )}
-      <pre className="max-h-96 overflow-auto p-4 text-sm leading-relaxed" role={project ? 'tabpanel' : undefined}>
-        <code className="font-mono">{displayedCode}</code>
-      </pre>
     </div>
   )
 }
