@@ -16,6 +16,11 @@ import { useTextToSpeech, useSpeechToText } from '@/hooks/use-voice'
 import { CodeBlock } from '@/components/code-block'
 import { CodeTemplates } from '@/components/code-templates'
 import Link from 'next/link'
+import { extractHtmlDocument } from '@/lib/code-validation'
+
+function replaceHtmlDocument(text: string, originalHtml: string, reviewedHtml: string) {
+  return text.replace(originalHtml, reviewedHtml)
+}
 
 // Lightweight hover tooltip. Wrapping span catches the hover so the label
 // still appears even when the wrapped button is disabled.
@@ -250,6 +255,11 @@ export default function ChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastSavedMessageRef = useRef<string | null>(null)
   const miningTriggeredRef = useRef(false)
+  const shouldReviewNextResponseRef = useRef(false)
+  const reviewedMessageIdsRef = useRef(new Set<string>())
+  const [pendingReviewMessage, setPendingReviewMessage] = useState<UIMessage | null>(null)
+  const [reviewPhase, setReviewPhase] = useState<'idle' | 'validating' | 'reviewing' | 'repairing' | 'finalizing'>('idle')
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -265,10 +275,75 @@ export default function ChatInterface() {
         setShowLimitWarning(true)
         fetchUsage() // Refresh usage data
       }
-    }
+    },
+    onFinish: ({ message, isError, isAbort }) => {
+      const shouldReview = shouldReviewNextResponseRef.current
+      shouldReviewNextResponseRef.current = false
+      if (!shouldReview || isError || isAbort || message.role !== 'assistant') return
+      if (!extractHtmlDocument(getMessageText(message))) return
+      setPendingReviewMessage(message)
+      setReviewPhase('validating')
+      setReviewNotice(null)
+    },
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
+  const isReviewing = reviewPhase !== 'idle'
+
+  useEffect(() => {
+    if (!pendingReviewMessage || reviewedMessageIdsRef.current.has(pendingReviewMessage.id)) return
+    reviewedMessageIdsRef.current.add(pendingReviewMessage.id)
+    const controller = new AbortController()
+
+    const reviewBuild = async () => {
+      const originalText = getMessageText(pendingReviewMessage)
+      const originalHtml = extractHtmlDocument(originalText)
+      if (!originalHtml) {
+        setReviewPhase('idle')
+        setPendingReviewMessage(null)
+        return
+      }
+
+      try {
+        setReviewPhase('validating')
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        setReviewPhase('reviewing')
+        const response = await fetch('/api/code-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: originalHtml }),
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('Review request failed')
+        const result = await response.json() as { html: string; status: 'passed' | 'improved' | 'fallback'; summary?: string }
+
+        if (result.status === 'improved') {
+          setReviewPhase('repairing')
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+        setReviewPhase('finalizing')
+        await new Promise((resolve) => setTimeout(resolve, 400))
+
+        if (result.status !== 'fallback' && result.html) {
+          const reviewedText = replaceHtmlDocument(originalText, originalHtml, result.html)
+          setMessages((current) => current.map((message) => message.id === pendingReviewMessage.id
+            ? { ...message, parts: message.parts.map((part) => part.type === 'text' ? { ...part, text: reviewedText } : part) }
+            : message))
+        }
+        setReviewNotice(result.status === 'improved' ? 'Reviewed and improved.' : result.status === 'passed' ? 'Review passed.' : (result.summary || 'Review unavailable; showing the original build.'))
+      } catch (error) {
+        if (!controller.signal.aborted) setReviewNotice('Review unavailable; showing the original build.')
+      } finally {
+        if (!controller.signal.aborted) {
+          setReviewPhase('idle')
+          setPendingReviewMessage(null)
+        }
+      }
+    }
+
+    void reviewBuild()
+    return () => controller.abort()
+  }, [pendingReviewMessage, setMessages])
 
   // Elapsed-time ticker: runs for the full duration of a request (both the
   // "submitted" reasoning phase and the "streaming" answer phase).
@@ -716,7 +791,7 @@ export default function ChatInterface() {
 
   // Save assistant messages when streaming completes (only if logged in)
   useEffect(() => {
-    if (status === 'ready' && messages.length > 0 && currentChatId && user) {
+    if (status === 'ready' && !isReviewing && messages.length > 0 && currentChatId && user) {
       const lastMessage = messages[messages.length - 1]
       if (lastMessage.role === 'assistant') {
         const content = getMessageText(lastMessage)
@@ -726,7 +801,7 @@ export default function ChatInterface() {
         }
       }
     }
-  }, [status, messages, currentChatId])
+  }, [status, messages, currentChatId, isReviewing])
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -835,6 +910,9 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
+    // Only Best Quality code builds enter the automatic validation + visual review gate.
+    shouldReviewNextResponseRef.current = codeMode && buildQuality === 'best'
+    setReviewNotice(null)
     sendMessage(
       { text: messageToSend },
       { body: { codeMode, buildQuality, editingCode: activeProject?.code ?? null } }
@@ -846,6 +924,7 @@ export default function ChatInterface() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return
       e.preventDefault()
       handleSubmit(e)
     }
@@ -1980,8 +2059,8 @@ export default function ChatInterface() {
                         
                         // For the last assistant message during streaming, use buffered content
                         // Hide it completely until we have enough buffered content
-                        if (isCurrentlyStreaming && !hasStartedStreaming) {
-                          return null // Don't show anything until buffer is ready
+                        if ((isCurrentlyStreaming && !hasStartedStreaming) || (isReviewing && pendingReviewMessage?.id === message.id)) {
+                          return null // Keep draft builds hidden until streaming/review is complete.
                         }
                         
                         // Create a modified message with buffered content for smooth display
@@ -2087,7 +2166,7 @@ export default function ChatInterface() {
                       </div>
                     </div>
                   )}
-{(status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
+{(isReviewing || status === 'submitted' || (status === 'streaming' && !hasStartedStreaming)) && !isNewsQuery(getMessageText(messages[messages.length - 1] || { parts: [] } as UIMessage)) && (
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
                     <Bot className="w-5 h-5 text-white" />
@@ -2113,7 +2192,15 @@ export default function ChatInterface() {
                         <div className="w-2 h-2 bg-sky-500 rounded-full" />
                       </div>
                       <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">
-                        {liveReasoning ? 'Thinking it through...' : thinkingStatus}
+                        {isReviewing
+                          ? reviewPhase === 'validating'
+                            ? 'Validating the build…'
+                            : reviewPhase === 'reviewing'
+                              ? 'Reviewing desktop and mobile previews…'
+                              : reviewPhase === 'repairing'
+                                ? 'Fixing issues found…'
+                                : 'Final quality check…'
+                          : liveReasoning ? 'Thinking it through...' : thinkingStatus}
                       </span>
                       <span className="ml-auto text-xs font-medium text-muted-foreground tabular-nums">
                         {elapsedSeconds >= 60
@@ -2121,7 +2208,7 @@ export default function ChatInterface() {
                           : `${elapsedSeconds}s`}
                       </span>
                     </div>
-                    {liveReasoning ? (
+                    {!isReviewing && liveReasoning ? (
                       // Real model thinking — show the most recent portion, live.
                       <div
                         className="ml-5 max-h-40 overflow-hidden text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed"
@@ -2136,7 +2223,15 @@ export default function ChatInterface() {
                       </div>
                     ) : (
                       <div className="space-y-2 ml-5">
-                        {thinkingDetails.map((detail, i) => (
+                        {(isReviewing
+                          ? reviewPhase === 'validating'
+                            ? ['Checking HTML, JavaScript, links, images, and accessibility']
+                            : reviewPhase === 'reviewing'
+                              ? ['Rendering at desktop and mobile sizes', 'Checking layout, contrast, spacing, and overflow']
+                              : reviewPhase === 'repairing'
+                                ? ['Applying one focused repair pass', 'Preserving working features and the chosen design direction']
+                                : ['Re-running deterministic checks', 'Preparing the reviewed preview']
+                          : thinkingDetails).map((detail, i) => (
                           <div 
                             key={i} 
                             className="flex items-center gap-2 text-xs text-muted-foreground animate-in fade-in slide-in-from-left-2 duration-300"
@@ -2155,6 +2250,12 @@ export default function ChatInterface() {
                       </span>
                     </div>
                   </div>
+                </div>
+              )}
+              {reviewNotice && !isReviewing && (
+                <div role="status" className="ml-12 flex items-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300">
+                  <Check className="h-3.5 w-3.5" />
+                  <span>{reviewNotice}</span>
                 </div>
               )}
               {/* Stop button - visible during entire loading/streaming phase */}
