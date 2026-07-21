@@ -331,12 +331,12 @@ export default function ChatInterface() {
   const isLoading = status === 'streaming' || status === 'submitted'
   const isReviewing = reviewPhase !== 'idle'
 
-  // A provider connection can occasionally remain open without delivering or
-  // terminating. Stop Quick builds after three minutes so the UI never appears
-  // frozen indefinitely; Best Quality keeps its larger reasoning allowance.
+  // Keep the browser alive long enough for the server to time out a stalled
+  // primary provider and run its failover chain. This guard only stops the
+  // request if the complete server-side recovery path also becomes stuck.
   useEffect(() => {
     if (!isLoading || !requestStartedAtRef.current) return
-    const timeoutMs = codeMode && buildQuality === 'best' ? 10 * 60_000 : 3 * 60_000
+    const timeoutMs = codeMode && buildQuality === 'best' ? 12 * 60_000 : 8 * 60_000
     const timeout = window.setTimeout(() => {
       stop()
       setBuildIssue(codeMode

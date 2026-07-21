@@ -775,15 +775,20 @@ When answering questions, refer to this document content. You can summarize it, 
     const errorMessage = String(error)
     console.log('[v0] Primary model error:', errorMessage)
     
-    // If Chutes is unavailable (503, 429, capacity, etc.), fall back directly to OpenAI
-    if (errorMessage.includes('503') || 
+    // Fail over for capacity failures and provider-only timeouts. A user abort
+    // must never start another provider request after they click Stop.
+    if (!req.signal.aborted && (errorMessage.includes('TimeoutError') ||
+        errorMessage.includes('AbortError') ||
+        errorMessage.includes('timed out') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('503') ||
         errorMessage.includes('429') ||
         errorMessage.includes('Too Many Requests') ||
         errorMessage.includes('Service Unavailable') || 
         errorMessage.includes('capacity') ||
         errorMessage.includes('maximum capacity') ||
         errorMessage.includes('No instances available') ||
-        errorMessage.includes('AI_RetryError')) {
+        errorMessage.includes('AI_RetryError'))) {
       
       // First failover: Targon (Bittensor SN4) — keeps inference decentralized
       // before resorting to the centralized OpenAI fallback.
@@ -803,7 +808,7 @@ When answering questions, refer to this document content. You can summarize it, 
             system: systemPrompt + fileContextSection,
             messages: modelMessages,
             maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
-            abortSignal: req.signal,
+            abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(3 * 60_000)]),
             experimental_transform: stripKimiToolTokens(),
           })
 
