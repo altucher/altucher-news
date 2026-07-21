@@ -48,6 +48,17 @@ function extractTitle(html: string): string | null {
   return t ? t.slice(0, 200) : null
 }
 
+function inferMarketplaceCategory(text: string): string {
+  const value = text.toLowerCase()
+  if (/research|source|news|search|investigat/.test(value)) return 'Research'
+  if (/support|customer|help desk|service/.test(value)) return 'Support'
+  if (/learn|teach|tutor|study|education/.test(value)) return 'Education'
+  if (/finance|market|stock|invest|budget/.test(value)) return 'Finance'
+  if (/write|design|creative|story|image/.test(value)) return 'Creative'
+  if (/plan|organize|schedule|productiv|task/.test(value)) return 'Productivity'
+  return 'Other'
+}
+
 // POST /api/publish  -> stores HTML under a short slug and returns the live URL.
 export async function POST(req: Request) {
   try {
@@ -66,7 +77,8 @@ export async function POST(req: Request) {
     let html = toDocument(rawHtml)
     const project = typeof body.project === 'string' ? parseProject(body.project) : null
     const projectId = typeof body.projectId === 'string' && /^[0-9a-f-]{36}$/i.test(body.projectId) ? body.projectId : null
-    const isAgent = project?.type === 'agent' && project.agent
+    const agent = project?.type === 'agent' ? project.agent : null
+    const isAgent = Boolean(agent)
     const runtimeToken = isAgent ? randomBytes(32).toString('base64url') : null
     if (runtimeToken) {
       const config = JSON.stringify({ endpoint: '/api/agent/runtime', token: runtimeToken })
@@ -90,8 +102,12 @@ export async function POST(req: Request) {
           html,
           project_id: projectId,
           project_type: isAgent ? 'agent' : 'site',
-          agent_manifest: isAgent ? project.agent : null,
+          agent_manifest: agent,
           runtime_token_hash: runtimeToken ? createHash('sha256').update(runtimeToken).digest('hex') : null,
+          marketplace_listed: Boolean(agent),
+          marketplace_description: agent ? agent.welcomeMessage.slice(0, 280) : null,
+          marketplace_category: agent ? inferMarketplaceCategory(`${agent.name} ${agent.instructions} ${agent.welcomeMessage}`) : null,
+          marketplace_listed_at: isAgent ? new Date().toISOString() : null,
         })
       if (!error) {
         slug = candidate

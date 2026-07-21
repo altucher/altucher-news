@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode, PartyPopper, Gem } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode, PartyPopper, Gem, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -1581,6 +1581,12 @@ export default function ChatInterface() {
             <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Pickaxe className="w-5 h-5 flex-shrink-0" />
               mining
+            </span>
+          </Link>
+          <Link href="/agents" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+              <Store className="w-5 h-5 flex-shrink-0" />
+              agents
             </span>
           </Link>
           <Link href="/fun" onClick={() => setSidebarOpen(false)}>
