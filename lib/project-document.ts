@@ -31,7 +31,7 @@ function decodeAccidentallyEscapedSource(value: string): string {
   const escapedNewlines = (value.match(/\\n/g) || []).length
   const escapedQuotes = (value.match(/\\["']/g) || []).length
   const realNewlines = (value.match(/\n/g) || []).length
-  if (escapedNewlines < 3 || escapedQuotes < 2 || realNewlines > 2) return value
+  if (escapedNewlines < 3 || realNewlines > 2) return value
 
   return value
     .replace(/\\r\\n/g, '\n')
@@ -104,10 +104,41 @@ export function validateProject(project: ProjectDocument): string[] {
   }
   if ((html.match(/href=["']styles\.css["']/gi) || []).length !== 1) errors.push('index.html must reference styles.css exactly once.')
   if ((html.match(/src=["']app\.js["']/gi) || []).length !== 1) errors.push('index.html must reference app.js exactly once.')
-  if (/\\n|\\["']/.test(html) && (html.match(/\\n/g) || []).length >= 3) errors.push('index.html contains escaped source instead of executable markup.')
+  if ((html.match(/\\n/g) || []).length >= 3) errors.push('index.html contains escaped source instead of executable markup.')
   if (/\b(?:TODO|FIXME|lorem ipsum|your (?:business|company|address|phone)|placeholder)\b/i.test(`${html}\n${css}\n${js}`)) errors.push('Project contains unfinished placeholder content.')
   if (!hasBalancedDelimiters(css.replace(/\/\*[\s\S]*?\*\//g, ''), '{', '}')) errors.push('styles.css appears truncated or malformed.')
   if (!hasBalancedDelimiters(js.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''), '{', '}')) errors.push('app.js appears truncated or malformed.')
+  return errors
+}
+
+export function validateInteractiveBuild(project: ProjectDocument, instruction: string): string[] {
+  if (!/\b(game|space\s*invaders?|shooter|arcade|pong|snake|tetris|platformer)\b/i.test(instruction)) return []
+
+  const html = project.files['index.html']
+  const css = project.files['styles.css']
+  const js = project.files['app.js']
+  const source = `${html}\n${css}\n${js}`
+  const errors: string[] = []
+  const isSpaceInvaders = /space\s*invaders?/i.test(instruction)
+
+  if (js.length < (isSpaceInvaders ? 3000 : 1400)) errors.push('The game implementation is too thin to be complete.')
+  if (!/<canvas\b|\b(?:game|stage|board)[-_ ]?(?:area|screen|container)?\b/i.test(html)) errors.push('The project needs a visible playable game stage.')
+  if (!/requestAnimationFrame|setInterval|setTimeout/i.test(js)) errors.push('The game needs a running update loop.')
+  if (!/keydown|keyup|pointerdown|touchstart|click/i.test(source)) errors.push('The game needs working keyboard, pointer, or touch controls.')
+  if (!/\b(?:collision|collides?|intersect|overlap|hitTest|hit\w*|distance)\b/i.test(js)) errors.push('The game needs collision or hit detection.')
+  if (!/\b(?:score|points)\b/i.test(source)) errors.push('The game needs visible score state.')
+  if (!/\b(?:gameOver|game over|lives|health|lose|lost)\b/i.test(source)) errors.push('The game needs a clear loss or game-over state.')
+  if (!/\b(?:restart|reset|play again|new game|startGame)\b/i.test(source)) errors.push('The game needs a restart flow.')
+
+  if (isSpaceInvaders) {
+    if (!/\b(?:player|ship|cannon)\b/i.test(js)) errors.push('Space Invaders needs player state.')
+    if (!/\b(?:invader|enemy|alien)\b/i.test(js)) errors.push('Space Invaders needs enemy formations and state.')
+    if (!/\b(?:bullet|projectile|laser|shot)\b/i.test(js)) errors.push('Space Invaders needs player projectiles.')
+    if (!/(?:enemy|invader|alien)[\s\S]{0,80}(?:bullet|projectile|laser|shot|shoot|fire)|(?:bullet|projectile|laser|shot|shoot|fire)[\s\S]{0,80}(?:enemy|invader|alien)/i.test(js)) errors.push('Space Invaders needs enemy fire.')
+    if (!/\b(?:direction|speed|velocity|moveDown|drop)\b/i.test(js)) errors.push('Space Invaders needs moving enemies that advance toward the player.')
+    if (!/\b(?:wave|level|victory|you win|nextLevel)\b/i.test(source)) errors.push('Space Invaders needs wave or victory progression.')
+  }
+
   return errors
 }
 
