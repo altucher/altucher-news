@@ -10,6 +10,25 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const MAX_HTML_BYTES = 1_500_000
+
+function countMatches(value: string, pattern: RegExp) {
+  return [...value.matchAll(pattern)].length
+}
+
+function preservesBuildStructure(original: string, repaired: string) {
+  const checks = [
+    [/<section\b/gi, 0.75],
+    [/<img\b/gi, 0.75],
+    [/<button\b/gi, 0.75],
+    [/<script\b/gi, 1],
+  ] as const
+  return checks.every(([pattern, ratio]) => {
+    const before = countMatches(original, pattern)
+    if (before === 0) return true
+    return countMatches(repaired, pattern) >= Math.ceil(before * ratio)
+  }) && repaired.length >= original.length * 0.65
+}
+
 const reviewSchema = z.object({
   passed: z.boolean(),
   summary: z.string().max(300),
@@ -151,8 +170,8 @@ export async function POST(request: Request) {
     }
 
     const finalValidation = validateHtmlDocument(repaired)
-    if (!finalValidation.valid) {
-      return Response.json({ html: originalHtml, status: 'fallback', summary: 'Review found issues, but the repaired build did not pass validation. Showing the original build.', findings: finalValidation.findings })
+    if (!finalValidation.valid || !preservesBuildStructure(originalHtml, repaired)) {
+      return Response.json({ html: originalHtml, status: 'fallback', summary: 'Review found issues, but the repair did not safely preserve the build. Showing the original build.', findings: finalValidation.findings })
     }
 
     return Response.json({ html: repaired, status: 'improved', summary: visualReview?.summary || 'Reviewed and improved.', findings: finalValidation.findings })

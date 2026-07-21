@@ -16,8 +16,13 @@ export function extractHtmlDocument(text: string): string | null {
 
   if (fenced.length > 0) return fenced[fenced.length - 1]
 
-  const starts = [...text.matchAll(/<!doctype html|<html[\s>]/gi)]
-  const start = starts.at(-1)?.index
+  const doctypeMatches = [...text.matchAll(/<!doctype html/gi)]
+  const htmlMatches = [...text.matchAll(/<html[\s>]/gi)]
+  const lastDoctype = doctypeMatches.at(-1)?.index
+  const lastHtml = htmlMatches.at(-1)?.index
+  const start = lastDoctype !== undefined && (lastHtml === undefined || lastDoctype <= lastHtml)
+    ? lastDoctype
+    : lastHtml
   if (start === undefined) return null
   const tail = text.slice(start)
   const close = tail.match(/<\/html\s*>/i)
