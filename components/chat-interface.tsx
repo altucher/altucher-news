@@ -17,7 +17,7 @@ import { CodeBlock } from '@/components/code-block'
 import { CodeTemplates } from '@/components/code-templates'
 import Link from 'next/link'
 import { extractHtmlDocument } from '@/lib/code-validation'
-import { bundleProject, extractPatchArtifact, extractProjectArtifact, normalizeProject, serializeProject } from '@/lib/project-document'
+import { bundleProject, extractPatchArtifact, extractProjectArtifact, projectFromBundledHtml, serializeProject } from '@/lib/project-document'
 
 function replaceHtmlDocument(text: string, originalHtml: string, reviewedHtml: string) {
   return text.replace(originalHtml, reviewedHtml)
@@ -285,6 +285,14 @@ export default function ChatInterface() {
 
   let finalMessage = message
   const responseText = getMessageText(message)
+  if (!responseText.trim()) {
+    finalMessage = {
+      ...message,
+      parts: [{ type: 'text', text: 'The Best Quality model finished without returning a usable build. Please try the same request again; new agent builds now use the more reliable structured-build path.' }],
+    }
+    setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
+    return
+  }
   const editContext = editContextRef.current
   editContextRef.current = null
   if (editContext && (extractPatchArtifact(responseText) || extractProjectArtifact(responseText))) {
@@ -353,9 +361,15 @@ export default function ChatInterface() {
         await new Promise((resolve) => setTimeout(resolve, 400))
 
         if (result.status !== 'fallback' && result.html) {
-          const reviewedText = originalProject
-            ? `\`\`\`bluetao-project\n${serializeProject(normalizeProject(result.html))}\n\`\`\``
-            : replaceHtmlDocument(originalText, originalHtml, result.html)
+          let reviewedText: string
+          if (originalProject) {
+            const reviewedProject = projectFromBundledHtml(result.html)
+            reviewedProject.type = originalProject.type
+            reviewedProject.agent = originalProject.agent
+            reviewedText = `\`\`\`bluetao-project\n${serializeProject(reviewedProject)}\n\`\`\``
+          } else {
+            reviewedText = replaceHtmlDocument(originalText, originalHtml, result.html)
+          }
           setMessages((current) => current.map((message) => message.id === pendingReviewMessage.id
             ? { ...message, parts: message.parts.map((part) => part.type === 'text' ? { ...part, text: reviewedText } : part) }
             : message))
