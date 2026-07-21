@@ -17,7 +17,7 @@ import { CodeBlock } from '@/components/code-block'
 import { CodeTemplates } from '@/components/code-templates'
 import Link from 'next/link'
 import { extractHtmlDocument } from '@/lib/code-validation'
-import { bundleProject, extractPatchArtifact, extractProjectArtifact, projectFromBundledHtml, serializeProject } from '@/lib/project-document'
+import { bundleProject, extractPatchArtifact, extractProjectArtifact, projectFromBundledHtml, serializeProject, validateInteractiveBuild } from '@/lib/project-document'
 
 function replaceHtmlDocument(text: string, originalHtml: string, reviewedHtml: string) {
   return text.replace(originalHtml, reviewedHtml)
@@ -257,6 +257,7 @@ export default function ChatInterface() {
   const lastSavedMessageRef = useRef<string | null>(null)
   const miningTriggeredRef = useRef(false)
  const shouldReviewNextResponseRef = useRef(false)
+ const requestedBuildQualityRef = useRef<'quick' | 'best'>('quick')
  const editContextRef = useRef<{ code: string; instruction: string; quality: 'quick' | 'best' } | null>(null)
  const reviewedMessageIdsRef = useRef(new Set<string>())
   const [pendingReviewMessage, setPendingReviewMessage] = useState<UIMessage | null>(null)
@@ -295,7 +296,7 @@ export default function ChatInterface() {
   if (!responseText.trim()) {
     finalMessage = {
       ...message,
-      parts: [{ type: 'text', text: 'The Best Quality model finished without returning a usable build. Please try the same request again; new agent builds now use the more reliable structured-build path.' }],
+      parts: [{ type: 'text', text: 'The build model finished without returning a usable project. Please retry the same request.' }],
     }
     setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
     return
@@ -321,18 +322,34 @@ export default function ChatInterface() {
 
   let artifact = extractProjectArtifact(getMessageText(finalMessage))
   const containsProjectMarker = getMessageText(finalMessage).includes('BLUETAO_PROJECT_V1')
-  if (codeMode && containsProjectMarker && !artifact) {
+  let serializationFailed = false
+  if (artifact) {
     try {
+      serializeProject(artifact)
+    } catch {
+      serializationFailed = true
+    }
+  }
+  let repairIssues = artifact ? validateInteractiveBuild(artifact, currentBuildRequestRef.current) : []
+  if (codeMode && ((containsProjectMarker && (!artifact || serializationFailed)) || repairIssues.length > 0)) {
+    try {
+      setReviewPhase(repairIssues.length ? 'validating' : 'repairing')
+      if (repairIssues.length) await new Promise((resolve) => setTimeout(resolve, 250))
       setReviewPhase('repairing')
       const repairResponse = await fetch('/api/code-repair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ responseText: getMessageText(finalMessage), instruction: currentBuildRequestRef.current }),
+        body: JSON.stringify({
+          responseText: getMessageText(finalMessage),
+          instruction: `${currentBuildRequestRef.current}\n\nQUALITY ISSUES TO FIX:\n${repairIssues.join('\n')}`,
+        }),
       })
       const repair = await repairResponse.json() as { code?: string; error?: string }
       if (!repairResponse.ok || !repair.code) throw new Error(repair.error || 'Repair failed')
       finalMessage = { ...finalMessage, parts: [{ type: 'text', text: `\`\`\`bluetao-project\n${repair.code}\n\`\`\`` }] }
       artifact = extractProjectArtifact(getMessageText(finalMessage))
+      repairIssues = artifact ? validateInteractiveBuild(artifact, currentBuildRequestRef.current) : ['The repaired build is invalid.']
+      if (repairIssues.length) throw new Error(repairIssues.join(' '))
       setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
     } catch {
       setReviewPhase('idle')
@@ -341,7 +358,12 @@ export default function ChatInterface() {
     }
   }
 
-  if (!shouldReview) return
+  if (!shouldReview) {
+    setReviewPhase('idle')
+    setReviewNotice(artifact ? 'Quick quality check passed.' : null)
+    requestStartedAtRef.current = 0
+    return
+  }
   const reviewHtml = artifact ? bundleProject(artifact) : extractHtmlDocument(getMessageText(finalMessage))
   if (!reviewHtml) {
     setBuildIssue('BlueTAO did not receive a complete website project. Your prompt is preserved—click Retry build to try again.')
@@ -360,8 +382,12 @@ export default function ChatInterface() {
   // primary provider and run its failover chain. This guard only stops the
   // request if the complete server-side recovery path also becomes stuck.
   useEffect(() => {
-    if (!isLoading || !requestStartedAtRef.current) return
-    const timeoutMs = codeMode && buildQuality === 'best' ? 12 * 60_000 : 8 * 60_000
+    if (!isLoading) {
+      if (!isReviewing) requestStartedAtRef.current = 0
+      return
+    }
+    if (!requestStartedAtRef.current) return
+    const timeoutMs = codeMode ? (buildQuality === 'best' ? 12 * 60_000 : 6 * 60_000) : 8 * 60_000
     const timeout = window.setTimeout(() => {
       stop()
       setBuildIssue(codeMode
@@ -369,7 +395,7 @@ export default function ChatInterface() {
         : 'This response stalled at the AI provider and was stopped. Please retry.')
     }, Math.max(0, timeoutMs - (Date.now() - requestStartedAtRef.current)))
     return () => window.clearTimeout(timeout)
-  }, [buildQuality, codeMode, isLoading, stop])
+  }, [buildQuality, codeMode, isLoading, isReviewing, stop])
 
   useEffect(() => {
     if (!pendingReviewMessage || reviewedMessageIdsRef.current.has(pendingReviewMessage.id)) return
@@ -1002,9 +1028,10 @@ export default function ChatInterface() {
       messageToSend = `[DOCUMENT: ${uploadedFile.name}]\n\n${uploadedFile.content}\n\n---\n\nUser question: ${userMessage}`
     }
     
-  // Every code build enters structural and visual review. Best Quality still
-  // uses the deeper generation model before this shared completion gate.
-  shouldReviewNextResponseRef.current = codeMode
+  // Quick gets a fast deterministic game/structure gate; only Best Quality
+  // runs the slower screenshot and AI visual review.
+  shouldReviewNextResponseRef.current = codeMode && buildQuality === 'best'
+  requestedBuildQualityRef.current = buildQuality
   currentBuildRequestRef.current = codeMode ? userMessage : ''
   editContextRef.current = codeMode && activeProject
    ? { code: activeProject.code, instruction: userMessage, quality: buildQuality }
@@ -2292,12 +2319,12 @@ export default function ChatInterface() {
                       <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">
                         {isReviewing
                           ? reviewPhase === 'validating'
-                            ? 'Validating the build…'
-                            : reviewPhase === 'reviewing'
-                              ? 'Reviewing desktop and mobile previews…'
-                              : reviewPhase === 'repairing'
-                                ? 'Fixing issues found…'
-                                : 'Final quality check…'
+              ? requestedBuildQualityRef.current === 'quick' ? 'Checking game mechanics…' : 'Validating the build…'
+              : reviewPhase === 'reviewing'
+              ? 'Reviewing desktop and mobile previews…'
+              : reviewPhase === 'repairing'
+              ? requestedBuildQualityRef.current === 'quick' ? 'Repairing incomplete game…' : 'Fixing issues found…'
+              : 'Final quality check…'
                           : liveReasoning ? 'Thinking it through...' : thinkingStatus}
                       </span>
                       <span className="ml-auto text-xs font-medium text-muted-foreground tabular-nums">
@@ -2789,7 +2816,11 @@ function MessageBubble({
             const formatMarkdown = (text: string): React.ReactNode => {
               const project = extractProjectArtifact(text)
               if (project) {
-                return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} projectId={projectId} />
+                try {
+                  return <CodeBlock code={serializeProject(project)} language="bluetao-project" onSave={onSaveCode} saveLabel={saveActive ? 'Save changes' : 'Save'} projectId={projectId} />
+                } catch {
+                  return <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">Checking and repairing the generated project…</div>
+                }
               }
               if (extractPatchArtifact(text)) {
                 return <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">Applying targeted project changes…</div>
