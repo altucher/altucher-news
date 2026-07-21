@@ -484,6 +484,10 @@ export async function POST(req: Request) {
       ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
       : 'moonshotai/Kimi-K2.5-TEE'
     const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
+    // Do not let an upstream inference connection stay open forever. Quick
+    // builds should finish promptly; Best Quality gets a larger reasoning window.
+    const providerTimeoutMs = codeMode && buildQuality === 'best' ? 10 * 60_000 : 3 * 60_000
+    const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
@@ -756,7 +760,7 @@ When answering questions, refer to this document content. You can summarize it, 
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
       maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
-      abortSignal: req.signal,
+      abortSignal: providerAbortSignal,
       experimental_transform: stripKimiToolTokens(),
     })
 
