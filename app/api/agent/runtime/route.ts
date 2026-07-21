@@ -117,10 +117,9 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (value: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`))
       try {
-        for await (const part of result.fullStream) {
-          if (part.type === 'text-delta') { answer += part.text; send({ type: 'text', delta: part.text }) }
-          if (part.type === 'tool-call') send({ type: 'tool', name: part.toolName, status: 'running' })
-          if (part.type === 'tool-result') send({ type: 'tool', name: part.toolName, status: 'complete', result: part.output })
+        for await (const delta of result.textStream) {
+          answer += delta
+          send({ type: 'text', delta })
         }
         if (answer.trim()) await db.from('agent_messages').insert({ thread_id: thread!.id, sequence: sequence + 1, role: 'assistant', content: answer, ui_message: { role: 'assistant', content: answer } })
         await db.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', thread!.id)
