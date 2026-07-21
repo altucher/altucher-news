@@ -262,6 +262,8 @@ export default function ChatInterface() {
   const [pendingReviewMessage, setPendingReviewMessage] = useState<UIMessage | null>(null)
   const [reviewPhase, setReviewPhase] = useState<'idle' | 'validating' | 'reviewing' | 'repairing' | 'finalizing'>('idle')
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
+  const [buildIssue, setBuildIssue] = useState<string | null>(null)
+  const requestStartedAtRef = useRef(0)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -276,7 +278,11 @@ export default function ChatInterface() {
       if (err.message?.includes('LIMIT_EXCEEDED') || err.message?.includes('429')) {
         setShowLimitWarning(true)
         fetchUsage() // Refresh usage data
+        return
       }
+      setBuildIssue(codeMode
+        ? 'The build provider stopped responding before your project was complete. Your prompt is preserved below so you can retry.'
+        : 'The AI provider stopped responding. Please try your message again.')
     },
   onFinish: async ({ message, isError, isAbort }) => {
   const shouldReview = shouldReviewNextResponseRef.current
@@ -324,6 +330,21 @@ export default function ChatInterface() {
 
   const isLoading = status === 'streaming' || status === 'submitted'
   const isReviewing = reviewPhase !== 'idle'
+
+  // Keep the browser alive long enough for the server to time out a stalled
+  // primary provider and run its failover chain. This guard only stops the
+  // request if the complete server-side recovery path also becomes stuck.
+  useEffect(() => {
+    if (!isLoading || !requestStartedAtRef.current) return
+    const timeoutMs = codeMode && buildQuality === 'best' ? 12 * 60_000 : 8 * 60_000
+    const timeout = window.setTimeout(() => {
+      stop()
+      setBuildIssue(codeMode
+        ? 'This build stalled at the AI provider and was stopped. Your prompt is preserved below—click Retry build to run it again.'
+        : 'This response stalled at the AI provider and was stopped. Please retry.')
+    }, Math.max(0, timeoutMs - (Date.now() - requestStartedAtRef.current)))
+    return () => window.clearTimeout(timeout)
+  }, [buildQuality, codeMode, isLoading, stop])
 
   useEffect(() => {
     if (!pendingReviewMessage || reviewedMessageIdsRef.current.has(pendingReviewMessage.id)) return
@@ -886,6 +907,8 @@ export default function ChatInterface() {
     
     const userMessage = input
     setInput('')
+    setBuildIssue(null)
+    requestStartedAtRef.current = Date.now()
 
     // A brand-new request re-pins to the bottom so the incoming answer follows.
     isPinnedToBottomRef.current = true
@@ -2304,6 +2327,23 @@ export default function ChatInterface() {
                 <div role="status" className="ml-12 flex items-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300">
                   <Check className="h-3.5 w-3.5" />
                   <span>{reviewNotice}</span>
+                </div>
+              )}
+              {buildIssue && !isLoading && (
+                <div role="alert" className="ml-12 flex max-w-xl flex-col items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-foreground">
+                  <p className="leading-relaxed">{buildIssue}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      const lastPrompt = [...messages].reverse().find((message) => message.role === 'user')
+                      if (lastPrompt) setInput(getMessageText(lastPrompt))
+                      setBuildIssue(null)
+                      textareaRef.current?.focus()
+                    }}
+                  >
+                    Retry build
+                  </Button>
                 </div>
               )}
               {/* Stop button - visible during entire loading/streaming phase */}
