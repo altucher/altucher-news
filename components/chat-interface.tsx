@@ -333,6 +333,13 @@ export default function ChatInterface() {
       serializationFailed = true
     }
   }
+  if (artifact && !serializationFailed) {
+    finalMessage = {
+      ...finalMessage,
+      parts: [{ type: 'text', text: `\`\`\`bluetao-project\n${serializeProject(artifact)}\n\`\`\`` }],
+    }
+    setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
+  }
   let repairIssues = artifact ? validateInteractiveBuild(artifact, currentBuildRequestRef.current) : []
   if (codeMode && ((containsProjectMarker && (!artifact || serializationFailed)) || repairIssues.length > 0)) {
     try {
