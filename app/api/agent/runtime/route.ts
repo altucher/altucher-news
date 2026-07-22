@@ -31,6 +31,59 @@ const toolLabels: Record<string, string> = {
   evaluate_virality: 'Testing viral angles',
 }
 
+// Build a short, human-readable summary of what a tool actually found, so the
+// activity feed between the question and the answer shows real substance
+// instead of a generic "complete". Never fabricates — only reflects output.
+function summarizeToolResult(toolName: string, output: unknown): string {
+  const o = (output || {}) as Record<string, any>
+  const clip = (s: unknown, n = 90) => {
+    const t = String(s ?? '').replace(/\s+/g, ' ').trim()
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t
+  }
+  try {
+    switch (toolName) {
+      case 'scan_twitter_trends':
+      case 'search_social': {
+        const posts = Array.isArray(o.posts) ? o.posts : []
+        const results = Array.isArray(o.results) ? o.results : []
+        if (!posts.length && !results.length) return 'No live posts surfaced'
+        const parts: string[] = []
+        if (posts.length) parts.push(`${posts.length} post${posts.length === 1 ? '' : 's'}`)
+        if (results.length) parts.push(`${results.length} article${results.length === 1 ? '' : 's'}`)
+        const lead = posts[0]?.author ? `${posts[0].author}: “${clip(posts[0].text, 70)}”` : clip(results[0]?.title, 80)
+        return lead ? `${parts.join(', ')} · ${lead}` : parts.join(', ')
+      }
+      case 'scan_current_news': {
+        const results = Array.isArray(o.results) ? o.results : []
+        if (!results.length) return 'No fresh reporting found'
+        return `${results.length} report${results.length === 1 ? '' : 's'} · ${clip(results[0]?.title, 80)}`
+      }
+      case 'inspect_source': {
+        if (o.inspectionError) return 'Source could not be read — relying on search evidence'
+        return o.title ? `Read “${clip(o.title, 80)}”` : 'Source inspected'
+      }
+      case 'build_angle_map': {
+        const views = (Array.isArray(o.mainstream) ? o.mainstream.length : 0) + (Array.isArray(o.counterView) ? o.counterView.length : 0) + (Array.isArray(o.extremeViews) ? o.extremeViews.length : 0)
+        const surprises = Array.isArray(o.surprises) ? o.surprises.length : 0
+        return `Mapped ${views} viewpoint${views === 1 ? '' : 's'}, ${surprises} surprise${surprises === 1 ? '' : 's'}`
+      }
+      case 'evaluate_virality': {
+        const ranked = Array.isArray(o.ranked) ? o.ranked : []
+        const top = ranked[0]
+        return top?.title ? `Chose “${clip(top.title, 70)}” (score ${top.score})` : 'Scored candidate angles'
+      }
+      case 'web_search': {
+        const results = Array.isArray(o.results) ? o.results : []
+        return results.length ? `${results.length} source${results.length === 1 ? '' : 's'} · ${clip(results[0]?.title, 80)}` : 'No results found'
+      }
+      default:
+        return ''
+    }
+  } catch {
+    return ''
+  }
+}
+
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
@@ -318,6 +371,7 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (value: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`))
       try {
+        send({ type: 'status', label: isViralScout ? 'Planning the research: trends, news, social, sourcing, angle map, virality' : 'Working through the request' })
         try {
           for await (const part of result.fullStream) {
             if (part.type === 'tool-call') {
@@ -325,7 +379,9 @@ export async function POST(request: Request) {
               send({ type: 'tool', phase: 'start', tool: part.toolName, label: toolLabels[part.toolName] || 'Using a specialist tool' })
             } else if (part.type === 'tool-result') {
               observations.push({ tool: part.toolName, output: part.output })
-              send({ type: 'tool', phase: 'complete', tool: part.toolName, label: `${toolLabels[part.toolName] || 'Tool'} complete` })
+              const detail = summarizeToolResult(part.toolName, part.output)
+              const base = toolLabels[part.toolName] || 'Tool'
+              send({ type: 'tool', phase: 'complete', tool: part.toolName, label: detail ? `${base} — ${detail}` : `${base} complete`, detail })
             } else if (part.type === 'finish-step') {
               stepCount += 1
             } else if (part.type === 'error') {
@@ -341,7 +397,7 @@ export async function POST(request: Request) {
           send({ type: 'tool', phase: 'complete', tool: 'recovery', label: 'Continuing with the research gathered so far' })
         }
         if (observations.length === 0) throw new Error('Agent completed without using a tool')
-        send({ type: 'status', label: 'Synthesizing the final answer' })
+        send({ type: 'status', label: isViralScout ? `Synthesizing the dossier from ${observations.length} research steps` : 'Synthesizing the final answer' })
         const evidence = JSON.stringify(observations).slice(0, 60_000)
         const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map (strongest cases on both sides and clearly labeled extreme/fringe/subculture views); What People Are Saying (only linked real examples); The Story (sourced real anecdote or explicitly labeled illustration); Podcast Blueprint (titles, cold open, arc, segments, counterarguments, reveal, takeaway, CTA); Guest Shortlist; Instagram Reel (timed script, on-screen text, visual beats, CTA); X/Twitter Thread; Substack / Viral Article (headlines, dek, and substantial draft or detailed outline); Why It Could Go Viral (identities, emotions, pattern interrupt, distribution, risks); Sources and Guardrails. Center a surprising, source-supported story, reversal, hidden incentive, unexpected constituency, historical rhyme, or counterintuitive implication. Explain why the twist matters. If social evidence or a credible twist is missing, say so honestly.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
         const synthesize = async (model: Parameters<typeof streamText>[0]['model'], timeoutMs: number) => {
