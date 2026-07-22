@@ -228,7 +228,7 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
                     {project.published_url && (
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <a
-                          href={project.published_url}
+                          href={project.project_type === 'agent' ? `${project.published_url}${project.published_url.includes('?') ? '&' : '?'}projectId=${project.id}` : project.published_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
