@@ -472,7 +472,8 @@ export async function POST(req: Request) {
     //                 ~30s; Qwen stays warm at ~1.4s TTFT). Ideal fast first draft.
     //      "best"  -> Kimi K2.6 (deeper reasoning, more complete/polished, slower)
     //    Default is "quick" so exploratory builds stay fast.
-    //  - Normal chat is short, where Kimi K2.5 runs ~2x faster than K2.6.
+    //  - Normal chat also uses Qwen 3.5 (397B): benchmarked ~6-8x faster and
+    //    more consistent than Kimi K2.5 on Chutes (K2.5 keeps cold-starting).
     // Agent builds require a large, strictly valid JSON project document. Qwen
     // has proven substantially more reliable for this structured first pass;
     // Best Quality still runs the automatic visual validation/repair gate after it.
@@ -482,7 +483,7 @@ export async function POST(req: Request) {
     // An explicit `model` from the client always overrides these defaults.
     const defaultModel = codeMode
       ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
-      : 'moonshotai/Kimi-K2.5-TEE'
+      : 'Qwen/Qwen3.5-397B-A17B-TEE'
     const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
@@ -545,7 +546,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-- You are powered by ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5') : 'Kimi K2.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
+  - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
