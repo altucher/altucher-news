@@ -19,6 +19,7 @@ export async function GET(
     .from('projects')
     .select('*')
     .eq('id', projectId)
+    .eq('user_id', user.id)
     .single()
 
   if (projectError) {
@@ -29,6 +30,7 @@ export async function GET(
     .from('project_versions')
     .select('id, label, version_number, created_at')
     .eq('project_id', projectId)
+    .eq('user_id', user.id)
     .order('version_number', { ascending: false })
 
   if (versionsError) {
@@ -101,6 +103,7 @@ export async function PATCH(
     .from('projects')
     .update(updates)
     .eq('id', projectId)
+    .eq('user_id', user.id)
     .select()
     .single()
 
@@ -128,6 +131,7 @@ export async function DELETE(
     .from('projects')
     .delete()
     .eq('id', projectId)
+    .eq('user_id', user.id)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
