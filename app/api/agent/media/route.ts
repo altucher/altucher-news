@@ -4,7 +4,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const pathname = url.searchParams.get('pathname')
-  if (!pathname || !/^viral-scout\/[0-9a-f-]{36}\/[a-zA-Z0-9._-]+$/.test(pathname)) {
+  if (!pathname || !/^(?:viral-scout|instagram-creator)\/[0-9a-f-]{36}\/[a-zA-Z0-9._-]+$/.test(pathname)) {
     return Response.json({ error: 'Invalid media path' }, { status: 400 })
   }
 

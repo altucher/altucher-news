@@ -29,6 +29,9 @@ const toolLabels: Record<string, string> = {
   search_social: 'Scanning subcultures and extreme views',
   inspect_source: 'Inspecting a substantive source',
   verify_current_facts: 'Verifying current roles, titles, and status',
+  research_instagram_topic: 'Researching credible facts, quotes, and visual hooks',
+  verify_instagram_claims: 'Verifying every proposed fact and attributed quote',
+  plan_instagram_posts: 'Planning five distinct high-potential posts',
   build_angle_map: 'Mapping the controversy',
   evaluate_virality: 'Testing viral angles',
   profile_recipient: 'Building the recipient profile',
@@ -125,6 +128,12 @@ export function isCompleteViralDossier(text: string, finishReason = 'stop') {
   return finishReason !== 'length' && hasSections && hasClosedEnding && !looksCutOff
 }
 
+function isCompleteInstagramPack(text: string, finishReason = 'stop') {
+  const posts = [...text.matchAll(/^##\s+Post\s+([1-5])\b/gim)].map((match) => match[1])
+  const requiredFields = ['Hook:', 'Overlay Copy:', 'Visual Direction:', 'Caption:', 'CTA:', 'Hashtags:', 'Alt Text:', 'Why It Could Go Viral:']
+  return finishReason !== 'length' && new Set(posts).size === 5 && requiredFields.every((field) => text.includes(field)) && /##\s+Post\s+5\b[\s\S]{200,}$/i.test(text)
+}
+
 const INSTAGRAM_IMAGE_MODELS = [
   'https://vonkaiser-qwen-image-2512.chutes.ai/generate',
   'https://vonkaiser-z-image-turbo.chutes.ai/generate',
@@ -178,7 +187,7 @@ function createInstagramPrompts(answer: string, subject: string) {
     {
       title: 'Editorial cover',
       alt: `Editorial Instagram visual inspired by ${topic}`,
-      caption: `Lead with the dossier’s strongest tension: ${topic}`,
+      caption: `Lead with the dossier��s strongest tension: ${topic}`,
       prompt: `Square 1:1 premium editorial news photograph about: ${topic}. Supporting context only: ${context}. Depict one clear real-world scene with one dominant focal subject, cinematic natural light, restrained high contrast, sophisticated documentary magazine art direction, and uncluttered negative space in the upper third where a designer can later add a headline. ${sharedNegative} Photorealistic, credible current-affairs visual storytelling, 1024x1024.`,
     },
     {
@@ -190,9 +199,26 @@ function createInstagramPrompts(answer: string, subject: string) {
   ]
 }
 
-async function buildInstagramCreativePack(answer: string, subject: string, threadId: string): Promise<InstagramCreative[]> {
+function createCreatorPrompts(answer: string, subject: string) {
+  const sections = answer.split(/^##\s+Post\s+\d+/gim).slice(1, 6)
+  const sharedNegative = 'No words, letters, numbers, captions, logos, watermarks, app interfaces, social-media screens, screenshots, charts, collages, split screens, or UI elements. Do not imitate Instagram. No abstract gradient blobs.'
+  return Array.from({ length: 5 }, (_, index) => {
+    const section = sections[index]?.replace(/https?:\/\/\S+/g, '').replace(/[#*`>|_[\]{}]/g, ' ').replace(/\s+/g, ' ').trim() || `${subject}, creative route ${index + 1}`
+    const visual = section.match(/(?:Visual Direction|Image Concept|Visual):\s*([^]*?)(?=\s(?:Caption|Hook|Overlay|CTA|Hashtags|Alt Text|Why It Could Go Viral):|$)/i)?.[1]?.trim() || section.slice(0, 900)
+    const title = section.match(/(?:Format|Hook):\s*([^\n.]{3,90})/i)?.[1]?.trim() || `Post ${index + 1}`
+    const alt = section.match(/Alt Text:\s*([^]*?)(?=\s(?:Why It Could Go Viral|CTA|Hashtags):|$)/i)?.[1]?.trim() || `Editorial visual for ${subject}, post ${index + 1}`
+    return {
+      title: title.slice(0, 90),
+      alt: alt.slice(0, 220),
+      caption: `Post ${index + 1} of 5 — use the exact overlay and caption from the creative brief.`,
+      prompt: `Square 1:1 premium editorial image for this Instagram post about ${subject}: ${visual}. One immediately legible focal idea, emotionally resonant, sophisticated art direction, tactile detail, excellent lighting, high visual contrast, and intentional negative space for a designer-added overlay. ${sharedNegative} 1024x1024.`,
+    }
+  })
+}
+
+async function buildInstagramCreativePack(answer: string, subject: string, threadId: string, creatorMode = false): Promise<InstagramCreative[]> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return []
-  const prompts = createInstagramPrompts(answer, subject)
+  const prompts = creatorMode ? createCreatorPrompts(answer, subject) : createInstagramPrompts(answer, subject)
   const creatives: InstagramCreative[] = []
   for (let index = 0; index < prompts.length; index += 1) {
     const concept = prompts[index]
@@ -200,11 +226,12 @@ async function buildInstagramCreativePack(answer: string, subject: string, threa
     if (!generated) continue
     try {
       const extension = generated.contentType.includes('jpeg') ? 'jpg' : generated.contentType.includes('webp') ? 'webp' : 'png'
-      const pathname = `viral-scout/${threadId}/${Date.now()}-${index + 1}.${extension}`
+      const folder = creatorMode ? 'instagram-creator' : 'viral-scout'
+      const pathname = `${folder}/${threadId}/${Date.now()}-${index + 1}.${extension}`
       const blob = await put(pathname, generated.body, { access: 'private', contentType: generated.contentType, addRandomSuffix: false })
       creatives.push({ ...concept, pathname: blob.pathname, downloadUrl: `/api/agent/media?pathname=${encodeURIComponent(blob.pathname)}` })
     } catch {
-      // Keep the dossier usable if Blob storage has a temporary failure.
+      // Keep the written creative pack usable if Blob storage has a temporary failure.
     }
   }
   return creatives
@@ -358,6 +385,21 @@ function makeTools() {
       inputSchema: z.object({ claims: z.array(z.string().min(3)).min(1).max(12) }),
       execute: async ({ claims }) => searchDesearch(`As of ${new Date().toISOString().slice(0, 10)}, verify each current-status claim below using official government, organization, court, or other authoritative primary sources. For each person or entity, state the current role/status, effective date when available, whether the supplied claim is current, former, disputed, or unverified, and provide direct URLs. Explicitly correct stale titles. Claims: ${claims.join(' | ')}`, ['web'], 'PAST_WEEK'),
     }),
+    research_instagram_topic: tool({
+      description: 'Research a user topic for credible, interesting facts, correctly attributed quotes, human stories, humor-safe observations, visual motifs, and timely cultural angles.',
+      inputSchema: z.object({ topic: z.string().min(2).max(500) }),
+      execute: async ({ topic }) => searchDesearch(`${topic}. Research compelling and visually expressible facts, primary-source data, accurately attributed quotations, surprising history, human stories, and culturally current angles suitable for five Instagram posts. Include direct reputable source URLs and publication dates. Never invent a quote or statistic.`, ['web'], 'PAST_WEEK'),
+    }),
+    verify_instagram_claims: tool({
+      description: 'Mandatory fact gate. Verify every candidate fact, statistic, historical claim, and attributed quote before it can appear in an Instagram post.',
+      inputSchema: z.object({ topic: z.string(), claims: z.array(z.string().min(3)).min(1).max(20) }),
+      execute: async ({ topic, claims }) => searchWeb(`Verify each proposed Instagram claim about ${topic} against primary sources, official data, original transcripts, peer-reviewed work, or multiple reputable sources. Return VERIFIED, DISPUTED, or UNSUPPORTED for each claim with URLs. For quotations, verify exact wording and attribution. Unsupported material must not be used as fact. Claims: ${claims.join(' | ')}`, 'ALL'),
+    }),
+    plan_instagram_posts: tool({
+      description: 'Plan exactly five genuinely distinct post routes only after research and verification.',
+      inputSchema: z.object({ topic: z.string(), posts: z.array(z.object({ format: z.enum(['quote', 'fact', 'humor', 'visual-metaphor', 'story']), hook: z.string(), verifiedClaim: z.string().optional(), visualDirection: z.string(), emotionalDriver: z.string() })).length(5) }),
+      execute: async (input) => ({ ...input, distinctFormats: new Set(input.posts.map((post) => post.format)).size, ready: input.posts.length === 5 && new Set(input.posts.map((post) => post.hook.toLowerCase())).size === 5 }),
+    }),
     build_angle_map: tool({
       description: 'Create a structured sourced editorial map after research: mainstream view, counter-view, extremes, subcultures, characters, story, stakes, surprises, contradictions, gaps, and candidate twists.',
       inputSchema: z.object({ topic: z.string(), mainstream: z.array(z.string()), counterView: z.array(z.string()), extremeViews: z.array(z.object({ view: z.string(), label: z.string(), sourceUrl: z.string().url().optional() })), subcultures: z.array(z.string()), characters: z.array(z.string()), stories: z.array(z.string()), surprises: z.array(z.string()), gaps: z.array(z.string()) }),
@@ -502,7 +544,8 @@ export async function POST(request: Request) {
   const manifest = site.agent_manifest as { name?: string; instructions?: string; tools?: string[] }
   const isViralScout = manifest.name === 'Viral Scout'
   const isGiftFinder = manifest.name === 'GiftFinder'
-  const isDossierAgent = isViralScout || isGiftFinder
+  const isInstagramCreator = manifest.name === 'Instagram Creator'
+  const isDossierAgent = isViralScout || isGiftFinder || isInstagramCreator
   const chutesKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
   const chutes = createOpenAICompatible({ name: 'chutes', baseURL: 'https://llm.chutes.ai/v1', headers: { Authorization: `Bearer ${chutesKey}` } })
   const allTools = makeTools()
@@ -511,13 +554,14 @@ export async function POST(request: Request) {
   const messages: ModelMessage[] = [...(history || []).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.content })), { role: 'user', content: parsed.data.message }]
   const viralSequence = ['scan_twitter_trends', 'scan_current_news', 'search_social', 'inspect_source', 'verify_current_facts', 'build_angle_map', 'evaluate_virality'] as const
   const giftSequence = ['profile_recipient', 'search_shopping', 'synthesize_reviews', 'compare_rank', 'suggest_alternatives', 'build_gift_roadmap'] as const
-  const forcedSequence = isViralScout ? viralSequence : isGiftFinder ? giftSequence : null
+  const instagramSequence = ['research_instagram_topic', 'inspect_source', 'verify_instagram_claims', 'plan_instagram_posts'] as const
+  const forcedSequence = isViralScout ? viralSequence : isGiftFinder ? giftSequence : isInstagramCreator ? instagramSequence : null
   const agent = new ToolLoopAgent({
     id: manifest.name || 'marketplace-agent',
     model: chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'),
-    instructions: `${manifest.instructions || 'Be helpful.'}\n\nYou are an autonomous, tool-using agent—not a one-shot answer bot. Use the research results to decide queries, sources, and revisions. Never repeat an identical call or invent a source, product, retailer, price, review, rating, availability, post, quote, identity, date, or story. When inspecting a source, choose a substantive URL actually returned by prior research. ${isViralScout ? 'Complete the full viral research workflow and build a defensible narrative twist. If no topic is given, pursue the strongest timely candidate. Treat every present-tense office, job title, organizational role, legal status, and public position as unverified until the current-facts step confirms it from an authoritative source. Never infer a current title from historical reporting; explicitly label former office holders as former.' : isGiftFinder ? 'Complete the full gift research workflow. Search the US market, use only products supported by live sources, label assumptions, preserve unknown prices as unknown, and build a useful 6–12 month roadmap. Do not ask follow-up questions unless absolutely necessary; make clearly labeled reasonable assumptions.' : 'Use at least one useful tool before answering.'} Current date: ${new Date().toISOString()}`,
+    instructions: `${manifest.instructions || 'Be helpful.'}\n\nYou are an autonomous, tool-using agent—not a one-shot answer bot. Use the research results to decide queries, sources, and revisions. Never repeat an identical call or invent a source, product, retailer, price, review, rating, availability, post, quote, identity, date, or story. When inspecting a source, choose a substantive URL actually returned by prior research. ${isViralScout ? 'Complete the full viral research workflow and build a defensible narrative twist. If no topic is given, pursue the strongest timely candidate. Treat every present-tense office, job title, organizational role, legal status, and public position as unverified until the current-facts step confirms it from an authoritative source. Never infer a current title from historical reporting; explicitly label former office holders as former.' : isGiftFinder ? 'Complete the full gift research workflow. Search the US market, use only products supported by live sources, label assumptions, preserve unknown prices as unknown, and build a useful 6–12 month roadmap. Do not ask follow-up questions unless absolutely necessary; make clearly labeled reasonable assumptions.' : isInstagramCreator ? 'Complete the full Instagram research and verification workflow. Produce exactly five distinct post routes. Any fact, statistic, historical claim, or attributed quote must be supported by the verifier; unsupported material must be omitted or rewritten clearly as opinion or humor. Do not expose the internal source list unless the user asks.' : 'Use at least one useful tool before answering.'} Current date: ${new Date().toISOString()}`,
     tools: enabledTools,
-    stopWhen: stepCountIs(isViralScout ? 8 : isGiftFinder ? 7 : 5),
+    stopWhen: stepCountIs(isViralScout ? 8 : isGiftFinder ? 7 : isInstagramCreator ? 5 : 5),
     prepareStep: ({ stepNumber }) => {
       if (forcedSequence && stepNumber < forcedSequence.length) return { activeTools: [forcedSequence[stepNumber]], toolChoice: { type: 'tool', toolName: forcedSequence[stepNumber] } }
       if (isDossierAgent || stepNumber >= 3) return { activeTools: [], toolChoice: 'none' }
@@ -564,7 +608,7 @@ export async function POST(request: Request) {
         if (observations.length === 0) throw new Error('Agent completed without using a tool')
         send({ type: 'status', label: isDossierAgent ? `Synthesizing the dossier from ${observations.length} research steps` : 'Synthesizing the final answer' })
         const evidence = JSON.stringify(observations).slice(0, 60_000)
-        const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map; What People Are Saying; The Story; Podcast Blueprint; Guest Shortlist; Instagram Reel; X/Twitter Thread; Substack / Viral Article; Why It Could Go Viral; Sources and Guardrails. If social evidence or a credible twist is missing, say so honestly. CURRENT-FACT RULE: For every present-tense office holder, job title, organizational role, legal status, or public position, use the verify_current_facts observation as the authority. Do not repeat a title merely because it appeared in another source. Say “former” where applicable. If the verifier did not support the current status, omit the title or explicitly mark it unverified. Prefer official sources in Sources and Guardrails.` : isGiftFinder ? `Return a polished Markdown Gift Dossier with ALL sections: Recipient Snapshot (known facts vs assumptions); Best Overall Pick; Ranked Gift Shortlist (3–7 real products); for every product include retailer, observed price or “price not verified,” fit rationale, review evidence, tradeoffs, and a direct source link; Even Better Alternatives; Buying Guidance (shipping/availability caveats and observed-at timestamp); 6–12 Month Gift Roadmap (known dates clearly separated from inferred milestones); Calendar Candidates with recipient, occasion, give-by date when known, suggested plan-by date, budget, and recurrence; Sources and Verification Notes. Never turn an unsupported product or price into a recommendation. Prices and availability can change.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
+        const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map; What People Are Saying; The Story; Podcast Blueprint; Guest Shortlist; Instagram Reel; X/Twitter Thread; Substack / Viral Article; Why It Could Go Viral; Sources and Guardrails. If social evidence or a credible twist is missing, say so honestly. CURRENT-FACT RULE: For every present-tense office holder, job title, organizational role, legal status, or public position, use the verify_current_facts observation as the authority. Do not repeat a title merely because it appeared in another source. Say “former” where applicable. If the verifier did not support the current status, omit the title or explicitly mark it unverified. Prefer official sources in Sources and Guardrails.` : isInstagramCreator ? `Return exactly five complete Instagram briefs, headed ## Post 1 through ## Post 5. Each post MUST contain these exact labeled fields: Format:; Hook:; Overlay Copy:; Visual Direction:; Caption:; CTA:; Hashtags:; Alt Text:; Why It Could Go Viral:. Make the five concepts genuinely distinct and vary among verified fact, accurately attributed quote, humor, visual metaphor, and human story when evidence supports them. Captions must be polished and ready to paste. Keep hashtags relevant and restrained. Never put source URLs or a Sources section in the user-facing pack unless requested, but only use facts and exact quotes that the verification evidence marked supported. If a quote cannot be verified exactly, paraphrase it without quotation marks or replace it. Visual Direction must describe an image with no rendered text; Overlay Copy supplies exact separate text for the designer.` : isGiftFinder ? `Return a polished Markdown Gift Dossier with ALL sections: Recipient Snapshot (known facts vs assumptions); Best Overall Pick; Ranked Gift Shortlist (3–7 real products); for every product include retailer, observed price or “price not verified,” fit rationale, review evidence, tradeoffs, and a direct source link; Even Better Alternatives; Buying Guidance (shipping/availability caveats and observed-at timestamp); 6–12 Month Gift Roadmap (known dates clearly separated from inferred milestones); Calendar Candidates with recipient, occasion, give-by date when known, suggested plan-by date, budget, and recurrence; Sources and Verification Notes. Never turn an unsupported product or price into a recommendation. Prices and availability can change.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
         const synthesize = async (model: Parameters<typeof streamText>[0]['model'], timeoutMs: number, system = synthesisPrompt, outputTokens = isDossierAgent ? 14_000 : 6000): Promise<SynthesisResult> => {
           try {
             const synthesis = streamText({ model, system, messages, maxOutputTokens: outputTokens, timeout: { totalMs: timeoutMs }, maxRetries: 2 })
@@ -577,25 +621,27 @@ export async function POST(request: Request) {
         }
         const primary = await synthesize(chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'), 120_000)
         let selected = primary
-        if (!primary.text.trim() || (isViralScout && !isCompleteViralDossier(primary.text, primary.finishReason))) {
+        if (!primary.text.trim() || (isViralScout && !isCompleteViralDossier(primary.text, primary.finishReason)) || (isInstagramCreator && !isCompleteInstagramPack(primary.text, primary.finishReason))) {
           send({ type: 'status', label: primary.text.trim() ? 'Completing the full dossier before delivery' : 'Retrying dossier synthesis' })
           const recoveryPrompt = `${synthesisPrompt}\n\nRELIABILITY REQUIREMENT: The previous attempt was empty or incomplete. Write a fresh, self-contained dossier from the evidence. Include every required section exactly once. Keep each section concise enough to finish. Never end mid-sentence, mid-quote, mid-script, or before Sources and Guardrails.`
           selected = await synthesize(chutes.chatModel('moonshotai/Kimi-K2.5-TEE'), 180_000, recoveryPrompt, 18_000)
         }
-        if (!selected.text.trim() || (isViralScout && !isCompleteViralDossier(selected.text, selected.finishReason))) {
+        if (!selected.text.trim() || (isViralScout && !isCompleteViralDossier(selected.text, selected.finishReason)) || (isInstagramCreator && !isCompleteInstagramPack(selected.text, selected.finishReason))) {
           const finalPrompt = `${synthesisPrompt}\n\nReturn a concise but COMPLETE self-contained dossier. Every required heading is mandatory. Finish Sources and Guardrails. Do not exceed roughly 5,500 words and do not stop mid-section.`
           selected = await synthesize(gateway('openai/gpt-4o-mini'), 120_000, finalPrompt, 16_000)
         }
         answer = selected.text
         if (!answer.trim()) throw new Error('All response models were temporarily unavailable. Please retry; the completed research has been preserved in this conversation.')
         if (isViralScout && !isCompleteViralDossier(answer, selected.finishReason)) throw new Error('The dossier could not be completed safely. Please retry; the completed research has been preserved in this conversation.')
+        if (isInstagramCreator && !isCompleteInstagramPack(answer, selected.finishReason)) throw new Error('All five Instagram posts could not be completed safely. Please retry; the verified research has been preserved in this conversation.')
         send({ type: 'text', delta: answer })
         let creatives: InstagramCreative[] = []
-        if (isViralScout) {
-          send({ type: 'status', label: 'Creating two Instagram-ready visuals from the selected angle' })
-          creatives = await buildInstagramCreativePack(answer, parsed.data.message, thread!.id)
-          send({ type: 'status', label: creatives.length === 2 ? 'Instagram Creative Pack ready' : creatives.length === 1 ? 'One Instagram visual is ready' : 'Image generation skipped; the dossier is complete' })
-          if (creatives.length) send({ type: 'creative-pack', title: 'Instagram Creative Pack', creatives })
+        if (isViralScout || isInstagramCreator) {
+          const targetCount = isInstagramCreator ? 5 : 2
+          send({ type: 'status', label: isInstagramCreator ? 'Creating five square Instagram visuals from the verified briefs' : 'Creating two Instagram-ready visuals from the selected angle' })
+          creatives = await buildInstagramCreativePack(answer, parsed.data.message, thread!.id, isInstagramCreator)
+          send({ type: 'status', label: creatives.length === targetCount ? `${isInstagramCreator ? 'Five-post Instagram pack' : 'Instagram Creative Pack'} ready` : creatives.length ? `${creatives.length} of ${targetCount} visuals are ready; all written briefs are complete` : 'Image generation was unavailable; all written briefs are complete' })
+          if (creatives.length) send({ type: 'creative-pack', title: isInstagramCreator ? 'Five-Post Instagram Pack' : 'Instagram Creative Pack', creatives })
         }
         await db.from('agent_messages').insert({
           thread_id: thread!.id,
@@ -606,11 +652,11 @@ export async function POST(request: Request) {
             role: 'assistant',
             content: answer,
             agent: { stepCount, tools: usedTools },
-            ...(creatives.length ? { creativePack: { title: 'Instagram Creative Pack', creatives } } : {}),
+            ...(creatives.length ? { creativePack: { title: isInstagramCreator ? 'Five-Post Instagram Pack' : 'Instagram Creative Pack', creatives } } : {}),
           },
         })
         await db.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', thread!.id)
-        await db.from('analytics_events').insert({ event_type: 'agent_query', prompt: parsed.data.message.slice(0, 500), model: isViralScout ? 'Qwen 3.5 Viral Scout' : isGiftFinder ? 'Qwen 3.5 GiftFinder' : 'Qwen 3.5 Agent', used_desearch: usedTools.some((name) => ['web_search', 'scan_twitter_trends', 'scan_current_news', 'search_social'].includes(name)) }).then(undefined, () => {})
+        await db.from('analytics_events').insert({ event_type: 'agent_query', prompt: parsed.data.message.slice(0, 500), model: isViralScout ? 'Qwen 3.5 Viral Scout' : isGiftFinder ? 'Qwen 3.5 GiftFinder' : isInstagramCreator ? 'Qwen 3.5 Instagram Creator' : 'Qwen 3.5 Agent', used_desearch: usedTools.some((name) => ['web_search', 'scan_twitter_trends', 'scan_current_news', 'search_social'].includes(name)) }).then(undefined, () => {})
         send({ type: 'done', stepCount, tools: usedTools })
       } catch (error) {
         send({ type: 'error', message: error instanceof Error ? error.message : 'The agent could not finish this response.' })
