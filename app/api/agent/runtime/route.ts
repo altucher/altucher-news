@@ -306,6 +306,7 @@ export async function POST(request: Request) {
       return { toolChoice: stepNumber === 0 ? 'required' : 'auto' }
     },
     maxOutputTokens: isViralScout ? 9000 : 6000,
+    maxRetries: 3,
   })
   const result = await agent.stream({ messages })
   let answer = ''
@@ -317,16 +318,27 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (value: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`))
       try {
-      for await (const part of result.fullStream) {
-          if (part.type === 'tool-call') {
-            usedTools.push(part.toolName)
-            send({ type: 'tool', phase: 'start', tool: part.toolName, label: toolLabels[part.toolName] || 'Using a specialist tool' })
-          } else if (part.type === 'tool-result') {
-            observations.push({ tool: part.toolName, output: part.output })
-            send({ type: 'tool', phase: 'complete', tool: part.toolName, label: `${toolLabels[part.toolName] || 'Tool'} complete` })
-        } else if (part.type === 'finish-step') {
-          stepCount += 1
-        }
+        try {
+          for await (const part of result.fullStream) {
+            if (part.type === 'tool-call') {
+              usedTools.push(part.toolName)
+              send({ type: 'tool', phase: 'start', tool: part.toolName, label: toolLabels[part.toolName] || 'Using a specialist tool' })
+            } else if (part.type === 'tool-result') {
+              observations.push({ tool: part.toolName, output: part.output })
+              send({ type: 'tool', phase: 'complete', tool: part.toolName, label: `${toolLabels[part.toolName] || 'Tool'} complete` })
+            } else if (part.type === 'finish-step') {
+              stepCount += 1
+            } else if (part.type === 'error') {
+              throw part.error instanceof Error ? part.error : new Error('Research model error')
+            }
+          }
+        } catch (streamError) {
+          // The research model stream failed mid-run (usually a transient Chutes
+          // error). If we already gathered evidence, continue to synthesis with
+          // what we have instead of discarding the whole run.
+          console.log('[v0] agent research stream error:', streamError instanceof Error ? streamError.message : streamError)
+          if (observations.length === 0) throw streamError
+          send({ type: 'tool', phase: 'complete', tool: 'recovery', label: 'Continuing with the research gathered so far' })
         }
         if (observations.length === 0) throw new Error('Agent completed without using a tool')
         send({ type: 'status', label: 'Synthesizing the final answer' })
