@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, FolderCode, Trash2, Loader2, History, ArrowLeft, RotateCcw, Pencil, Globe, Store } from 'lucide-react'
+import { X, FolderCode, Trash2, Loader2, History, ArrowLeft, RotateCcw, Pencil, Globe, Store, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Project {
@@ -46,6 +46,8 @@ function formatDate(iso: string): string {
 
 export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion }: ProjectsPanelProps) {
   const [projects, setProjects] = useState<Project[]>([])
+  // Which category is being viewed: standalone sites ("Projects") or agents ("Agents").
+  const [category, setCategory] = useState<'site' | 'agent'>('site')
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [updatingListing, setUpdatingListing] = useState<string | null>(null)
@@ -128,6 +130,11 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
 
   if (!isOpen) return null
 
+  const agents = projects.filter((p) => p.project_type === 'agent')
+  const sites = projects.filter((p) => p.project_type !== 'agent')
+  const visibleProjects = category === 'agent' ? agents : sites
+  const isAgents = category === 'agent'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-card border border-border rounded-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col shadow-xl">
@@ -146,8 +153,8 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
               </>
             ) : (
               <>
-                <FolderCode className="w-5 h-5 text-sky-500" />
-                <h2 className="text-lg font-semibold text-foreground">My Projects</h2>
+                {isAgents ? <Bot className="w-5 h-5 text-sky-500" /> : <FolderCode className="w-5 h-5 text-sky-500" />}
+                <h2 className="text-lg font-semibold text-foreground">{isAgents ? 'My Agents' : 'My Projects'}</h2>
               </>
             )}
           </div>
@@ -155,6 +162,30 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
             <X className="w-5 h-5" />
           </Button>
         </div>
+
+        {/* Category tabs */}
+        {!historyFor && (
+          <div className="flex items-center gap-1 border-b border-border p-2">
+            <button
+              type="button"
+              onClick={() => setCategory('site')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${category === 'site' ? 'bg-sky-500/10 text-sky-500' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <FolderCode className="h-4 w-4" />
+              Projects
+              <span className="text-xs font-normal opacity-70">{sites.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategory('agent')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${category === 'agent' ? 'bg-sky-500/10 text-sky-500' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Bot className="h-4 w-4" />
+              Agents
+              <span className="text-xs font-normal opacity-70">{agents.length}</span>
+            </button>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-4">
@@ -199,17 +230,28 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
-          ) : projects.length === 0 ? (
+          ) : visibleProjects.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <FolderCode className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p>No saved projects yet</p>
-              <p className="text-sm mt-1">
-                Build something in BlueTAO Code, then press &quot;Save&quot; to keep it here.
-              </p>
+              {isAgents ? <Bot className="w-12 h-12 mx-auto mb-3 opacity-20" /> : <FolderCode className="w-12 h-12 mx-auto mb-3 opacity-20" />}
+              {isAgents ? (
+                <>
+                  <p>No agents added yet</p>
+                  <p className="text-sm mt-1">
+                    Open the Agent Marketplace and press &quot;Add to my agents&quot; to keep one here.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>No saved projects yet</p>
+                  <p className="text-sm mt-1">
+                    Build something in BlueTAO Code, then press &quot;Save&quot; to keep it here.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
-              {projects.map((project) => (
+              {visibleProjects.map((project) => (
                 <div
                   key={project.id}
                   className="flex items-center justify-between gap-2 p-3 bg-background/50 rounded-lg border border-border/50 group"
@@ -295,7 +337,9 @@ export function ProjectsPanel({ isOpen, onClose, onOpenProject, onRestoreVersion
         {!historyFor && (
           <div className="p-4 border-t border-border text-center">
             <p className="text-xs text-muted-foreground">
-              {projects.length} {projects.length === 1 ? 'project' : 'projects'} saved
+              {isAgents
+                ? `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} added`
+                : `${sites.length} ${sites.length === 1 ? 'project' : 'projects'} saved`}
             </p>
           </div>
         )}

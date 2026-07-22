@@ -10,7 +10,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ sl
   const { slug } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Sign in to add this agent to My Projects.' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Sign in to add this agent to My Agents.' }, { status: 401 })
 
   const { data: site } = await admin()
     .from('published_sites')

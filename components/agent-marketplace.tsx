@@ -64,14 +64,14 @@ function AgentCard({ agent, featured = false }: { agent: Agent; featured?: boole
       <div className="flex flex-col gap-3 pt-5">
         <button type="button" onClick={install} disabled={installing || installed} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70">
           {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : installed ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
-          {installing ? 'Adding…' : installed ? 'Added to your projects' : 'Add to my projects'}
+          {installing ? 'Adding…' : installed ? 'Added to your agents' : 'Add to my agents'}
         </button>
         <div className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <p className="text-pretty text-xs leading-5 text-muted-foreground">
             {installed
-              ? <>Opened in a new tab. Find it anytime under <span className="font-semibold text-foreground">My Projects</span>, where your chats stay private to you—and you can delete it whenever you like.</>
-              : <>Add it to keep your conversations <span className="font-semibold text-foreground">private to your account</span>. It lives in <span className="font-semibold text-foreground">My Projects</span> and you can delete it anytime.</>}
+              ? <>Opened in a new tab. Find it anytime under <span className="font-semibold text-foreground">My Agents</span>, where your chats stay private to you—and you can delete it whenever you like.</>
+              : <>Add it to keep your conversations <span className="font-semibold text-foreground">private to your account</span>. It lives in <span className="font-semibold text-foreground">My Agents</span> and you can delete it anytime.</>}
           </p>
         </div>
         <div className="flex items-center justify-between gap-3">
