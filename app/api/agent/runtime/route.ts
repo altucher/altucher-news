@@ -100,6 +100,31 @@ type InstagramCreative = {
   downloadUrl: string
 }
 
+type SynthesisResult = {
+  text: string
+  finishReason: string
+  rawFinishReason?: string
+}
+
+const VIRAL_DOSSIER_SECTIONS = [
+  'As of',
+  'The Big Idea',
+  'Podcast Blueprint',
+  'Instagram Reel',
+  'X/Twitter Thread',
+  'Substack',
+  'Why It Could Go Viral',
+  'Sources and Guardrails',
+] as const
+
+export function isCompleteViralDossier(text: string, finishReason = 'stop') {
+  const normalized = text.toLowerCase()
+  const hasSections = VIRAL_DOSSIER_SECTIONS.every((section) => normalized.includes(section.toLowerCase()))
+  const hasClosedEnding = /sources\s*(?:and|&)\s*guardrails[\s\S]{80,}$/i.test(text)
+  const looksCutOff = /(?:^|\s)(?:script|caption|audio|text overlay):\s*["“][^"”\n]{0,220}$/i.test(text.trim())
+  return finishReason !== 'length' && hasSections && hasClosedEnding && !looksCutOff
+}
+
 const INSTAGRAM_IMAGE_MODELS = [
   'https://vonkaiser-qwen-image-2512.chutes.ai/generate',
   'https://vonkaiser-z-image-turbo.chutes.ai/generate',
@@ -540,20 +565,30 @@ export async function POST(request: Request) {
         send({ type: 'status', label: isDossierAgent ? `Synthesizing the dossier from ${observations.length} research steps` : 'Synthesizing the final answer' })
         const evidence = JSON.stringify(observations).slice(0, 60_000)
         const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map; What People Are Saying; The Story; Podcast Blueprint; Guest Shortlist; Instagram Reel; X/Twitter Thread; Substack / Viral Article; Why It Could Go Viral; Sources and Guardrails. If social evidence or a credible twist is missing, say so honestly. CURRENT-FACT RULE: For every present-tense office holder, job title, organizational role, legal status, or public position, use the verify_current_facts observation as the authority. Do not repeat a title merely because it appeared in another source. Say “former” where applicable. If the verifier did not support the current status, omit the title or explicitly mark it unverified. Prefer official sources in Sources and Guardrails.` : isGiftFinder ? `Return a polished Markdown Gift Dossier with ALL sections: Recipient Snapshot (known facts vs assumptions); Best Overall Pick; Ranked Gift Shortlist (3–7 real products); for every product include retailer, observed price or “price not verified,” fit rationale, review evidence, tradeoffs, and a direct source link; Even Better Alternatives; Buying Guidance (shipping/availability caveats and observed-at timestamp); 6–12 Month Gift Roadmap (known dates clearly separated from inferred milestones); Calendar Candidates with recipient, occasion, give-by date when known, suggested plan-by date, budget, and recurrence; Sources and Verification Notes. Never turn an unsupported product or price into a recommendation. Prices and availability can change.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
-        const synthesize = async (model: Parameters<typeof streamText>[0]['model'], timeoutMs: number) => {
+        const synthesize = async (model: Parameters<typeof streamText>[0]['model'], timeoutMs: number, system = synthesisPrompt, outputTokens = isDossierAgent ? 14_000 : 6000): Promise<SynthesisResult> => {
           try {
-            const synthesis = streamText({ model, system: synthesisPrompt, messages, maxOutputTokens: isDossierAgent ? 9000 : 6000, timeout: { totalMs: timeoutMs }, maxRetries: 2 })
+            const synthesis = streamText({ model, system, messages, maxOutputTokens: outputTokens, timeout: { totalMs: timeoutMs }, maxRetries: 2 })
             let text = ''
             for await (const delta of synthesis.textStream) text += delta
-            return text
+            return { text, finishReason: await synthesis.finishReason, rawFinishReason: await synthesis.rawFinishReason }
           } catch {
-            return ''
+            return { text: '', finishReason: 'error' }
           }
         }
-        answer = await synthesize(chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'), 90_000)
-        if (!answer.trim()) answer = await synthesize(chutes.chatModel('moonshotai/Kimi-K2.5-TEE'), 120_000)
-        if (!answer.trim()) answer = await synthesize(gateway('openai/gpt-4o-mini'), 90_000)
-  if (!answer.trim()) throw new Error('All response models were temporarily unavailable. Please retry; the completed research has been preserved in this conversation.')
+        const primary = await synthesize(chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'), 120_000)
+        let selected = primary
+        if (!primary.text.trim() || (isViralScout && !isCompleteViralDossier(primary.text, primary.finishReason))) {
+          send({ type: 'status', label: primary.text.trim() ? 'Completing the full dossier before delivery' : 'Retrying dossier synthesis' })
+          const recoveryPrompt = `${synthesisPrompt}\n\nRELIABILITY REQUIREMENT: The previous attempt was empty or incomplete. Write a fresh, self-contained dossier from the evidence. Include every required section exactly once. Keep each section concise enough to finish. Never end mid-sentence, mid-quote, mid-script, or before Sources and Guardrails.`
+          selected = await synthesize(chutes.chatModel('moonshotai/Kimi-K2.5-TEE'), 180_000, recoveryPrompt, 18_000)
+        }
+        if (!selected.text.trim() || (isViralScout && !isCompleteViralDossier(selected.text, selected.finishReason))) {
+          const finalPrompt = `${synthesisPrompt}\n\nReturn a concise but COMPLETE self-contained dossier. Every required heading is mandatory. Finish Sources and Guardrails. Do not exceed roughly 5,500 words and do not stop mid-section.`
+          selected = await synthesize(gateway('openai/gpt-4o-mini'), 120_000, finalPrompt, 16_000)
+        }
+        answer = selected.text
+        if (!answer.trim()) throw new Error('All response models were temporarily unavailable. Please retry; the completed research has been preserved in this conversation.')
+        if (isViralScout && !isCompleteViralDossier(answer, selected.finishReason)) throw new Error('The dossier could not be completed safely. Please retry; the completed research has been preserved in this conversation.')
         send({ type: 'text', delta: answer })
         let creatives: InstagramCreative[] = []
         if (isViralScout) {
