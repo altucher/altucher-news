@@ -30,6 +30,12 @@ const toolLabels: Record<string, string> = {
   inspect_source: 'Inspecting a substantive source',
   build_angle_map: 'Mapping the controversy',
   evaluate_virality: 'Testing viral angles',
+  profile_recipient: 'Building the recipient profile',
+  search_shopping: 'Searching live US shopping sources',
+  synthesize_reviews: 'Inspecting product and review evidence',
+  compare_rank: 'Comparing fit, value, and risk',
+  suggest_alternatives: 'Searching for better alternatives',
+  build_gift_roadmap: 'Building the gift roadmap',
 }
 
 // Build a short, human-readable summary of what a tool actually found, so the
@@ -331,6 +337,36 @@ function makeTools() {
       inputSchema: z.object({ angles: z.array(z.object({ title: z.string(), twist: z.string(), evidence: z.array(z.string()), recency: z.number().min(1).max(5), novelty: z.number().min(1).max(5), tension: z.number().min(1).max(5), stakes: z.number().min(1).max(5), visualPotential: z.number().min(1).max(5), credibility: z.number().min(1).max(5) })).min(2) }),
       execute: async ({ angles }) => ({ ranked: angles.map((angle) => ({ ...angle, score: angle.recency + angle.novelty + angle.tension + angle.stakes + angle.visualPotential + angle.credibility })).sort((a, b) => b.score - a.score), selectionRule: 'Choose the highest credible angle, not merely the most sensational.' }),
     }),
+    profile_recipient: tool({
+      description: 'Create a concise recipient brief before shopping. Capture known details and label assumptions explicitly.',
+      inputSchema: z.object({ recipient: z.string(), relationship: z.string().optional(), occasion: z.string(), budgetUsd: z.object({ min: z.number().nonnegative(), max: z.number().positive() }), interests: z.array(z.string()), constraints: z.array(z.string()), avoid: z.array(z.string()), assumptions: z.array(z.string()) }),
+      execute: async (input) => ({ ...input, market: 'US', profiledAt: new Date().toISOString() }),
+    }),
+    search_shopping: tool({
+      description: 'Search live US retailer and product sources. Return real links, observed prices, availability language, and search timestamps; never invent products.',
+      inputSchema: z.object({ query: z.string().min(2).max(500) }),
+      execute: async ({ query }) => searchDesearch(`${query}. Search current US retailers and reputable gift guides. Return exact product names, retailer names, observed USD prices, availability wording, and direct product URLs. Do not infer missing prices.`, ['web'], 'PAST_WEEK'),
+    }),
+    synthesize_reviews: tool({
+      description: 'Inspect real product or review pages returned by shopping search and record recurring praise, complaints, rating evidence, and provenance.',
+      inputSchema: z.object({ sources: z.array(z.string().url()).min(1).max(4) }),
+      execute: async ({ sources }) => ({ inspected: await Promise.all(sources.map((url) => inspectUrl(url))), inspectedAt: new Date().toISOString() }),
+    }),
+    compare_rank: tool({
+      description: 'Rank only products supported by current source evidence; include price, retailer, fit, value, risks, review evidence, and source URLs.',
+      inputSchema: z.object({ products: z.array(z.object({ name: z.string(), retailer: z.string(), observedPrice: z.string().optional(), sourceUrl: z.string().url(), fit: z.number().min(1).max(5), value: z.number().min(1).max(5), risk: z.number().min(1).max(5), reviewEvidence: z.array(z.string()) })).min(2) }),
+      execute: async ({ products }) => ({ ranked: products.map((product) => ({ ...product, score: product.fit * 3 + product.value * 2 - product.risk })).sort((a, b) => b.score - a.score), rule: 'Evidence-backed fit outranks novelty; unknown price or availability must remain unknown.' }),
+    }),
+    suggest_alternatives: tool({
+      description: 'Search live sources for stronger, more personal, experiential, handmade, or better-value alternatives to the initial shortlist.',
+      inputSchema: z.object({ query: z.string().min(2).max(500) }),
+      execute: async ({ query }) => searchDesearch(`${query}. Find real US-market alternatives that are more personal, experiential, handmade, local, or better value. Include observed prices and direct links; do not invent availability.`, ['web'], 'PAST_WEEK'),
+    }),
+    build_gift_roadmap: tool({
+      description: 'Build a 6–12 month themed roadmap and distinguish known occasion dates from inferred possibilities.',
+      inputSchema: z.object({ recipient: z.string(), milestones: z.array(z.object({ label: z.string(), date: z.string().optional(), timing: z.string(), knownDate: z.boolean(), theme: z.string(), budgetUsd: z.number().nonnegative().optional() })).min(1), exclusions: z.array(z.string()) }),
+      execute: async (input) => ({ ...input, reminderLeadDays: [30, 14, 3], generatedAt: new Date().toISOString() }),
+    }),
     web_search: tool({
       description: 'Search the current web. Call this more than once with refined queries when evidence is incomplete, conflicting, time-sensitive, product-specific, or location-specific.',
       inputSchema: z.object({ query: z.string().min(2).max(500), dateFilter: z.enum(['PAST_DAY', 'PAST_WEEK', 'PAST_MONTH', 'PAST_YEAR', 'ALL']).default('ALL') }),
@@ -381,7 +417,7 @@ async function resolvePrivateProject(projectId?: string) {
   if (!user) throw new Error('PRIVATE_UNAUTHORIZED')
   const { data: project } = await supabase.from('projects').select('id, user_id, project_type, agent_manifest').eq('id', projectId).eq('user_id', user.id).maybeSingle()
   const manifest = project?.agent_manifest as { name?: string } | null
-  if (!project || project.project_type !== 'agent' || manifest?.name !== 'Viral Scout') throw new Error('PRIVATE_NOT_FOUND')
+  if (!project || project.project_type !== 'agent' || !['Viral Scout', 'GiftFinder'].includes(manifest?.name || '')) throw new Error('PRIVATE_NOT_FOUND')
   return { projectId: project.id, userId: user.id }
 }
 
@@ -434,6 +470,8 @@ export async function POST(request: Request) {
 
   const manifest = site.agent_manifest as { name?: string; instructions?: string; tools?: string[] }
   const isViralScout = manifest.name === 'Viral Scout'
+  const isGiftFinder = manifest.name === 'GiftFinder'
+  const isDossierAgent = isViralScout || isGiftFinder
   const chutesKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
   const chutes = createOpenAICompatible({ name: 'chutes', baseURL: 'https://llm.chutes.ai/v1', headers: { Authorization: `Bearer ${chutesKey}` } })
   const allTools = makeTools()
@@ -441,18 +479,20 @@ export async function POST(request: Request) {
   const enabledTools = Object.fromEntries(Object.entries(allTools).filter(([name]) => enabledNames.has(name))) as typeof allTools
   const messages: ModelMessage[] = [...(history || []).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.content })), { role: 'user', content: parsed.data.message }]
   const viralSequence = ['scan_twitter_trends', 'scan_current_news', 'search_social', 'inspect_source', 'build_angle_map', 'evaluate_virality'] as const
+  const giftSequence = ['profile_recipient', 'search_shopping', 'synthesize_reviews', 'compare_rank', 'suggest_alternatives', 'build_gift_roadmap'] as const
+  const forcedSequence = isViralScout ? viralSequence : isGiftFinder ? giftSequence : null
   const agent = new ToolLoopAgent({
     id: manifest.name || 'marketplace-agent',
     model: chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'),
-    instructions: `${manifest.instructions || 'Be helpful.'}\n\nYou are an autonomous, tool-using agent—not a one-shot answer bot. Use the research results to decide queries, sources, angles, and revisions. Never repeat an identical call or invent a source, post, quote, identity, date, engagement number, or story. When inspecting a source, choose a substantive URL actually returned by prior research. Distinguish reporting, opinion, fringe claims, and inference. ${isViralScout ? 'Complete the full research workflow and build a defensible narrative twist before synthesis. If the user gives no topic, rank timely candidates and pursue the strongest. Current date: ' + new Date().toISOString() : 'Use at least one useful tool before answering.'}`,
+    instructions: `${manifest.instructions || 'Be helpful.'}\n\nYou are an autonomous, tool-using agent—not a one-shot answer bot. Use the research results to decide queries, sources, and revisions. Never repeat an identical call or invent a source, product, retailer, price, review, rating, availability, post, quote, identity, date, or story. When inspecting a source, choose a substantive URL actually returned by prior research. ${isViralScout ? 'Complete the full viral research workflow and build a defensible narrative twist. If no topic is given, pursue the strongest timely candidate.' : isGiftFinder ? 'Complete the full gift research workflow. Search the US market, use only products supported by live sources, label assumptions, preserve unknown prices as unknown, and build a useful 6–12 month roadmap. Do not ask follow-up questions unless absolutely necessary; make clearly labeled reasonable assumptions.' : 'Use at least one useful tool before answering.'} Current date: ${new Date().toISOString()}`,
     tools: enabledTools,
-    stopWhen: stepCountIs(isViralScout ? 7 : 5),
+    stopWhen: stepCountIs(isDossierAgent ? 7 : 5),
     prepareStep: ({ stepNumber }) => {
-      if (isViralScout && stepNumber < viralSequence.length) return { activeTools: [viralSequence[stepNumber]], toolChoice: { type: 'tool', toolName: viralSequence[stepNumber] } }
-      if (isViralScout || stepNumber >= 3) return { activeTools: [], toolChoice: 'none' }
+      if (forcedSequence && stepNumber < forcedSequence.length) return { activeTools: [forcedSequence[stepNumber]], toolChoice: { type: 'tool', toolName: forcedSequence[stepNumber] } }
+      if (isDossierAgent || stepNumber >= 3) return { activeTools: [], toolChoice: 'none' }
       return { toolChoice: stepNumber === 0 ? 'required' : 'auto' }
     },
-    maxOutputTokens: isViralScout ? 9000 : 6000,
+    maxOutputTokens: isDossierAgent ? 9000 : 6000,
     maxRetries: 3,
   })
   const result = await agent.stream({ messages })
@@ -491,12 +531,12 @@ export async function POST(request: Request) {
           send({ type: 'tool', phase: 'complete', tool: 'recovery', label: 'Continuing with the research gathered so far' })
         }
         if (observations.length === 0) throw new Error('Agent completed without using a tool')
-        send({ type: 'status', label: isViralScout ? `Synthesizing the dossier from ${observations.length} research steps` : 'Synthesizing the final answer' })
+        send({ type: 'status', label: isDossierAgent ? `Synthesizing the dossier from ${observations.length} research steps` : 'Synthesizing the final answer' })
         const evidence = JSON.stringify(observations).slice(0, 60_000)
-        const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map (strongest cases on both sides and clearly labeled extreme/fringe/subculture views); What People Are Saying (only linked real examples); The Story (sourced real anecdote or explicitly labeled illustration); Podcast Blueprint (titles, cold open, arc, segments, counterarguments, reveal, takeaway, CTA); Guest Shortlist; Instagram Reel (timed script, on-screen text, visual beats, CTA); X/Twitter Thread; Substack / Viral Article (headlines, dek, and substantial draft or detailed outline); Why It Could Go Viral (identities, emotions, pattern interrupt, distribution, risks); Sources and Guardrails. Center a surprising, source-supported story, reversal, hidden incentive, unexpected constituency, historical rhyme, or counterintuitive implication. Explain why the twist matters. If social evidence or a credible twist is missing, say so honestly.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
+        const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map; What People Are Saying; The Story; Podcast Blueprint; Guest Shortlist; Instagram Reel; X/Twitter Thread; Substack / Viral Article; Why It Could Go Viral; Sources and Guardrails. If social evidence or a credible twist is missing, say so honestly.` : isGiftFinder ? `Return a polished Markdown Gift Dossier with ALL sections: Recipient Snapshot (known facts vs assumptions); Best Overall Pick; Ranked Gift Shortlist (3–7 real products); for every product include retailer, observed price or “price not verified,” fit rationale, review evidence, tradeoffs, and a direct source link; Even Better Alternatives; Buying Guidance (shipping/availability caveats and observed-at timestamp); 6–12 Month Gift Roadmap (known dates clearly separated from inferred milestones); Calendar Candidates with recipient, occasion, give-by date when known, suggested plan-by date, budget, and recurrence; Sources and Verification Notes. Never turn an unsupported product or price into a recommendation. Prices and availability can change.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
         const synthesize = async (model: Parameters<typeof streamText>[0]['model'], timeoutMs: number) => {
           try {
-            const synthesis = streamText({ model, system: synthesisPrompt, messages, maxOutputTokens: isViralScout ? 9000 : 6000, timeout: { totalMs: timeoutMs }, maxRetries: 2 })
+            const synthesis = streamText({ model, system: synthesisPrompt, messages, maxOutputTokens: isDossierAgent ? 9000 : 6000, timeout: { totalMs: timeoutMs }, maxRetries: 2 })
             let text = ''
             for await (const delta of synthesis.textStream) text += delta
             return text
@@ -529,7 +569,7 @@ export async function POST(request: Request) {
           },
         })
         await db.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', thread!.id)
-        await db.from('analytics_events').insert({ event_type: 'agent_query', prompt: parsed.data.message.slice(0, 500), model: isViralScout ? 'Qwen 3.5 Viral Scout' : 'Qwen 3.5 Agent', used_desearch: usedTools.some((name) => ['web_search', 'scan_twitter_trends', 'scan_current_news', 'search_social'].includes(name)) }).then(undefined, () => {})
+        await db.from('analytics_events').insert({ event_type: 'agent_query', prompt: parsed.data.message.slice(0, 500), model: isViralScout ? 'Qwen 3.5 Viral Scout' : isGiftFinder ? 'Qwen 3.5 GiftFinder' : 'Qwen 3.5 Agent', used_desearch: usedTools.some((name) => ['web_search', 'scan_twitter_trends', 'scan_current_news', 'search_social'].includes(name)) }).then(undefined, () => {})
         send({ type: 'done', stepCount, tools: usedTools })
       } catch (error) {
         send({ type: 'error', message: error instanceof Error ? error.message : 'The agent could not finish this response.' })
