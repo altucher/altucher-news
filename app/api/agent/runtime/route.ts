@@ -4,6 +4,7 @@ import { gateway } from '@ai-sdk/gateway'
 import { streamText, ToolLoopAgent, stepCountIs, tool, type ModelMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { put } from '@vercel/blob'
 import { z } from 'zod'
 
 export const maxDuration = 800
@@ -82,6 +83,99 @@ function summarizeToolResult(toolName: string, output: unknown): string {
   } catch {
     return ''
   }
+}
+
+type InstagramCreative = {
+  title: string
+  caption: string
+  alt: string
+  pathname: string
+  downloadUrl: string
+}
+
+const INSTAGRAM_IMAGE_MODELS = [
+  'https://vonkaiser-qwen-image-2512.chutes.ai/generate',
+  'https://vonkaiser-z-image-turbo.chutes.ai/generate',
+]
+
+async function generateInstagramImage(prompt: string) {
+  const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
+  for (const endpoint of INSTAGRAM_IMAGE_MODELS) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 120_000)
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal,
+      })
+      if (!response.ok) continue
+      const body = await response.arrayBuffer()
+      if (body.byteLength < 1_000) continue
+      const rawType = response.headers.get('content-type') || 'image/png'
+      const contentType = rawType.startsWith('image/') ? rawType : 'image/png'
+      return { body: Buffer.from(body), contentType }
+    } catch {
+      // Try the next image model. Creative generation is deliberately non-fatal.
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  return null
+}
+
+function createInstagramPrompts(answer: string, subject: string) {
+  const clean = answer
+    .split(/##\s+(?:Instagram|X Thread|Sources)/i)[0]
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[#*`>|_[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const heading = [...answer.matchAll(/^#{1,3}\s+(.+)$/gm)]
+    .map((match) => match[1].replace(/[*_`]/g, '').trim())
+    .find((value) => value.length > 12 && !/viral content dossier|big idea|executive summary/i.test(value))
+  const requestTopic = subject
+    .replace(/\b(?:find|scout|create|make|build|give me|today'?s|the dossier|plus|instagram images?|posts?)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const topic = (heading || requestTopic || clean.slice(0, 140) || 'the strongest story in today’s dossier').slice(0, 180)
+  const context = clean.slice(0, 1_200)
+  const sharedNegative = 'Absolutely no words, letters, numbers, captions, logos, watermarks, social-media screens, app interfaces, news pages, screenshots, charts, collages, split screens, or UI elements. Do not imitate Instagram.'
+  return [
+    {
+      title: 'Editorial cover',
+      alt: `Editorial Instagram visual inspired by ${topic}`,
+      caption: `Lead with the dossier’s strongest tension: ${topic}`,
+      prompt: `Square 1:1 premium editorial news photograph about: ${topic}. Supporting context only: ${context}. Depict one clear real-world scene with one dominant focal subject, cinematic natural light, restrained high contrast, sophisticated documentary magazine art direction, and uncluttered negative space in the upper third where a designer can later add a headline. ${sharedNegative} Photorealistic, credible current-affairs visual storytelling, 1024x1024.`,
+    },
+    {
+      title: 'Contrarian angle',
+      alt: `Conceptual Instagram visual illustrating the contrarian angle around ${topic}`,
+      caption: `Use this pattern interrupt to introduce the sourced narrative twist: ${topic}`,
+      prompt: `Square 1:1 conceptual editorial photograph visualizing the surprising tension in: ${topic}. Supporting context only: ${context}. Express the idea with one bold physical metaphor made from tactile real-world materials, a single focal point, dramatic studio lighting, minimal premium magazine composition, and uncluttered negative space in the lower third for a designer-added headline. ${sharedNegative} No abstract gradient blobs. Photorealistic, 1024x1024.`,
+    },
+  ]
+}
+
+async function buildInstagramCreativePack(answer: string, subject: string, threadId: string): Promise<InstagramCreative[]> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return []
+  const prompts = createInstagramPrompts(answer, subject)
+  const creatives: InstagramCreative[] = []
+  for (let index = 0; index < prompts.length; index += 1) {
+    const concept = prompts[index]
+    const generated = await generateInstagramImage(concept.prompt)
+    if (!generated) continue
+    try {
+      const extension = generated.contentType.includes('jpeg') ? 'jpg' : generated.contentType.includes('webp') ? 'webp' : 'png'
+      const pathname = `viral-scout/${threadId}/${Date.now()}-${index + 1}.${extension}`
+      const blob = await put(pathname, generated.body, { access: 'private', contentType: generated.contentType, addRandomSuffix: false })
+      creatives.push({ ...concept, pathname: blob.pathname, downloadUrl: `/api/agent/media?pathname=${encodeURIComponent(blob.pathname)}` })
+    } catch {
+      // Keep the dossier usable if Blob storage has a temporary failure.
+    }
+  }
+  return creatives
 }
 
 function admin() {
@@ -310,7 +404,7 @@ export async function GET(request: Request) {
   threadQuery = privateContext ? threadQuery.eq('project_id', privateContext.projectId).eq('user_id', privateContext.userId) : threadQuery.is('user_id', null)
   const { data: thread } = await threadQuery.maybeSingle()
   if (!thread) return Response.json({ messages: [] })
-  const { data: messages } = await db.from('agent_messages').select('role, content, created_at').eq('thread_id', thread.id).order('sequence')
+  const { data: messages } = await db.from('agent_messages').select('role, content, created_at, ui_message').eq('thread_id', thread.id).order('sequence')
   return Response.json({ messages: messages || [] })
 }
 
@@ -413,9 +507,27 @@ export async function POST(request: Request) {
         answer = await synthesize(chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'), 90_000)
         if (!answer.trim()) answer = await synthesize(chutes.chatModel('moonshotai/Kimi-K2.5-TEE'), 120_000)
         if (!answer.trim()) answer = await synthesize(gateway('openai/gpt-4o-mini'), 90_000)
-        if (!answer.trim()) throw new Error('All response models were temporarily unavailable. Please retry; the completed research has been preserved in this conversation.')
+  if (!answer.trim()) throw new Error('All response models were temporarily unavailable. Please retry; the completed research has been preserved in this conversation.')
         send({ type: 'text', delta: answer })
-        await db.from('agent_messages').insert({ thread_id: thread!.id, sequence: sequence + 1, role: 'assistant', content: answer, ui_message: { role: 'assistant', content: answer, agent: { stepCount, tools: usedTools } } })
+        let creatives: InstagramCreative[] = []
+        if (isViralScout) {
+          send({ type: 'status', label: 'Creating two Instagram-ready visuals from the selected angle' })
+          creatives = await buildInstagramCreativePack(answer, parsed.data.message, thread!.id)
+          if (creatives.length) send({ type: 'creative-pack', title: 'Instagram Creative Pack', creatives })
+          send({ type: 'status', label: creatives.length === 2 ? 'Instagram Creative Pack ready' : creatives.length === 1 ? 'One Instagram visual is ready' : 'Image generation skipped; the dossier is complete' })
+        }
+        await db.from('agent_messages').insert({
+          thread_id: thread!.id,
+          sequence: sequence + 1,
+          role: 'assistant',
+          content: answer,
+          ui_message: {
+            role: 'assistant',
+            content: answer,
+            agent: { stepCount, tools: usedTools },
+            ...(creatives.length ? { creativePack: { title: 'Instagram Creative Pack', creatives } } : {}),
+          },
+        })
         await db.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', thread!.id)
         await db.from('analytics_events').insert({ event_type: 'agent_query', prompt: parsed.data.message.slice(0, 500), model: isViralScout ? 'Qwen 3.5 Viral Scout' : 'Qwen 3.5 Agent', used_desearch: usedTools.some((name) => ['web_search', 'scan_twitter_trends', 'scan_current_news', 'search_social'].includes(name)) }).then(undefined, () => {})
         send({ type: 'done', stepCount, tools: usedTools })
