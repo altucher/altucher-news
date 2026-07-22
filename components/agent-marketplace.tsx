@@ -3,7 +3,7 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import { ArrowUpRight, Bot, BookmarkPlus, Clock3, ExternalLink, Loader2, Search, Sparkles, Telescope, TrendingUp, WandSparkles } from 'lucide-react'
+import { ArrowUpRight, Bot, BookmarkPlus, Check, Clock3, ExternalLink, Loader2, Search, ShieldCheck, Sparkles, Telescope, TrendingUp, WandSparkles } from 'lucide-react'
 
 interface Agent {
   id: string
@@ -26,6 +26,7 @@ const fetcher = (url: string) => fetch(url).then(async (response) => {
 function AgentCard({ agent, featured = false }: { agent: Agent; featured?: boolean }) {
   const [installing, setInstalling] = useState(false)
   const [installError, setInstallError] = useState('')
+  const [installed, setInstalled] = useState(false)
 
   const install = async () => {
     setInstalling(true)
@@ -34,6 +35,7 @@ function AgentCard({ agent, featured = false }: { agent: Agent; featured?: boole
       const response = await fetch(`/api/agents/${agent.slug}/install`, { method: 'POST' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || 'Could not add this agent')
+      setInstalled(true)
       window.open(data.openUrl, '_blank', 'noopener,noreferrer')
     } catch (error) {
       setInstallError(error instanceof Error ? error.message : 'Could not add this agent')
@@ -59,17 +61,24 @@ function AgentCard({ agent, featured = false }: { agent: Agent; featured?: boole
           </div>
         )}
       </div>
-      <div className="flex flex-col gap-2 pt-5">
+      <div className="flex flex-col gap-3 pt-5">
+        <button type="button" onClick={install} disabled={installing || installed} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70">
+          {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : installed ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
+          {installing ? 'Adding…' : installed ? 'Added to your projects' : 'Add to my projects'}
+        </button>
+        <div className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <p className="text-pretty text-xs leading-5 text-muted-foreground">
+            {installed
+              ? <>Opened in a new tab. Find it anytime under <span className="font-semibold text-foreground">My Projects</span>, where your chats stay private to you—and you can delete it whenever you like.</>
+              : <>Add it to keep your conversations <span className="font-semibold text-foreground">private to your account</span>. It lives in <span className="font-semibold text-foreground">My Projects</span> and you can delete it anytime.</>}
+          </p>
+        </div>
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><TrendingUp className="h-3.5 w-3.5" />{agent.openCount.toLocaleString()} opens</span>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={install} disabled={installing} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-60">
-              {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />} Add
-            </button>
-            <a href={`/api/agents/${agent.slug}/open`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-2 text-sm font-semibold text-background transition-colors hover:bg-primary hover:text-primary-foreground">
-              Open <ArrowUpRight className="h-4 w-4" />
-            </a>
-          </div>
+          <a href={`/api/agents/${agent.slug}/open`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            Try a public preview <ArrowUpRight className="h-3.5 w-3.5" />
+          </a>
         </div>
         {installError && <p className="text-pretty text-xs leading-5 text-destructive" role="alert">{installError}</p>}
       </div>
