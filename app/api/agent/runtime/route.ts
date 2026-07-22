@@ -116,11 +116,19 @@ async function inspectUrl(rawUrl: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    const response = await fetch(url, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 ViralScout/1.0' } })
-    const html = await response.text()
-    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, ' ').trim() || url.hostname
+    let response = await fetch(url, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 ViralScout/1.0' } })
+    let html = await response.text()
+    let usedReaderFallback = false
+    if (!response.ok || html.length < 500) {
+      const readerUrl = `https://r.jina.ai/http://${url.host}${url.pathname}${url.search}`
+      response = await fetch(readerUrl, { signal: controller.signal, headers: { Accept: 'text/plain' } })
+      html = await response.text()
+      usedReaderFallback = true
+    }
+    if (!response.ok || html.length < 300) throw new Error(`Source could not be inspected (${response.status})`)
+    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, ' ').trim() || html.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || url.hostname
     const content = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 12_000)
-    return { url: response.url, status: response.status, title, content, inspectedAt: new Date().toISOString() }
+    return { url: rawUrl, status: response.status, title, content, usedReaderFallback, inspectedAt: new Date().toISOString() }
   } finally { clearTimeout(timeout) }
 }
 
@@ -289,18 +297,16 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (value: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`))
       try {
-        send({ type: 'status', label: 'Planning next steps' })
-        for await (const part of result.fullStream) {
+      for await (const part of result.fullStream) {
           if (part.type === 'tool-call') {
             usedTools.push(part.toolName)
             send({ type: 'tool', phase: 'start', tool: part.toolName, label: toolLabels[part.toolName] || 'Using a specialist tool' })
           } else if (part.type === 'tool-result') {
             observations.push({ tool: part.toolName, output: part.output })
             send({ type: 'tool', phase: 'complete', tool: part.toolName, label: `${toolLabels[part.toolName] || 'Tool'} complete` })
-          } else if (part.type === 'finish-step') {
-            stepCount += 1
-            if (!answer.trim()) send({ type: 'status', label: 'Reviewing results and deciding what to do next' })
-          }
+        } else if (part.type === 'finish-step') {
+          stepCount += 1
+        }
         }
         if (observations.length === 0) throw new Error('Agent completed without using a tool')
         send({ type: 'status', label: 'Synthesizing the final answer' })
