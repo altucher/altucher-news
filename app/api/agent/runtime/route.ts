@@ -126,20 +126,34 @@ async function generateInstagramImage(prompt: string) {
 }
 
 function createInstagramPrompts(answer: string, subject: string) {
-  const context = answer.replace(/[#*`>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4_000)
-  const topic = subject.replace(/\s+/g, ' ').trim().slice(0, 300) || 'today’s strongest viral story'
+  const clean = answer
+    .split(/##\s+(?:Instagram|X Thread|Sources)/i)[0]
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[#*`>|_[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const heading = [...answer.matchAll(/^#{1,3}\s+(.+)$/gm)]
+    .map((match) => match[1].replace(/[*_`]/g, '').trim())
+    .find((value) => value.length > 12 && !/viral content dossier|big idea|executive summary/i.test(value))
+  const requestTopic = subject
+    .replace(/\b(?:find|scout|create|make|build|give me|today'?s|the dossier|plus|instagram images?|posts?)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const topic = (heading || requestTopic || clean.slice(0, 140) || 'the strongest story in today’s dossier').slice(0, 180)
+  const context = clean.slice(0, 1_200)
+  const sharedNegative = 'Absolutely no words, letters, numbers, captions, logos, watermarks, social-media screens, app interfaces, news pages, screenshots, charts, collages, split screens, or UI elements. Do not imitate Instagram.'
   return [
     {
       title: 'Editorial cover',
-      alt: `Editorial Instagram cover inspired by ${topic}`,
+      alt: `Editorial Instagram visual inspired by ${topic}`,
       caption: `Lead with the dossier’s strongest tension: ${topic}`,
-      prompt: `Create a premium square 1:1 editorial photograph for an Instagram news post. Subject: ${topic}. Evidence and angle context: ${context}. One striking focal subject, cinematic natural light, high contrast, sophisticated magazine composition, room for a headline in the upper third, no logos, no watermarks, no text, no fake interfaces, no collage. Photorealistic, current-affairs visual storytelling, 1080x1080 composition.`,
+      prompt: `Square 1:1 premium editorial news photograph about: ${topic}. Supporting context only: ${context}. Depict one clear real-world scene with one dominant focal subject, cinematic natural light, restrained high contrast, sophisticated documentary magazine art direction, and uncluttered negative space in the upper third where a designer can later add a headline. ${sharedNegative} Photorealistic, credible current-affairs visual storytelling, 1024x1024.`,
     },
     {
       title: 'Contrarian angle',
-      alt: `Conceptual Instagram image illustrating the contrarian angle around ${topic}`,
-      caption: `Use the visual as the pattern interrupt, then explain the sourced narrative twist in the caption.` ,
-      prompt: `Create a memorable square 1:1 conceptual editorial image for Instagram that visualizes the surprising or contrarian angle in this dossier. Subject: ${topic}. Dossier context: ${context}. Bold single metaphor, tactile real-world materials, dramatic but credible magazine art direction, minimal composition, room for a headline in the lower third, no logos, no watermarks, no text, no abstract gradient blobs, no collage. 1080x1080 composition.`,
+      alt: `Conceptual Instagram visual illustrating the contrarian angle around ${topic}`,
+      caption: `Use this pattern interrupt to introduce the sourced narrative twist: ${topic}`,
+      prompt: `Square 1:1 conceptual editorial photograph visualizing the surprising tension in: ${topic}. Supporting context only: ${context}. Express the idea with one bold physical metaphor made from tactile real-world materials, a single focal point, dramatic studio lighting, minimal premium magazine composition, and uncluttered negative space in the lower third for a designer-added headline. ${sharedNegative} No abstract gradient blobs. Photorealistic, 1024x1024.`,
     },
   ]
 }
