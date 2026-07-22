@@ -553,8 +553,8 @@ export async function POST(request: Request) {
         if (isViralScout) {
           send({ type: 'status', label: 'Creating two Instagram-ready visuals from the selected angle' })
           creatives = await buildInstagramCreativePack(answer, parsed.data.message, thread!.id)
-          if (creatives.length) send({ type: 'creative-pack', title: 'Instagram Creative Pack', creatives })
           send({ type: 'status', label: creatives.length === 2 ? 'Instagram Creative Pack ready' : creatives.length === 1 ? 'One Instagram visual is ready' : 'Image generation skipped; the dossier is complete' })
+          if (creatives.length) send({ type: 'creative-pack', title: 'Instagram Creative Pack', creatives })
         }
         await db.from('agent_messages').insert({
           thread_id: thread!.id,
