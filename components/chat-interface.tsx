@@ -1896,7 +1896,7 @@ export default function ChatInterface() {
   <div role="status" aria-live="polite" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/60">
    <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
     <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-    <span className="truncate">{status === 'submitted' ? 'Starting Quick Build…' : 'Receiving your website…'}</span>
+    <span className="truncate">{codeMode ? (status === 'submitted' ? `Starting ${buildQuality === 'best' ? 'Best Quality build' : 'Quick Build'}…` : 'Receiving your website…') : (status === 'submitted' ? 'Thinking…' : 'Responding…')}</span>
     <span className="shrink-0 text-xs tabular-nums text-sky-700 dark:text-sky-300">{elapsedSeconds}s</span>
    </div>
    <Button type="button" size="sm" variant="outline" onClick={handleStopGeneration} className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10">
@@ -2477,7 +2477,7 @@ export default function ChatInterface() {
                   <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                     <span className="truncate">
-                      {status === 'submitted' ? 'Starting Quick Build…' : 'Receiving your website…'}
+                      {codeMode ? (status === 'submitted' ? `Starting ${buildQuality === 'best' ? 'Best Quality build' : 'Quick Build'}…` : 'Receiving your website…') : (status === 'submitted' ? 'Thinking…' : 'Responding…')}
                     </span>
                     <span className="shrink-0 text-xs tabular-nums text-sky-700 dark:text-sky-300">{elapsedSeconds}s</span>
                   </div>
