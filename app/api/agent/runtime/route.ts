@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { gateway } from '@ai-sdk/gateway'
 import { streamText, ToolLoopAgent, stepCountIs, tool, type ModelMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
@@ -110,26 +111,45 @@ async function searchDesearch(query: string, tools: Array<'twitter' | 'web'>, da
   } finally { clearTimeout(timeout) }
 }
 
+async function fetchSource(url: string | URL, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    return { response, text: await response.text() }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function inspectUrl(rawUrl: string) {
   const url = new URL(rawUrl)
   if (!['http:', 'https:'].includes(url.protocol) || /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(url.hostname)) throw new Error('Unsupported source URL')
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12_000)
+
+  let direct: Awaited<ReturnType<typeof fetchSource>> | null = null
   try {
-    let response = await fetch(url, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 ViralScout/1.0' } })
-    let html = await response.text()
-    let usedReaderFallback = false
-    if (!response.ok || html.length < 500) {
+    direct = await fetchSource(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 ViralScout/1.0' } }, 12_000)
+  } catch {}
+
+  let response = direct?.response
+  let html = direct?.text || ''
+  let usedReaderFallback = false
+  if (!response?.ok || html.length < 500) {
+    usedReaderFallback = true
+    try {
       const readerUrl = `https://r.jina.ai/http://${url.host}${url.pathname}${url.search}`
-      response = await fetch(readerUrl, { signal: controller.signal, headers: { Accept: 'text/plain' } })
-      html = await response.text()
-      usedReaderFallback = true
-    }
-    if (!response.ok || html.length < 300) throw new Error(`Source could not be inspected (${response.status})`)
-    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, ' ').trim() || html.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || url.hostname
-    const content = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 12_000)
-    return { url: rawUrl, status: response.status, title, content, usedReaderFallback, inspectedAt: new Date().toISOString() }
-  } finally { clearTimeout(timeout) }
+      const reader = await fetchSource(readerUrl, { headers: { Accept: 'text/plain' } }, 15_000)
+      response = reader.response
+      html = reader.text
+    } catch {}
+  }
+
+  if (!response?.ok || html.length < 300) {
+    return { url: rawUrl, status: response?.status || 0, title: url.hostname, content: '', usedReaderFallback, inspectionError: 'Source was unavailable; use the corroborating search evidence and disclose that this page could not be inspected.', inspectedAt: new Date().toISOString() }
+  }
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, ' ').trim() || html.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || url.hostname
+  const content = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 12_000)
+  return { url: rawUrl, status: response.status, title, content, usedReaderFallback, inspectedAt: new Date().toISOString() }
 }
 
 function makeTools() {
@@ -312,23 +332,20 @@ export async function POST(request: Request) {
         send({ type: 'status', label: 'Synthesizing the final answer' })
         const evidence = JSON.stringify(observations).slice(0, 60_000)
         const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map (strongest cases on both sides and clearly labeled extreme/fringe/subculture views); What People Are Saying (only linked real examples); The Story (sourced real anecdote or explicitly labeled illustration); Podcast Blueprint (titles, cold open, arc, segments, counterarguments, reveal, takeaway, CTA); Guest Shortlist; Instagram Reel (timed script, on-screen text, visual beats, CTA); X/Twitter Thread; Substack / Viral Article (headlines, dek, and substantial draft or detailed outline); Why It Could Go Viral (identities, emotions, pattern interrupt, distribution, risks); Sources and Guardrails. Center a surprising, source-supported story, reversal, hidden incentive, unexpected constituency, historical rhyme, or counterintuitive implication. Explain why the twist matters. If social evidence or a credible twist is missing, say so honestly.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
-        const synthesize = async (model: string, timeoutMs: number) => {
-          const abort = new AbortController()
-          const timeout = setTimeout(() => abort.abort(), timeoutMs)
+        const synthesize = async (model: Parameters<typeof streamText>[0]['model'], timeoutMs: number) => {
           try {
-            const synthesis = streamText({ model: chutes.chatModel(model), system: synthesisPrompt, messages, maxOutputTokens: isViralScout ? 9000 : 6000, abortSignal: abort.signal })
+            const synthesis = streamText({ model, system: synthesisPrompt, messages, maxOutputTokens: isViralScout ? 9000 : 6000, timeout: { totalMs: timeoutMs }, maxRetries: 2 })
             let text = ''
             for await (const delta of synthesis.textStream) text += delta
             return text
           } catch {
             return ''
-          } finally {
-            clearTimeout(timeout)
           }
         }
-        answer = await synthesize('Qwen/Qwen3.5-397B-A17B-TEE', 90_000)
-        if (!answer.trim()) answer = await synthesize('moonshotai/Kimi-K2.5-TEE', 120_000)
-        if (!answer.trim()) throw new Error('Agent completed without a final answer')
+        answer = await synthesize(chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'), 90_000)
+        if (!answer.trim()) answer = await synthesize(chutes.chatModel('moonshotai/Kimi-K2.5-TEE'), 120_000)
+        if (!answer.trim()) answer = await synthesize(gateway('openai/gpt-4o-mini'), 90_000)
+        if (!answer.trim()) throw new Error('All response models were temporarily unavailable. Please retry; the completed research has been preserved in this conversation.')
         send({ type: 'text', delta: answer })
         await db.from('agent_messages').insert({ thread_id: thread!.id, sequence: sequence + 1, role: 'assistant', content: answer, ui_message: { role: 'assistant', content: answer, agent: { stepCount, tools: usedTools } } })
         await db.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', thread!.id)
