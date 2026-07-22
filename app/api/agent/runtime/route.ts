@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
-export const maxDuration = 180
+export const maxDuration = 800
 
 const requestSchema = z.object({
   token: z.string().min(24).max(256),
@@ -311,17 +311,25 @@ export async function POST(request: Request) {
         if (observations.length === 0) throw new Error('Agent completed without using a tool')
         send({ type: 'status', label: 'Synthesizing the final answer' })
         const evidence = JSON.stringify(observations).slice(0, 60_000)
-        const synthesis = streamText({
-          model: chutes.chatModel('Qwen/Qwen3.5-397B-A17B-TEE'),
-          system: `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map (strongest cases on both sides and clearly labeled extreme/fringe/subculture views); What People Are Saying (only linked real examples); The Story (sourced real anecdote or explicitly labeled illustration); Podcast Blueprint (titles, cold open, arc, segments, counterarguments, reveal, takeaway, CTA); Guest Shortlist; Instagram Reel (timed script, on-screen text, visual beats, CTA); X/Twitter Thread; Substack / Viral Article (headlines, dek, and substantial draft or detailed outline); Why It Could Go Viral (identities, emotions, pattern interrupt, distribution, risks); Sources and Guardrails. Center a surprising, source-supported story, reversal, hidden incentive, unexpected constituency, historical rhyme, or counterintuitive implication. Explain why the twist matters. If social evidence or a credible twist is missing, say so honestly.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`,
-          messages,
-          maxOutputTokens: isViralScout ? 9000 : 6000,
-        })
-        for await (const delta of synthesis.textStream) {
-          answer += delta
-          send({ type: 'text', delta })
+        const synthesisPrompt = `${manifest.instructions || 'Be helpful.'}\n\nYou are writing the final response after an autonomous agent completed its research. Answer directly from the observations. Do not mention tools or output tool syntax. Never invent facts, citations, posts, quotes, people, dates, engagement, or anecdotes. Use descriptive clickable links and distinguish evidence, opinion, fringe views, and inference. ${isViralScout ? `Return a riveting but credible Markdown Viral Content Dossier with ALL sections: As of + Why This Is Timely; The Big Idea; Hook + Pattern Disrupt; Debate Map (strongest cases on both sides and clearly labeled extreme/fringe/subculture views); What People Are Saying (only linked real examples); The Story (sourced real anecdote or explicitly labeled illustration); Podcast Blueprint (titles, cold open, arc, segments, counterarguments, reveal, takeaway, CTA); Guest Shortlist; Instagram Reel (timed script, on-screen text, visual beats, CTA); X/Twitter Thread; Substack / Viral Article (headlines, dek, and substantial draft or detailed outline); Why It Could Go Viral (identities, emotions, pattern interrupt, distribution, risks); Sources and Guardrails. Center a surprising, source-supported story, reversal, hidden incentive, unexpected constituency, historical rhyme, or counterintuitive implication. Explain why the twist matters. If social evidence or a credible twist is missing, say so honestly.` : 'Use polished Markdown with short headings, compact paragraphs, useful bullets, and a Sources section.'}\n\nAGENT OBSERVATIONS:\n${evidence}`
+        const synthesize = async (model: string, timeoutMs: number) => {
+          const abort = new AbortController()
+          const timeout = setTimeout(() => abort.abort(), timeoutMs)
+          try {
+            const synthesis = streamText({ model: chutes.chatModel(model), system: synthesisPrompt, messages, maxOutputTokens: isViralScout ? 9000 : 6000, abortSignal: abort.signal })
+            let text = ''
+            for await (const delta of synthesis.textStream) text += delta
+            return text
+          } catch {
+            return ''
+          } finally {
+            clearTimeout(timeout)
+          }
         }
+        answer = await synthesize('Qwen/Qwen3.5-397B-A17B-TEE', 90_000)
+        if (!answer.trim()) answer = await synthesize('moonshotai/Kimi-K2.5-TEE', 120_000)
         if (!answer.trim()) throw new Error('Agent completed without a final answer')
+        send({ type: 'text', delta: answer })
         await db.from('agent_messages').insert({ thread_id: thread!.id, sequence: sequence + 1, role: 'assistant', content: answer, ui_message: { role: 'assistant', content: answer, agent: { stepCount, tools: usedTools } } })
         await db.from('agent_threads').update({ updated_at: new Date().toISOString() }).eq('id', thread!.id)
         await db.from('analytics_events').insert({ event_type: 'agent_query', prompt: parsed.data.message.slice(0, 500), model: isViralScout ? 'Qwen 3.5 Viral Scout' : 'Qwen 3.5 Agent', used_desearch: usedTools.some((name) => ['web_search', 'scan_twitter_trends', 'scan_current_news', 'search_social'].includes(name)) }).then(undefined, () => {})
