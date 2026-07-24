@@ -4,7 +4,7 @@ import { gateway } from '@ai-sdk/gateway'
 import { streamText, ToolLoopAgent, stepCountIs, tool, type ModelMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { put } from '@vercel/blob'
+import { get, put } from '@vercel/blob'
 import { z } from 'zod'
 
 export const maxDuration = 800
@@ -14,6 +14,7 @@ const requestSchema = z.object({
   sessionId: z.string().min(16).max(128).regex(/^[a-zA-Z0-9_-]+$/),
   message: z.string().trim().min(1).max(8000),
   projectId: z.string().uuid().optional(),
+  manuscriptPath: z.string().max(500).optional(),
 })
 
 const toolLabels: Record<string, string> = {
@@ -490,7 +491,7 @@ async function resolvePrivateProject(projectId?: string) {
   if (!user) throw new Error('PRIVATE_UNAUTHORIZED')
   const { data: project } = await supabase.from('projects').select('id, user_id, project_type, agent_manifest').eq('id', projectId).eq('user_id', user.id).maybeSingle()
   const manifest = project?.agent_manifest as { name?: string } | null
-  if (!project || project.project_type !== 'agent' || !['Viral Scout', 'GiftFinder'].includes(manifest?.name || '')) throw new Error('PRIVATE_NOT_FOUND')
+  if (!project || project.project_type !== 'agent' || !['Viral Scout', 'GiftFinder', 'BookLaunch'].includes(manifest?.name || '')) throw new Error('PRIVATE_NOT_FOUND')
   return { projectId: project.id, userId: user.id }
 }
 
@@ -515,6 +516,15 @@ export async function GET(request: Request) {
   if (!thread) return Response.json({ messages: [] })
   const { data: messages } = await db.from('agent_messages').select('role, content, created_at, ui_message').eq('thread_id', thread.id).order('sequence')
   return Response.json({ messages: messages || [] })
+}
+
+async function readBookLaunchManuscript(pathname: string, userId: string, projectId: string) {
+  const expectedPrefix = `booklaunch/${userId}/${projectId}/`
+  if (!pathname.startsWith(expectedPrefix) || !pathname.endsWith('/manuscript.txt')) throw new Error('INVALID_MANUSCRIPT')
+  const result = await get(pathname, { access: 'private' })
+  if (!result || result.statusCode !== 200) throw new Error('MANUSCRIPT_NOT_FOUND')
+  const text = await new Response(result.stream).text()
+  return text.slice(0, 180_000)
 }
 
 export async function POST(request: Request) {
@@ -545,13 +555,28 @@ export async function POST(request: Request) {
   const isViralScout = manifest.name === 'Viral Scout'
   const isGiftFinder = manifest.name === 'GiftFinder'
   const isInstagramCreator = manifest.name === 'Instagram Creator'
+  const isBookLaunch = manifest.name === 'BookLaunch'
+  if (isBookLaunch && (!privateContext || !parsed.data.manuscriptPath)) {
+    return Response.json({ error: 'Upload a manuscript from a signed-in BookLaunch project before starting.' }, { status: 400 })
+  }
+  let manuscriptContext = ''
+  if (isBookLaunch && privateContext && parsed.data.manuscriptPath) {
+    try {
+      manuscriptContext = await readBookLaunchManuscript(parsed.data.manuscriptPath, privateContext.userId, privateContext.projectId)
+    } catch {
+      return Response.json({ error: 'The private manuscript could not be opened. Please upload it again.' }, { status: 400 })
+    }
+  }
   const isDossierAgent = isViralScout || isGiftFinder || isInstagramCreator
   const chutesKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
   const chutes = createOpenAICompatible({ name: 'chutes', baseURL: 'https://llm.chutes.ai/v1', headers: { Authorization: `Bearer ${chutesKey}` } })
   const allTools = makeTools()
   const enabledNames = new Set(manifest.tools?.length ? manifest.tools : ['web_search', 'inspect_evidence'])
   const enabledTools = Object.fromEntries(Object.entries(allTools).filter(([name]) => enabledNames.has(name))) as typeof allTools
-  const messages: ModelMessage[] = [...(history || []).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.content })), { role: 'user', content: parsed.data.message }]
+  const userContent = isBookLaunch
+    ? `${parsed.data.message}\n\n<private_manuscript>\n${manuscriptContext}\n</private_manuscript>`
+    : parsed.data.message
+  const messages: ModelMessage[] = [...(history || []).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.content })), { role: 'user', content: userContent }]
   const viralSequence = ['scan_twitter_trends', 'scan_current_news', 'search_social', 'inspect_source', 'verify_current_facts', 'build_angle_map', 'evaluate_virality'] as const
   const giftSequence = ['profile_recipient', 'search_shopping', 'synthesize_reviews', 'compare_rank', 'suggest_alternatives', 'build_gift_roadmap'] as const
   const instagramSequence = ['research_instagram_topic', 'inspect_source', 'verify_instagram_claims', 'plan_instagram_posts'] as const
