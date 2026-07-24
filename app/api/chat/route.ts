@@ -753,19 +753,23 @@ ${fileContext.content}
 When answering questions, refer to this document content. You can summarize it, answer questions about it, extract information, or analyze it as requested.`
     }
 
-    // Convert messages to simple format for the model
+    // Preserve supported image parts for multimodal models while keeping
+    // assistant/system history as plain text. Image data is never persisted.
     const modelMessages = messages.map((msg) => {
-      let content = typeof (msg as { content?: string }).content === 'string' 
-        ? (msg as { content: string }).content 
-        : (msg.parts?.find(p => p.type === 'text') as { text: string } | undefined)?.text || ''
-      
-      // Strip force search prefix from user messages
-      content = content.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
-      
-      return {
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content
+      let text = typeof (msg as { content?: string }).content === 'string'
+        ? (msg as { content: string }).content
+        : (msg.parts?.find((part) => part.type === 'text') as { text: string } | undefined)?.text || ''
+      text = text.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
+
+      if (msg.role === 'user') {
+        const imageParts = (msg.parts || []).flatMap((part) => {
+          if (part.type !== 'file' || !['image/jpeg', 'image/png', 'image/webp'].includes(part.mediaType)) return []
+          return [{ type: 'image' as const, image: part.url, mediaType: part.mediaType }]
+        })
+        if (imageParts.length) return { role: 'user' as const, content: [{ type: 'text' as const, text }, ...imageParts] }
       }
+
+      return { role: msg.role as 'user' | 'assistant' | 'system', content: text }
     })
 
     // Try Chutes directly - fallback happens in catch block if it fails

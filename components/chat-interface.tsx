@@ -235,6 +235,7 @@ export default function ChatInterface() {
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
+  const [uploadedImage, setUploadedImage] = useState<{ name: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp'; url: string } | null>(null)
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [showProjectsPanel, setShowProjectsPanel] = useState(false)
@@ -963,23 +964,34 @@ export default function ChatInterface() {
 
     setUploadingFile(true)
     try {
+      const supportedImages = ['image/jpeg', 'image/png', 'image/webp'] as const
+      if (supportedImages.includes(file.type as (typeof supportedImages)[number])) {
+        if (file.size > 8 * 1024 * 1024) throw new Error('Images must be 8 MB or smaller.')
+        const url = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result))
+          reader.onerror = () => reject(new Error('Could not read this image.'))
+          reader.readAsDataURL(file)
+        })
+        setUploadedFile(null)
+        setUploadedImage({ name: file.name, mediaType: file.type as 'image/jpeg' | 'image/png' | 'image/webp', url })
+        return
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
       const data = await res.json()
       if (data.success) {
+        setUploadedImage(null)
         setUploadedFile({ name: data.fileName, content: data.extractedText })
       } else {
-        alert(data.error || 'Failed to upload file')
+        throw new Error(data.error || 'Failed to upload file')
       }
     } catch (err) {
       console.error('File upload error:', err)
-      alert('Failed to upload file. Please try again.')
+      alert(err instanceof Error ? err.message : 'Failed to upload file. Please try again.')
     } finally {
       setUploadingFile(false)
       // Reset file input
@@ -991,9 +1003,9 @@ export default function ChatInterface() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isLoading) return
+    if ((!input.trim() && !uploadedImage) || isLoading) return
     
-    const userMessage = input
+    const userMessage = input.trim() || 'Describe and analyze this image.'
     setInput('')
     setBuildIssue(null)
     requestStartedAtRef.current = Date.now()
@@ -1007,7 +1019,7 @@ export default function ChatInterface() {
 
     // In Code mode, everything is a coding request — skip the media routing
     // so prompts like "make a function" aren't hijacked into image/video/music.
-    if (!codeMode) {
+    if (!codeMode && !uploadedImage) {
       // If the user is asking for an image, route to image generation even
       // if they pressed the text/send button instead of the image button.
       if (isImageRequest(userMessage)) {
@@ -1075,10 +1087,15 @@ export default function ChatInterface() {
    : null
  setReviewNotice(null)
  completedBuildMessageIdRef.current = null
+    const imageToSend = uploadedImage
     sendMessage(
-      { text: messageToSend },
+      imageToSend
+        ? { text: messageToSend, files: [{ type: 'file', filename: imageToSend.name, mediaType: imageToSend.mediaType, url: imageToSend.url }] }
+        : { text: messageToSend },
       { body: { codeMode, buildQuality, editingCode: activeProject?.code ?? null } }
     )
+    setUploadedImage(null)
+    setUploadedFile(null)
     
     // Refresh usage after sending
     setTimeout(() => fetchUsage(), 1000)
@@ -1483,7 +1500,7 @@ export default function ChatInterface() {
         type="file"
         ref={fileInputRef}
         onChange={handleFileUpload}
-        accept=".pdf,.docx,.txt,.md"
+        accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
         className="hidden"
       />
       
@@ -1880,18 +1897,24 @@ export default function ChatInterface() {
                   )}
 
                   {/* File upload indicator */}
-                  {uploadedFile && (
-                    <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
-                      <FileText className="w-4 h-4 text-primary" />
-                      <span className="truncate max-w-[200px]">{uploadedFile.name}</span>
-                      <button
-                        onClick={() => setUploadedFile(null)}
-                        className="ml-auto text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+{uploadedFile && (
+  <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-foreground">
+  <FileText className="w-4 h-4 text-primary" />
+  <span className="truncate max-w-[200px]">{uploadedFile.name}</span>
+  <button type="button" aria-label="Remove attached document" onClick={() => setUploadedFile(null)} className="ml-auto text-muted-foreground hover:text-foreground">
+  <X className="w-4 h-4" />
+  </button>
+  </div>
+  )}
+  {uploadedImage && (
+  <div className="mb-2 flex items-center gap-3 rounded-xl border border-border bg-card p-2 text-sm text-foreground shadow-sm">
+  <img src={uploadedImage.url} alt="Image attachment preview" className="h-14 w-14 rounded-lg object-cover" />
+  <span className="min-w-0 flex-1 truncate">{uploadedImage.name}</span>
+  <button type="button" aria-label="Remove attached image" onClick={() => setUploadedImage(null)} className="rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+  <X className="w-4 h-4" />
+  </button>
+  </div>
+  )}
  {isLoading && (
   <div role="status" aria-live="polite" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/60">
    <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
@@ -1912,7 +1935,7 @@ export default function ChatInterface() {
                         size="icon"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadingFile}
-                        title="Upload a file (PDF, DOCX, TXT, MD)"
+                        title="Attach a document or image (JPEG, PNG, WebP)"
                         className="ml-2 h-9 w-9 rounded-full bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
                       >
                         {uploadingFile ? (
@@ -1926,7 +1949,7 @@ export default function ChatInterface() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={codeMode ? "What would you like to BUILD today?" : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
+                        placeholder={codeMode ? "What would you like to BUILD today?" : uploadedImage ? "Ask about your image..." : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
                         className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 text-lg"
                       />
@@ -2022,7 +2045,7 @@ export default function ChatInterface() {
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={!input.trim() || isLoading}
+                        disabled={(!input.trim() && !uploadedImage) || isLoading}
                         className={cn(
                           'mr-2 h-10 w-10 rounded-full transition-all',
                           input.trim() && !isLoading
@@ -2536,7 +2559,7 @@ export default function ChatInterface() {
                     size="icon"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingFile}
-                    title="Upload a file (PDF, DOCX, TXT, MD)"
+                    title="Attach a document or image (JPEG, PNG, WebP)"
                     className="ml-2 h-8 w-8 rounded-full bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     {uploadingFile ? (
@@ -2664,7 +2687,7 @@ export default function ChatInterface() {
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={!input.trim() || isLoading}
+                      disabled={(!input.trim() && !uploadedImage) || isLoading}
                       className={cn(
                         'mr-2 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading
