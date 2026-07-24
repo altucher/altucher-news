@@ -1788,12 +1788,10 @@ export default function ChatInterface() {
             </Button>
             <button
               onClick={handleNewChat}
-              className="flex items-center gap-2.5 group"
+              className="flex items-center group"
+              aria-label="Start a new chat"
             >
               <BlueTaoLogo className="w-7 h-7 text-[var(--gold)] drop-shadow-[0_0_12px_var(--gold)]" />
-              <span className="text-lg font-semibold tracking-tight text-foreground group-hover:text-[var(--gold)] transition-colors hidden sm:block">
-                bluetao
-              </span>
             </button>
           </div>
 
