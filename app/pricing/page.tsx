@@ -1,142 +1,59 @@
-'use client'
-
-import { useState } from 'react'
-import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { SUBSCRIPTION_PLANS, formatPrice } from '@/lib/products'
-import SubscriptionCheckout from '@/components/checkout'
-import { AnimatedOceanBackground } from '@/components/animated-background'
 import Link from 'next/link'
+import { ArrowLeft, Clock3, Sparkles } from 'lucide-react'
+import { AnimatedOceanBackground } from '@/components/animated-background'
 
 export default function PricingPage() {
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
-
   return (
-    <div className="min-h-screen relative">
+    <div className="relative min-h-screen overflow-hidden bg-background">
       <AnimatedOceanBackground />
-      
-      <div className="relative z-10">
-        {/* Header */}
-        <header className="p-4 flex items-center justify-between">
-          <Link 
-            href="/"
-            className="font-[family-name:var(--font-playfair)] text-2xl font-medium text-foreground tracking-wide"
-          >
-            BlueTAO
-          </Link>
-          <Link href="/">
-            <Button variant="outline" className="rounded-full border-border/50">
-              Back to Chat
-            </Button>
-          </Link>
-        </header>
 
-        {/* Main Content */}
-        <main className="max-w-6xl mx-auto px-4 py-12">
-          <div className="text-center mb-12">
-            <h1 className="font-[family-name:var(--font-playfair)] text-4xl md:text-5xl font-normal text-foreground mb-4">
-              Choose Your Plan
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Unlock the full potential of BlueTAO with our flexible subscription plans.
-              Start free and upgrade as you grow.
-            </p>
+      <header className="relative z-10 flex items-center justify-between p-4 md:p-6">
+        <Link
+          href="/"
+          className="font-serif text-2xl font-medium tracking-wide text-foreground"
+        >
+          BlueTAO
+        </Link>
+        <Link
+          href="/"
+          className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to Chat
+        </Link>
+      </header>
+
+      <main className="relative z-10 flex min-h-[calc(100vh-80px)] items-center justify-center px-4 pb-20 pt-10">
+        <section className="flex w-full max-w-2xl flex-col items-center gap-8 text-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
+            <Sparkles className="size-7" aria-hidden="true" />
           </div>
 
-          {/* Pricing Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {SUBSCRIPTION_PLANS.map((plan) => (
-              <div
-                key={plan.id}
-                className={cn(
-                  'relative rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-6 flex flex-col',
-                  plan.id === 'plus' && 'border-primary shadow-sm',
-                  plan.id === selectedPlan && 'ring-2 ring-primary'
-                )}
-              >
-                {plan.id === 'plus' && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">
-                    Most Popular
-                  </div>
-                )}
-
-                <h3 className="text-xl font-semibold text-foreground mb-2">{plan.name}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-
-                <div className="mb-6">
-                  <span className="text-4xl font-semibold text-foreground">
-                    {formatPrice(plan.priceInCents)}
-                  </span>
-                  {plan.priceInCents > 0 && (
-                    <span className="text-muted-foreground">/month</span>
-                  )}
-                </div>
-
-                <ul className="space-y-3 mb-6 flex-1">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {plan.id === 'free' ? (
-                  <Link href="/">
-                    <Button variant="outline" className="w-full border-border/50">
-                      Get Started
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button
-                    onClick={() => setSelectedPlan(plan.id)}
-                    className={cn(
-                      'w-full',
-                      plan.id === 'plus'
-                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
-                        : 'bg-foreground/10 hover:bg-foreground/20 text-foreground'
-                    )}
-                  >
-                    {selectedPlan === plan.id ? 'Selected' : 'Subscribe'}
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Checkout Section */}
-          {selectedPlan && selectedPlan !== 'free' && (
-            <div className="max-w-xl mx-auto">
-              <div className="bg-card/80 backdrop-blur-sm rounded-xl border border-border/50 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Complete Your Subscription
-                  </h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedPlan(null)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-                <SubscriptionCheckout planId={selectedPlan} />
-              </div>
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground">
+              <Clock3 className="size-4 text-primary" aria-hidden="true" />
+              Upgrades are on the way
             </div>
-          )}
-
-          {/* FAQ or Additional Info */}
-          <div className="mt-16 text-center">
-            <p className="text-muted-foreground">
-              All plans include access to all AI models. Cancel anytime.
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Questions? Contact us at support@bluetao.ai
+            <h1 className="max-w-xl text-balance font-serif text-5xl font-medium leading-tight text-foreground md:text-7xl">
+              Coming soon
+            </h1>
+            <p className="max-w-lg text-pretty text-base leading-relaxed text-muted-foreground md:text-lg">
+              We&apos;re preparing new BlueTAO plans with more usage, more creative power, and expanded access. Your current experience remains available while we get everything ready.
             </p>
           </div>
-        </main>
-      </div>
+
+          <Link
+            href="/"
+            className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          >
+            Continue using BlueTAO
+          </Link>
+
+          <p className="text-sm text-muted-foreground">
+            Questions? <a className="font-medium text-foreground underline decoration-border underline-offset-4 hover:text-primary" href="mailto:support@bluetao.ai">support@bluetao.ai</a>
+          </p>
+        </section>
+      </main>
     </div>
   )
 }
