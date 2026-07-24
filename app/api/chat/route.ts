@@ -465,26 +465,21 @@ export async function POST(req: Request) {
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
     }
     
-    // Model-aware defaults (benchmarked on Chutes SN64):
-    //  - Code mode exposes a user speed/quality choice:
-    //      "quick" -> Qwen 3.5 (397B) — benchmarked ~6-8x faster + more consistent
-    //                 than Kimi K2.5 on Chutes (K2.5's chute keeps cold-starting
-    //                 ~30s; Qwen stays warm at ~1.4s TTFT). Ideal fast first draft.
-    //      "best"  -> Kimi K2.6 (deeper reasoning, more complete/polished, slower)
-    //    Default is "quick" so exploratory builds stay fast.
-    //  - Normal chat also uses Qwen 3.5 (397B): benchmarked ~6-8x faster and
-    //    more consistent than Kimi K2.5 on Chutes (K2.5 keeps cold-starting).
-    // Agent builds require a large, strictly valid JSON project document. Qwen
-    // has proven substantially more reliable for this structured first pass;
-    // Best Quality still runs the automatic visual validation/repair gate after it.
+    // Model-aware defaults:
+    //  - Normal text chat uses GLM 5.2 through Vercel AI Gateway.
+    //  - Image chat uses GLM 5V Turbo because GLM 5.2 is text-only.
+    //  - Code mode keeps the benchmarked Chutes quality choices: Qwen 3.5 for
+    //    Quick and Kimi K2.6 for Best. New agent builds stay on Qwen because it
+    //    is more reliable for the required structured project document.
     const requestText = getLastUserMessage(messages)
     const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
 
-    // An explicit `model` from the client always overrides these defaults.
+    const hasImageAttachment = messages.some((message) => message.parts?.some((part) => part.type === 'file' && part.mediaType.startsWith('image/')))
     const defaultModel = codeMode
       ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
-      : 'Qwen/Qwen3.5-397B-A17B-TEE'
-    const selectedModel = model && modelOptions[model] ? modelOptions[model] : defaultModel
+      : hasImageAttachment ? 'zai/glm-5v-turbo' : 'zai/glm-5.2'
+    // Explicit model overrides apply to Code mode's existing Chutes selector.
+    const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : defaultModel
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
     const providerTimeoutMs = codeMode
@@ -772,9 +767,10 @@ When answering questions, refer to this document content. You can summarize it, 
       return { role: msg.role as 'user' | 'assistant' | 'system', content: text }
     })
 
-    // Try Chutes directly - fallback happens in catch block if it fails
+    // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
+    // The existing decentralized and OpenAI fallbacks remain available.
     const result = streamText({
-      model: chutes.chatModel(selectedModel),
+      model: codeMode ? chutes.chatModel(selectedModel) : gateway(selectedModel),
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
       maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
@@ -812,7 +808,7 @@ When answering questions, refer to this document content. You can summarize it, 
       // before resorting to the centralized OpenAI fallback.
       if (targonApiKey) {
         try {
-          console.log('[v0] Chutes unavailable, trying Targon (SN4)')
+          console.log('[v0] Primary provider unavailable, trying Targon (SN4)')
           const targon = createOpenAICompatible({
             name: 'targon',
             baseURL: 'https://api.targon.com/v1',
@@ -845,7 +841,7 @@ When answering questions, refer to this document content. You can summarize it, 
         }
       }
       
-      console.log('[v0] Chutes unavailable, falling back to OpenAI GPT-4o-mini')
+      console.log('[v0] Primary providers unavailable, falling back to OpenAI GPT-4o-mini')
       
       // Final fallback to OpenAI - use saved data from request
       try {

@@ -614,7 +614,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}...`, details: ['Running inference on Chutes (SN64)', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5') : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Chutes (SN64)' : 'Running inference through Vercel AI Gateway', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
@@ -2409,7 +2409,7 @@ export default function ChatInterface() {
                       <span className="text-sm font-semibold text-sky-700 dark:text-sky-300 transition-all duration-500">
                         {isReviewing
                           ? reviewPhase === 'validating'
-              ? requestedBuildQualityRef.current === 'quick' ? 'Checking game mechanics…' : 'Validating the build…'
+              ? requestedBuildQualityRef.current === 'quick' ? 'Checking game mechanics…' : 'Validating the build���'
               : reviewPhase === 'reviewing'
               ? 'Reviewing desktop and mobile previews…'
               : reviewPhase === 'repairing'
