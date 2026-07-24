@@ -63,7 +63,10 @@ function ModeToggle({
         className={cn(
           base,
           !codeMode
-            ? 'bg-primary text-primary-foreground shadow-sm'
+            ? cn(
+                'bg-primary text-primary-foreground shadow-sm',
+                compact ? 'px-4 py-1.5 text-sm' : 'px-5 py-2 text-base'
+              )
             : 'text-muted-foreground hover:text-foreground'
         )}
       >
