@@ -2979,12 +2979,13 @@ function MessageBubble({
               let keyIndex = 0
               
               const formatLine = (line: string): React.ReactNode => {
-                // Check for ### headers (subtitles)
-                const headerMatch = line.match(/^###\s+(.+)$/)
+                // Render Markdown headings as bold bullet points instead of exposing ##.
+                const headerMatch = line.match(/^#{2,}\s+(.+)$/)
                 if (headerMatch) {
                   return (
-                    <div key={keyIndex++} className="text-base font-bold mt-3 mb-1">
-                      {formatInlineMarkdown(headerMatch[1])}
+                    <div key={keyIndex++} className="mt-3 mb-1 flex items-start gap-2 font-bold text-foreground">
+                      <span aria-hidden="true" className="text-sky-500">•</span>
+                      <span>{formatInlineMarkdown(headerMatch[1])}</span>
                     </div>
                   )
                 }
