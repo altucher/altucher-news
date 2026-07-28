@@ -460,6 +460,7 @@ export async function POST(req: Request) {
     const modelOptions: Record<string, string> = {
       'qwen3.5': 'Qwen/Qwen3.5-397B-A17B-TEE',
       'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.2-TEE',
+      'kimi-k3': 'moonshotai/Kimi-K3-TEE',
       'kimi-k2.6': 'moonshotai/Kimi-K2.6-TEE',
       'kimi-k2.5': 'moonshotai/Kimi-K2.5-TEE',
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
@@ -469,14 +470,14 @@ export async function POST(req: Request) {
     //  - Normal text chat uses GLM 5.2 through Vercel AI Gateway.
     //  - Image chat uses GLM 5V Turbo because GLM 5.2 is text-only.
     //  - Code mode keeps the benchmarked Chutes quality choices: Qwen 3.5 for
-    //    Quick and Kimi K2.6 for Best. New agent builds stay on Qwen because it
+    //    Quick and Kimi K3 for Best. New agent builds stay on Qwen because it
     //    is more reliable for the required structured project document.
     const requestText = getLastUserMessage(messages)
     const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
 
     const hasImageAttachment = messages.some((message) => message.parts?.some((part) => part.type === 'file' && part.mediaType.startsWith('image/')))
     const defaultModel = codeMode
-      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
+      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K3-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
       : hasImageAttachment ? 'zai/glm-5v-turbo' : 'zai/glm-5.2'
     // Explicit model overrides apply to Code mode's existing Chutes selector.
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : defaultModel
@@ -505,6 +506,7 @@ export async function POST(req: Request) {
       // open model to keep the site online when Chutes is at capacity.
       'qwen3.5': 'moonshotai/Kimi-K2-Instruct',
       'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.1',
+      'kimi-k3': 'moonshotai/Kimi-K2-Instruct',
       'kimi-k2.6': 'moonshotai/Kimi-K2-Instruct',
       'kimi-k2.5': 'moonshotai/Kimi-K2-Instruct',
       'qwen3-32b': 'Qwen/Qwen3-32B',
@@ -541,7 +543,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-  - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
+      - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K3' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
@@ -564,7 +566,7 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by Kimi K2.6 on Chutes (SN64), with Targon (SN4) as failover.
+    // Powered by Kimi K3 on Chutes (SN64), with Targon (SN4) as failover.
     if (codeMode) {
       systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
 

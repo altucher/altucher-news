@@ -7,7 +7,7 @@ import { validateHtmlDocument } from '@/lib/code-validation'
 export const maxDuration = 800
 
 const QUICK_MODEL = 'Qwen/Qwen3.5-397B-A17B-TEE'
-const BEST_MODEL = 'moonshotai/Kimi-K2.6-TEE'
+const BEST_MODEL = 'moonshotai/Kimi-K3-TEE'
 
 function getModel(best: boolean) {
   const key = process.env.CHUTES_API_KEY

@@ -120,7 +120,7 @@ async function reviewVisually(html: string, deterministicSummary: string) {
 async function repairHtml(html: string, instructions: string) {
   const apiKey = process.env.CHUTES_API_KEY
   const model = apiKey
-    ? createOpenAICompatible({ name: 'chutes-review', apiKey, baseURL: 'https://llm.chutes.ai/v1' })('moonshotai/Kimi-K2.6-TEE')
+    ? createOpenAICompatible({ name: 'chutes-review', apiKey, baseURL: 'https://llm.chutes.ai/v1' })('moonshotai/Kimi-K3-TEE')
     : gateway('openai/gpt-4o-mini')
 
   const { text } = await generateText({
