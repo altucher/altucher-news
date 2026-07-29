@@ -683,6 +683,35 @@ COMPONENT PATTERNS (build these properly — they are what separate a real site 
 Before finishing, inspect the actual HTML and CSS you wrote—not just your intent. Confirm all of these are present in code: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. If any item is missing, revise the project before closing the artifact. A technically valid but visually generic page has failed this review.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
 
+      // Best Quality runs Kimi K3, a REASONING model: it deliberates privately
+      // before emitting a single character. The self-review instructions above
+      // ("mentally trace", "test the edge cases in your head", "before
+      // finishing, inspect the actual HTML you wrote") are written for
+      // non-reasoning models like Qwen, which need to be told to double-check.
+      // On K3 they compound with its native deliberation instead of replacing
+      // it: the same kanban prompt produced 21k chars of reasoning sent bare to
+      // Chutes but 146k chars through this route - a 7x blow-up that pushed the
+      // request past an upstream connection drop and returned nothing at all.
+      //
+      // So for reasoning models we ask for the same rigor ONCE, briefly, and
+      // let the model's own reasoning pass do the work. This trims the
+      // redundant "think harder" scaffolding, not any actual requirement.
+      if (buildQuality === 'best') {
+        systemPrompt = systemPrompt
+          .replace(
+            '- The logic must actually WORK, not just look good. Before finishing, mentally trace through the core logic and the main user interactions to confirm it behaves correctly. Visual polish never excuses broken behavior.',
+            '- The logic must actually WORK, not just look good. Visual polish never excuses broken behavior.',
+          )
+          .replace(
+            ' Test the edge cases in your head (e.g. Connect 4: check horizontal, vertical, and BOTH diagonals for 4-in-a-row; a full column can\'t be played).',
+            ' Cover the edge cases (e.g. Connect 4: horizontal, vertical, and BOTH diagonals; a full column cannot be played).',
+          )
+          .replace(
+            'Before finishing, inspect the actual HTML and CSS you wrote—not just your intent. Confirm all of these are present in code: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. If any item is missing, revise the project before closing the artifact. A technically valid but visually generic page has failed this review.',
+            'The finished document must include: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. A technically valid but visually generic page has failed.',
+          )
+      }
+
       if (buildQuality === 'quick' && !/\b(game|space\s*invaders?|shooter|arcade|pong|snake|tetris|platformer)\b/i.test(lastMessage)) {
         systemPrompt += `
 
