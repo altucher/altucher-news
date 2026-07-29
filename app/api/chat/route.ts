@@ -508,16 +508,17 @@ export async function POST(req: Request) {
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
     //
-    // Key this off the SELECTED MODEL, not buildQuality: K3 remains reachable via
-    // the model selector and needs a far longer window than the K2.6 default.
-    // K2.6 finished the same prompt in 201s, so 420s is ~2x headroom while still
-    // bounding a hung call; K3 measured 672-1092s and gets everything that fits
-    // under maxDuration (800s) minus finalization headroom. Note that even 740s
-    // is not always enough for K3 - that is a reason to leave it non-default,
-    // not a reason to raise it further.
+    // Give Best Quality the whole window that fits under maxDuration (800s),
+    // leaving ~60s for finalization. A tighter 420s looked like plenty next to
+    // K2.6's 201s bare-prompt run, but this route's larger system prompt makes it
+    // reason ~10x more, and real builds aborted mid-file at 420s. Do not tune
+    // this from a bare-prompt measurement.
+    //
+    // K3 (selector-only) measured 672-1092s, so even 740s can be too short for
+    // it. That is a reason to keep it non-default, not to raise maxDuration.
     const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
     const providerTimeoutMs = codeMode
-    ? (isHeavyReasoningModel ? 740_000 : buildQuality === 'best' ? 420_000 : 165_000)
+    ? (buildQuality === 'best' || isHeavyReasoningModel ? 740_000 : 165_000)
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
@@ -695,18 +696,21 @@ Before finishing, inspect the actual HTML and CSS you wrote—not just your inte
 
       // The self-review instructions above ("mentally trace", "test the edge
       // cases in your head", "before finishing, inspect the actual HTML you
-      // wrote") tell a model to deliberate. That is what we want from Qwen and
-      // from K2.6, whose own reasoning pass is short (~2.8k chars).
+      // wrote") tell a model to deliberate. Qwen needs that - it will not
+      // double-check unless told.
       //
-      // On a HEAVY reasoning model they backfire: K3 compounds them with its
-      // native deliberation instead of replacing it, and the same kanban prompt
-      // produced 21k chars of reasoning sent bare to Chutes but 146k chars
-      // through this route - a 7x blow-up that pushed the request past an
-      // upstream connection drop and returned nothing at all.
+      // On a REASONING model they backfire, because the model already
+      // deliberates natively and these instructions compound with it instead of
+      // replacing it. Measured on one kanban prompt, reasoning chars sent bare
+      // to Chutes vs through this route:
+      //   K3   -  21k bare -> 146k here (7x)  - silent stream death, no output
+      //   K2.6 - 2.8k bare ->  29k here (10x) - aborted mid-file
+      // I first scoped this to K3 only, assuming K2.6's short reasoning made it
+      // immune. It is not: the amplification is a property of the prompt, not
+      // the model, so it applies to every reasoning model we route here.
       //
-      // So trim the redundant "think harder" scaffolding for heavy reasoners
-      // only, keeping every actual requirement. Do NOT widen this to all of
-      // Best Quality: K2.6 benefits from the explicit self-review pass.
+      // Trim the redundant "think harder" scaffolding while keeping every actual
+      // requirement.
       if (isHeavyReasoningModel) {
         systemPrompt = systemPrompt
           .replace(
