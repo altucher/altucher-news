@@ -4,7 +4,7 @@ import {
   consumeStream,
   streamText,
 } from 'ai'
-import type { UIMessage } from 'ai'
+import type { UIMessage, ModelMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
 import { stripKimiToolTokens } from '@/lib/strip-kimi-tokens'
@@ -388,7 +388,49 @@ function getLastUserMessage(messages: UIMessage[]): string {
   return ''
 }
 
+/**
+ * Everything the Targon (SN4) failover needs in order to retry a request.
+ *
+ * The failover lives in the `catch` block, but every value it used to reference
+ * (`systemPrompt`, `modelMessages`, `targonApiKey`, `codeMode`, ...) was declared
+ * with const/let INSIDE the `try`, so none of them were in scope there. That is a
+ * ReferenceError the moment the primary provider fails - i.e. the decentralized
+ * failover could never actually run, and the route silently skipped straight to
+ * the centralized OpenAI fallback. `location` was the nastiest of the group: it
+ * resolved to the global `Location` object instead of throwing, so analytics
+ * would have recorded garbage rather than failing loudly.
+ *
+ * Capturing them in one object declared OUTSIDE the try keeps the fix in a single
+ * place, so the failover cannot drift out of scope again as this handler grows.
+ */
+type FailoverContext = {
+  targonApiKey: string
+  targonModel: string
+  systemPrompt: string
+  fileContextSection: string
+  modelMessages: ModelMessage[]
+  messages: UIMessage[]
+  // Both are optional in the request body, so keep them nullable here rather
+  // than coercing - the failover only ever reads them as a condition.
+  codeMode: boolean | undefined
+  buildQuality: string | undefined
+  lastMessage: string
+  usedDesearch: boolean
+  location: { country?: string; city?: string; region?: string }
+}
+
 export async function POST(req: Request) {
+  // Populated just before the primary streamText call, so the catch block can
+  // retry on Targon. Null means we failed before there was anything to retry.
+  let failover: FailoverContext | null = null
+
+  // The OpenAI fallback used to recover the request with `await req.clone().json()`,
+  // which throws `TypeError: unusable` - by then the original body has already been
+  // consumed by `await req.json()`, and a clone taken after that point has no
+  // readable stream. The result was a hard 500 with NO fallback whenever the primary
+  // provider failed. Keep the parsed body instead of trying to re-read the request.
+  let parsedBody: Record<string, unknown> = {}
+
   try {
     // Extract geolocation from Vercel headers
     const country = req.headers.get('x-vercel-ip-country') || undefined
@@ -405,7 +447,7 @@ export async function POST(req: Request) {
       codeMode?: boolean;
       buildQuality?: 'quick' | 'best';
       editingCode?: string | null;
-    } = await req.json()
+    } = (parsedBody = await req.json()) as never
 
     // Kick off the user-memory fetch immediately so it runs in parallel
     // with the usage/subscription check and (potentially) the web search,
@@ -836,6 +878,24 @@ When answering questions, refer to this document content. You can summarize it, 
       return { role: msg.role as 'user' | 'assistant' | 'system', content: text }
     })
 
+    // Snapshot what the Targon failover needs before we hand off to the primary
+    // provider. Must stay immediately above this call so it cannot go stale.
+    if (targonApiKey) {
+      failover = {
+        targonApiKey,
+        targonModel,
+        systemPrompt,
+        fileContextSection,
+        modelMessages,
+        messages,
+        codeMode,
+        buildQuality,
+        lastMessage,
+        usedDesearch,
+        location,
+      }
+    }
+
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
     const result = streamText({
@@ -875,33 +935,40 @@ When answering questions, refer to this document content. You can summarize it, 
       
       // First failover: Targon (Bittensor SN4) — keeps inference decentralized
       // before resorting to the centralized OpenAI fallback.
-      if (targonApiKey) {
+      if (failover) {
         try {
           console.log('[v0] Primary provider unavailable, trying Targon (SN4)')
           const targon = createOpenAICompatible({
             name: 'targon',
             baseURL: 'https://api.targon.com/v1',
             headers: {
-              'Authorization': `Bearer ${targonApiKey}`,
+              'Authorization': `Bearer ${failover.targonApiKey}`,
             },
           })
 
           const targonResult = streamText({
-            model: targon.chatModel(targonModel),
-            system: systemPrompt + fileContextSection,
-            messages: modelMessages,
-            maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
+            model: targon.chatModel(failover.targonModel),
+            system: failover.systemPrompt + failover.fileContextSection,
+            messages: failover.modelMessages,
+            maxOutputTokens: failover.codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
+            // A Best Quality code build needs the same long window as the primary
+            // attempt; a flat 3 min here would abort the retry mid-file and make
+            // the failover look broken even once it is reachable.
             abortSignal: AbortSignal.any([
               req.signal,
-              AbortSignal.timeout(codeMode && buildQuality === 'quick' ? 75_000 : 3 * 60_000),
+              AbortSignal.timeout(
+                failover.codeMode
+                  ? (failover.buildQuality === 'best' ? 740_000 : 165_000)
+                  : 3 * 60_000,
+              ),
             ]),
             experimental_transform: stripKimiToolTokens(),
           })
 
-          trackAnalyticsEvent('chat_query', lastMessage, `targon/${targonModel}`, 0.002, location, usedDesearch)
+          trackAnalyticsEvent('chat_query', failover.lastMessage, `targon/${failover.targonModel}`, 0.002, failover.location, failover.usedDesearch)
 
           return targonResult.toUIMessageStreamResponse({
-            originalMessages: messages,
+            originalMessages: failover.messages,
             consumeSseStream: consumeStream,
           })
         } catch (targonError) {
@@ -916,15 +983,24 @@ When answering questions, refer to this document content. You can summarize it, 
       try {
         const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
         
-        // Re-parse the request body
-        const reqBody = await req.clone().json()
-        const fallbackMessages = reqBody.messages
+        // Reuse the body parsed at the top of the handler. Do NOT call
+        // req.clone().json() here: the body is already consumed at this point and
+        // the clone throws `TypeError: unusable`, which killed this fallback.
+        const reqBody = parsedBody as {
+          messages?: UIMessage[]
+          fileContext?: { name: string; content: string } | null
+          codeMode?: boolean
+        }
+        const fallbackMessages = reqBody.messages ?? []
         const fallbackFileContext = reqBody.fileContext
         
         // Get the last user message for analytics
         const lastFallbackUserMessage = fallbackMessages.filter((m: UIMessage) => m.role === 'user').pop()
-        const fallbackLastMessage = typeof lastFallbackUserMessage?.content === 'string' 
-          ? lastFallbackUserMessage.content 
+        // UIMessage has no `content` in this AI SDK version - text lives in `parts`.
+        // Cast the way the rest of this file does so older clients that still send a
+        // flat `content` string keep working.
+        const fallbackLastMessage = typeof (lastFallbackUserMessage as { content?: string } | undefined)?.content === 'string'
+          ? (lastFallbackUserMessage as unknown as { content: string }).content
           : (lastFallbackUserMessage?.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
         
         // Build file context for fallback
@@ -935,8 +1011,8 @@ When answering questions, refer to this document content. You can summarize it, 
         
         const fallbackModelMessages = fallbackMessages.map((msg: UIMessage) => ({
           role: msg.role as 'user' | 'assistant' | 'system',
-          content: typeof msg.content === 'string' 
-            ? msg.content 
+          content: typeof (msg as { content?: string }).content === 'string'
+            ? (msg as unknown as { content: string }).content
             : (msg.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
         }))
         
@@ -945,7 +1021,9 @@ When answering questions, refer to this document content. You can summarize it, 
           system: `You are BlueTAO, a helpful AI assistant. Today's date is ${currentDate}. Answer questions thoughtfully and concisely.${fallbackFileContextSection}`,
           messages: fallbackModelMessages,
           // gpt-4o-mini caps output at 16,384 tokens, so stay under that.
-          maxOutputTokens: codeMode ? 16000 : MAX_OUTPUT_TOKENS_DEFAULT,
+          // Read codeMode off the re-parsed body: the outer `codeMode` is scoped
+          // to the try block and is not in scope here.
+          maxOutputTokens: reqBody.codeMode ? 16000 : MAX_OUTPUT_TOKENS_DEFAULT,
           abortSignal: req.signal,
         })
         
