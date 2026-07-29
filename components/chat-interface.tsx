@@ -302,9 +302,19 @@ export default function ChatInterface() {
   let finalMessage = message
   const responseText = getMessageText(message)
   if (!responseText.trim()) {
+    // Best Quality (Kimi K3) emits a long reasoning pass before its first
+    // visible token, so on a large prompt it can hit the upstream time limit
+    // with nothing rendered. Telling the user to "retry the same request" is
+    // misleading there — an identical heavy prompt fails the same way. Point
+    // them at the two things that actually change the outcome.
     finalMessage = {
       ...message,
-      parts: [{ type: 'text', text: 'The build model finished without returning a usable project. Please retry the same request.' }],
+      parts: [{
+        type: 'text',
+        text: codeMode && buildQuality === 'best'
+          ? 'Best Quality ran out of time before it produced any code — this happens on large prompts, because it thinks for a long while before writing anything. Either switch to Quick Build, or split this into a smaller first step (build the core screen, then add features in follow-up messages). Your prompt is preserved below.'
+          : 'The build model finished without returning a usable project. Please retry the same request.',
+      }],
     }
     setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
     return

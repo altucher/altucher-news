@@ -483,8 +483,15 @@ export async function POST(req: Request) {
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : defaultModel
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
+    //
+    // Best Quality must sit just UNDER `maxDuration` (800s), not well below it.
+    // K3 streams 20k-58k chars of reasoning before its first visible token, and
+    // measured end-to-end times on heavy prompts are 672-1092s. A 600s abort
+    // therefore killed the stream mid-reasoning, so zero text reached the client
+    // and the UI reported "finished without returning a usable project". 760s
+    // leaves ~40s of headroom for finalization inside the 800s function budget.
     const providerTimeoutMs = codeMode
-    ? (buildQuality === 'best' ? 10 * 60_000 : 165_000)
+    ? (buildQuality === 'best' ? 760_000 : 165_000)
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
