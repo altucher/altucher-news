@@ -4,7 +4,10 @@ import { gateway } from '@ai-sdk/gateway'
 import { applyProjectPatches, bundleProject, extractPatchArtifact, extractProjectArtifact, normalizeProject, serializeProject, validateProject } from '@/lib/project-document'
 import { validateHtmlDocument } from '@/lib/code-validation'
 
-export const maxDuration = 800
+// Best Quality uses Kimi K3, a reasoning model that spends tens of thousands of
+// tokens (and many minutes) thinking before it emits anything. See the extended
+// note in app/api/chat/route.ts: 800s truncated real edits mid-file.
+export const maxDuration = 1800
 
 const QUICK_MODEL = 'Qwen/Qwen3.5-397B-A17B-TEE'
 const BEST_MODEL = 'moonshotai/Kimi-K3-TEE'
@@ -48,7 +51,9 @@ export async function POST(req: Request) {
 
     const fallback = await generateText({
       model: getModel(buildQuality === 'best'),
-      maxOutputTokens: buildQuality === 'best' ? 32000 : 16000,
+      // K3's reasoning is billed against this same budget, so 32000 left too
+      // little for the patch itself and edits came back truncated.
+      maxOutputTokens: buildQuality === 'best' ? 96000 : 16000,
       system: 'You repair BlueTAO projects. Return only one fenced bluetao-project artifact: BLUETAO_PROJECT_V1 then strict JSON with exactly index.html, styles.css, and app.js. Preserve all unrelated behavior and design. No prose.',
       prompt: `The patch response could not be safely applied. Regenerate the complete project with this request applied: ${instruction || 'Apply the requested edit.'}\n\nORIGINAL PROJECT:\n${serializeProject(original)}\n\nFAILED RESPONSE:\n${responseText}`,
     })

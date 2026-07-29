@@ -46,7 +46,13 @@ const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 // answers/code off mid-stream. Build mode gets a much bigger budget so a
 // full HTML page can finish in one go.
 const MAX_OUTPUT_TOKENS_DEFAULT = 8000
-const MAX_OUTPUT_TOKENS_CODE = 32000
+// Reasoning models spend this SAME budget on their private thinking before they
+// emit any code. Kimi K3 used ~25.7k tokens of reasoning on a simple kanban
+// prompt, leaving under 6.3k for the file itself, so the HTML was cut off
+// mid-script with a clean `finish` (no abort) - a truncation that looks nothing
+// like a timeout. 96000 leaves room for a long reasoning pass AND a complete
+// file; Chutes accepts up to at least 200k for K3.
+const MAX_OUTPUT_TOKENS_CODE = 96000
 
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
