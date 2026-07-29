@@ -746,15 +746,17 @@ Before finishing, inspect the actual HTML and CSS you wrote—not just your inte
       // wrote") tell a model to deliberate. Qwen needs that - it will not
       // double-check unless told.
       //
-      // On a REASONING model they backfire, because the model already
-      // deliberates natively and these instructions compound with it instead of
-      // replacing it. Measured on one kanban prompt, reasoning chars sent bare
-      // to Chutes vs through this route:
-      //   K3   -  21k bare -> 146k here (7x)  - silent stream death, no output
-      //   K2.6 - 2.8k bare ->  29k here (10x) - aborted mid-file
-      // I first scoped this to K3 only, assuming K2.6's short reasoning made it
-      // immune. It is not: the amplification is a property of the prompt, not
-      // the model, so it applies to every reasoning model we route here.
+      // On a HEAVY reasoning model (K3) they backfire: it already deliberates
+      // natively, so this scaffolding compounds with that instead of replacing it.
+      // Measured on one kanban prompt, K3 went 21k reasoning chars bare -> 146k
+      // through this route, and the stream died silently with no output.
+      //
+      // Scope: K3 ONLY. An earlier version of this comment claimed the same 10x
+      // amplification hit K2.6 and that it was "a property of the prompt, not the
+      // model". That was wrong - it came from measuring two builds running
+      // CONCURRENTLY. Run sequentially, K2.6 is 3.3k trimmed vs 3.7k untrimmed:
+      // no amplification at all. So K2.6 keeps the full self-review text, which
+      // is a quality feature, and only K3 gets trimmed.
       //
       // Trim the redundant "think harder" scaffolding while keeping every actual
       // requirement.
