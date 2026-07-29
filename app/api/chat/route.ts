@@ -12,9 +12,19 @@ import { normalizeProject, serializeProject } from '@/lib/project-document'
 
 // Chutes streams tokens slowly and routes to variable-speed instances, so a
 // long code generation can run well past 5 minutes. 300s was cutting some
-// builds off mid-stream; 800s (Vercel Pro standard max) gives enough headroom
-// for even slow-instance runs to finish in a single response.
-export const maxDuration = 800
+// builds off mid-stream, and 800s (the standard Pro max) was still not enough:
+// Kimi K3 streams 70k+ chars of reasoning before its first visible token, and
+// measured end-to-end times are 672-1092s, so Best Quality aborted mid-file.
+//
+// 1800s uses Vercel's "extended max duration" (Pro/Enterprise, beta), which
+// must be set per-function in code — project-level defaults above 800s are not
+// supported. Requires a nodejs20/22/24.x runtime (this project is on 24.x) and
+// is incompatible with Secure Compute / Static IPs (not used here).
+// See https://vercel.com/docs/functions/configuring-functions/duration
+//
+// Note: the route forwards reasoning deltas to the client, which doubles as the
+// heartbeat traffic the docs recommend so idle connections are not dropped.
+export const maxDuration = 1800
 
 // CORS headers for embed widget
 const corsHeaders = {
@@ -484,14 +494,14 @@ export async function POST(req: Request) {
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
     //
-    // Best Quality must sit just UNDER `maxDuration` (800s), not well below it.
-    // K3 streams 20k-58k chars of reasoning before its first visible token, and
-    // measured end-to-end times on heavy prompts are 672-1092s. A 600s abort
-    // therefore killed the stream mid-reasoning, so zero text reached the client
-    // and the UI reported "finished without returning a usable project". 760s
-    // leaves ~40s of headroom for finalization inside the 800s function budget.
+    // Best Quality must sit just UNDER `maxDuration`, not well below it. K3
+    // streams 70k+ chars of reasoning before its first visible token, and
+    // measured end-to-end times are 672-1092s. Both 600s and 760s aborted it
+    // mid-stream, so the UI reported "finished without returning a usable
+    // project". With maxDuration raised to 1800s, 1740s leaves ~60s of headroom
+    // for finalization while still bounding a genuinely hung upstream call.
     const providerTimeoutMs = codeMode
-    ? (buildQuality === 'best' ? 760_000 : 165_000)
+    ? (buildQuality === 'best' ? 1_740_000 : 165_000)
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
