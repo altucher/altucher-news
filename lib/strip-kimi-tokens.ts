@@ -25,6 +25,11 @@ const ALL_TOKENS = [
 
 const MAX_MARKER_LEN = Math.max(...ALL_TOKENS.map((t) => t.length))
 
+// Upper bound on how much unterminated-section text we hold on to for possible
+// salvage. Generated single-file projects run to a few hundred KB, so 4MB is
+// ample while still refusing to buffer without limit.
+const SALVAGE_CAP = 4_000_000
+
 /**
  * Returns an `experimental_transform` for streamText that removes Kimi/Moonshot
  * tool-call tokens from the visible text stream.
@@ -34,6 +39,9 @@ export function stripKimiToolTokens<TOOLS extends ToolSet>() {
     let buffer = ''
     let inSection = false
     let currentId: string | undefined
+    // Whether any visible text has been emitted for this response. Used to
+    // decide what to do with an unterminated tool-call section at flush time.
+    let emittedAny = false
 
     const emit = (
       controller: TransformStreamDefaultController<TextStreamPart<TOOLS>>,
@@ -44,6 +52,7 @@ export function stripKimiToolTokens<TOOLS extends ToolSet>() {
       let clean = raw
       for (const tok of ALL_TOKENS) clean = clean.split(tok).join('')
       if (clean && currentId) {
+        if (clean.trim()) emittedAny = true
         controller.enqueue({
           type: 'text-delta',
           id: currentId,
@@ -65,7 +74,24 @@ export function stripKimiToolTokens<TOOLS extends ToolSet>() {
             // Still inside a tool-call section: drop buffered content, but
             // retain a small tail in case the end marker is split across chunks.
             if (flush) {
+              // Unterminated section at end of stream. If we already emitted
+              // real text, this is a normal trailing tool call and dropping it
+              // is correct. If we emitted NOTHING, the stream was almost
+              // certainly cut off (upstream timeout) and discarding the buffer
+              // turns a partial answer into an empty response — the exact
+              // "finished without returning a usable project" symptom. Salvage
+              // the remainder instead; `emit` strips the delimiters.
+              if (!emittedAny && buffer.trim()) {
+                inSection = false
+                emit(controller, buffer)
+              }
               buffer = ''
+            } else if (!emittedAny && buffer.length <= SALVAGE_CAP) {
+              // Nothing visible has been emitted yet, so this "section" may
+              // really be a truncated answer. Retain it (bounded) so the flush
+              // branch above has something to salvage. If the section closes
+              // normally it is discarded anyway when we slice past SECTION_END.
+              return
             } else {
               const keep = Math.min(buffer.length, SECTION_END.length - 1)
               buffer = buffer.slice(buffer.length - keep)

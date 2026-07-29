@@ -4,16 +4,23 @@ import {
   consumeStream,
   streamText,
 } from 'ai'
-import type { UIMessage } from 'ai'
+import type { UIMessage, ModelMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
 import { stripKimiToolTokens } from '@/lib/strip-kimi-tokens'
 import { normalizeProject, serializeProject } from '@/lib/project-document'
 
 // Chutes streams tokens slowly and routes to variable-speed instances, so a
-// long code generation can run well past 5 minutes. 300s was cutting some
-// builds off mid-stream; 800s (Vercel Pro standard max) gives enough headroom
-// for even slow-instance runs to finish in a single response.
+// long code generation can run well past 5 minutes, so 300s was cutting builds
+// off mid-stream. 800s is the standard Vercel Pro maximum and is comfortable for
+// Best Quality on Kimi K2.6 (measured 201s end to end, first code at 18s).
+//
+// Vercel Pro can go to 1800s via "extended max duration" (beta, must be set
+// per-function in code; project-level defaults cannot exceed 800s). That was
+// needed only for Kimi K3, which is no longer the default - so we stay on the
+// standard limit rather than depending on a beta feature. If K3 is ever made
+// default again, this must go back to 1800.
+// See https://vercel.com/docs/functions/configuring-functions/duration
 export const maxDuration = 800
 
 // CORS headers for embed widget
@@ -36,7 +43,14 @@ const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 // answers/code off mid-stream. Build mode gets a much bigger budget so a
 // full HTML page can finish in one go.
 const MAX_OUTPUT_TOKENS_DEFAULT = 8000
-const MAX_OUTPUT_TOKENS_CODE = 32000
+// Reasoning models spend this SAME budget on their private thinking before they
+// emit any code, so it must cover reasoning AND the finished file. Kimi K3 used
+// ~25.7k reasoning tokens on a simple kanban prompt, leaving under 6.3k of the
+// old 32000 for the document itself: the HTML was cut off mid-script while the
+// stream ended with a clean `finish` and no abort, a truncation that looks
+// nothing like a timeout. K2.6 reasons far less (~2.8k chars) but generated
+// files alone run past 44k chars, so keep generous headroom here regardless.
+const MAX_OUTPUT_TOKENS_CODE = 96000
 
 // Lazy initialization to avoid build-time errors
 function getSupabaseAdmin() {
@@ -374,7 +388,49 @@ function getLastUserMessage(messages: UIMessage[]): string {
   return ''
 }
 
+/**
+ * Everything the Targon (SN4) failover needs in order to retry a request.
+ *
+ * The failover lives in the `catch` block, but every value it used to reference
+ * (`systemPrompt`, `modelMessages`, `targonApiKey`, `codeMode`, ...) was declared
+ * with const/let INSIDE the `try`, so none of them were in scope there. That is a
+ * ReferenceError the moment the primary provider fails - i.e. the decentralized
+ * failover could never actually run, and the route silently skipped straight to
+ * the centralized OpenAI fallback. `location` was the nastiest of the group: it
+ * resolved to the global `Location` object instead of throwing, so analytics
+ * would have recorded garbage rather than failing loudly.
+ *
+ * Capturing them in one object declared OUTSIDE the try keeps the fix in a single
+ * place, so the failover cannot drift out of scope again as this handler grows.
+ */
+type FailoverContext = {
+  targonApiKey: string
+  targonModel: string
+  systemPrompt: string
+  fileContextSection: string
+  modelMessages: ModelMessage[]
+  messages: UIMessage[]
+  // Both are optional in the request body, so keep them nullable here rather
+  // than coercing - the failover only ever reads them as a condition.
+  codeMode: boolean | undefined
+  buildQuality: string | undefined
+  lastMessage: string
+  usedDesearch: boolean
+  location: { country?: string; city?: string; region?: string }
+}
+
 export async function POST(req: Request) {
+  // Populated just before the primary streamText call, so the catch block can
+  // retry on Targon. Null means we failed before there was anything to retry.
+  let failover: FailoverContext | null = null
+
+  // The OpenAI fallback used to recover the request with `await req.clone().json()`,
+  // which throws `TypeError: unusable` - by then the original body has already been
+  // consumed by `await req.json()`, and a clone taken after that point has no
+  // readable stream. The result was a hard 500 with NO fallback whenever the primary
+  // provider failed. Keep the parsed body instead of trying to re-read the request.
+  let parsedBody: Record<string, unknown> = {}
+
   try {
     // Extract geolocation from Vercel headers
     const country = req.headers.get('x-vercel-ip-country') || undefined
@@ -391,7 +447,7 @@ export async function POST(req: Request) {
       codeMode?: boolean;
       buildQuality?: 'quick' | 'best';
       editingCode?: string | null;
-    } = await req.json()
+    } = (parsedBody = await req.json()) as never
 
     // Kick off the user-memory fetch immediately so it runs in parallel
     // with the usage/subscription check and (potentially) the web search,
@@ -470,21 +526,46 @@ export async function POST(req: Request) {
     //  - Normal text chat uses GLM 5.2 through Vercel AI Gateway.
     //  - Image chat uses GLM 5V Turbo because GLM 5.2 is text-only.
     //  - Code mode keeps the benchmarked Chutes quality choices: Qwen 3.5 for
-    //    Quick and Kimi K3 for Best. New agent builds stay on Qwen because it
+    //    Quick and Kimi K2.6 for Best. New agent builds stay on Qwen because it
     //    is more reliable for the required structured project document.
+    //
+    // Best was briefly Kimi K3. K3 is a heavy reasoning model that emits nothing
+    // visible until it has finished deliberating, and on this route it produced
+    // 146k chars of reasoning and blew every limit, so builds returned "finished
+    // without returning a usable project". Measured on the same kanban prompt:
+    //   K3    - first code at 203s, 21k reasoning direct / 146k via this route
+    //   K2.6  - first code at  18s,  2.8k reasoning, done in 201s, complete HTML
+    // K2.6 is still a reasoning model but a light one, so it fits comfortably in
+    // a normal request and the user sees code almost immediately. K3 stays
+    // available through the explicit model selector.
     const requestText = getLastUserMessage(messages)
     const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
 
     const hasImageAttachment = messages.some((message) => message.parts?.some((part) => part.type === 'file' && part.mediaType.startsWith('image/')))
     const defaultModel = codeMode
-      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K3-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
+      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
       : hasImageAttachment ? 'zai/glm-5v-turbo' : 'zai/glm-5.2'
     // Explicit model overrides apply to Code mode's existing Chutes selector.
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : defaultModel
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
+    //
+    // Give Best Quality the whole window that fits under maxDuration (800s),
+    // leaving ~60s for finalization. 420s is NOT enough: Chutes throughput varies
+    // hugely run to run (measured 154 chars/sec vs 11 chars/sec on the identical
+    // request), so a build that normally lands in ~200s can legitimately need
+    // 700s+ and would otherwise abort mid-file.
+    //
+    // Note: an earlier version of this comment claimed the system prompt makes
+    // K2.6 "reason 10x more". That was a measurement artifact from running two
+    // builds concurrently. Sequentially it is 3.3k vs 3.7k reasoning chars - the
+    // prompt does not inflate reasoning. The timeout is about provider variance.
+    //
+    // K3 (selector-only) measured 672-1092s, so even 740s can be too short for
+    // it. That is a reason to keep it non-default, not to raise maxDuration.
+    const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
     const providerTimeoutMs = codeMode
-    ? (buildQuality === 'best' ? 10 * 60_000 : 165_000)
+    ? (buildQuality === 'best' || isHeavyReasoningModel ? 740_000 : 165_000)
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
@@ -543,7 +624,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-      - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K3' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
+      - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
@@ -566,7 +647,7 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by Kimi K3 on Chutes (SN64), with Targon (SN4) as failover.
+    // Powered by Kimi K2.6 on Chutes (SN64), with Targon (SN4) as failover.
     if (codeMode) {
       systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
 
@@ -659,6 +740,39 @@ COMPONENT PATTERNS (build these properly — they are what separate a real site 
 
 Before finishing, inspect the actual HTML and CSS you wrote—not just your intent. Confirm all of these are present in code: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. If any item is missing, revise the project before closing the artifact. A technically valid but visually generic page has failed this review.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
+
+      // The self-review instructions above ("mentally trace", "test the edge
+      // cases in your head", "before finishing, inspect the actual HTML you
+      // wrote") tell a model to deliberate. Qwen needs that - it will not
+      // double-check unless told.
+      //
+      // On a REASONING model they backfire, because the model already
+      // deliberates natively and these instructions compound with it instead of
+      // replacing it. Measured on one kanban prompt, reasoning chars sent bare
+      // to Chutes vs through this route:
+      //   K3   -  21k bare -> 146k here (7x)  - silent stream death, no output
+      //   K2.6 - 2.8k bare ->  29k here (10x) - aborted mid-file
+      // I first scoped this to K3 only, assuming K2.6's short reasoning made it
+      // immune. It is not: the amplification is a property of the prompt, not
+      // the model, so it applies to every reasoning model we route here.
+      //
+      // Trim the redundant "think harder" scaffolding while keeping every actual
+      // requirement.
+      if (isHeavyReasoningModel) {
+        systemPrompt = systemPrompt
+          .replace(
+            '- The logic must actually WORK, not just look good. Before finishing, mentally trace through the core logic and the main user interactions to confirm it behaves correctly. Visual polish never excuses broken behavior.',
+            '- The logic must actually WORK, not just look good. Visual polish never excuses broken behavior.',
+          )
+          .replace(
+            ' Test the edge cases in your head (e.g. Connect 4: check horizontal, vertical, and BOTH diagonals for 4-in-a-row; a full column can\'t be played).',
+            ' Cover the edge cases (e.g. Connect 4: horizontal, vertical, and BOTH diagonals; a full column cannot be played).',
+          )
+          .replace(
+            'Before finishing, inspect the actual HTML and CSS you wrote—not just your intent. Confirm all of these are present in code: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. If any item is missing, revise the project before closing the artifact. A technically valid but visually generic page has failed this review.',
+            'The finished document must include: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. A technically valid but visually generic page has failed.',
+          )
+      }
 
       if (buildQuality === 'quick' && !/\b(game|space\s*invaders?|shooter|arcade|pong|snake|tetris|platformer)\b/i.test(lastMessage)) {
         systemPrompt += `
@@ -769,6 +883,24 @@ When answering questions, refer to this document content. You can summarize it, 
       return { role: msg.role as 'user' | 'assistant' | 'system', content: text }
     })
 
+    // Snapshot what the Targon failover needs before we hand off to the primary
+    // provider. Must stay immediately above this call so it cannot go stale.
+    if (targonApiKey) {
+      failover = {
+        targonApiKey,
+        targonModel,
+        systemPrompt,
+        fileContextSection,
+        modelMessages,
+        messages,
+        codeMode,
+        buildQuality,
+        lastMessage,
+        usedDesearch,
+        location,
+      }
+    }
+
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
     const result = streamText({
@@ -808,33 +940,40 @@ When answering questions, refer to this document content. You can summarize it, 
       
       // First failover: Targon (Bittensor SN4) — keeps inference decentralized
       // before resorting to the centralized OpenAI fallback.
-      if (targonApiKey) {
+      if (failover) {
         try {
           console.log('[v0] Primary provider unavailable, trying Targon (SN4)')
           const targon = createOpenAICompatible({
             name: 'targon',
             baseURL: 'https://api.targon.com/v1',
             headers: {
-              'Authorization': `Bearer ${targonApiKey}`,
+              'Authorization': `Bearer ${failover.targonApiKey}`,
             },
           })
 
           const targonResult = streamText({
-            model: targon.chatModel(targonModel),
-            system: systemPrompt + fileContextSection,
-            messages: modelMessages,
-            maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
+            model: targon.chatModel(failover.targonModel),
+            system: failover.systemPrompt + failover.fileContextSection,
+            messages: failover.modelMessages,
+            maxOutputTokens: failover.codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
+            // A Best Quality code build needs the same long window as the primary
+            // attempt; a flat 3 min here would abort the retry mid-file and make
+            // the failover look broken even once it is reachable.
             abortSignal: AbortSignal.any([
               req.signal,
-              AbortSignal.timeout(codeMode && buildQuality === 'quick' ? 75_000 : 3 * 60_000),
+              AbortSignal.timeout(
+                failover.codeMode
+                  ? (failover.buildQuality === 'best' ? 740_000 : 165_000)
+                  : 3 * 60_000,
+              ),
             ]),
             experimental_transform: stripKimiToolTokens(),
           })
 
-          trackAnalyticsEvent('chat_query', lastMessage, `targon/${targonModel}`, 0.002, location, usedDesearch)
+          trackAnalyticsEvent('chat_query', failover.lastMessage, `targon/${failover.targonModel}`, 0.002, failover.location, failover.usedDesearch)
 
           return targonResult.toUIMessageStreamResponse({
-            originalMessages: messages,
+            originalMessages: failover.messages,
             consumeSseStream: consumeStream,
           })
         } catch (targonError) {
@@ -849,15 +988,24 @@ When answering questions, refer to this document content. You can summarize it, 
       try {
         const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
         
-        // Re-parse the request body
-        const reqBody = await req.clone().json()
-        const fallbackMessages = reqBody.messages
+        // Reuse the body parsed at the top of the handler. Do NOT call
+        // req.clone().json() here: the body is already consumed at this point and
+        // the clone throws `TypeError: unusable`, which killed this fallback.
+        const reqBody = parsedBody as {
+          messages?: UIMessage[]
+          fileContext?: { name: string; content: string } | null
+          codeMode?: boolean
+        }
+        const fallbackMessages = reqBody.messages ?? []
         const fallbackFileContext = reqBody.fileContext
         
         // Get the last user message for analytics
         const lastFallbackUserMessage = fallbackMessages.filter((m: UIMessage) => m.role === 'user').pop()
-        const fallbackLastMessage = typeof lastFallbackUserMessage?.content === 'string' 
-          ? lastFallbackUserMessage.content 
+        // UIMessage has no `content` in this AI SDK version - text lives in `parts`.
+        // Cast the way the rest of this file does so older clients that still send a
+        // flat `content` string keep working.
+        const fallbackLastMessage = typeof (lastFallbackUserMessage as { content?: string } | undefined)?.content === 'string'
+          ? (lastFallbackUserMessage as unknown as { content: string }).content
           : (lastFallbackUserMessage?.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
         
         // Build file context for fallback
@@ -868,8 +1016,8 @@ When answering questions, refer to this document content. You can summarize it, 
         
         const fallbackModelMessages = fallbackMessages.map((msg: UIMessage) => ({
           role: msg.role as 'user' | 'assistant' | 'system',
-          content: typeof msg.content === 'string' 
-            ? msg.content 
+          content: typeof (msg as { content?: string }).content === 'string'
+            ? (msg as unknown as { content: string }).content
             : (msg.parts?.find((p: { type: string }) => p.type === 'text') as { text: string } | undefined)?.text || ''
         }))
         
@@ -878,7 +1026,9 @@ When answering questions, refer to this document content. You can summarize it, 
           system: `You are BlueTAO, a helpful AI assistant. Today's date is ${currentDate}. Answer questions thoughtfully and concisely.${fallbackFileContextSection}`,
           messages: fallbackModelMessages,
           // gpt-4o-mini caps output at 16,384 tokens, so stay under that.
-          maxOutputTokens: codeMode ? 16000 : MAX_OUTPUT_TOKENS_DEFAULT,
+          // Read codeMode off the re-parsed body: the outer `codeMode` is scoped
+          // to the try block and is not in scope here.
+          maxOutputTokens: reqBody.codeMode ? 16000 : MAX_OUTPUT_TOKENS_DEFAULT,
           abortSignal: req.signal,
         })
         

@@ -93,7 +93,7 @@ function ModeToggle({
 }
 
 // Lets the user trade speed for quality in Build mode. "Quick" runs the faster
-// Qwen 3.5 for a fast first version; "Best" runs the deeper-reasoning Kimi K3
+// Qwen 3.5 for a fast first version; "Best" runs the deeper-reasoning Kimi K2.6
 // for a more complete, correct, polished build (slower). Default is Quick.
 function BuildQualityToggle({
   quality,
@@ -180,7 +180,7 @@ function getMessageText(message: UIMessage): string {
   .join('')
   }
 
-  // Reasoning models (e.g. Kimi K3) stream their actual thinking as
+  // Reasoning models (e.g. Kimi K2.6) stream their actual thinking as
   // `reasoning` parts before any visible answer text. Surfacing this gives the
   // user REAL progress instead of a synthetic loading animation.
   function getMessageReasoning(message: UIMessage): string {
@@ -302,9 +302,18 @@ export default function ChatInterface() {
   let finalMessage = message
   const responseText = getMessageText(message)
   if (!responseText.trim()) {
+    // An empty response means the stream ended before any visible text: usually
+    // an upstream timeout or a cut connection on a large build. "Retry the same
+    // request" is only useful advice if the request can actually succeed, so on
+    // Best Quality also offer the two levers that change the outcome.
     finalMessage = {
       ...message,
-      parts: [{ type: 'text', text: 'The build model finished without returning a usable project. Please retry the same request.' }],
+      parts: [{
+        type: 'text',
+        text: codeMode && buildQuality === 'best'
+          ? 'Best Quality stopped before it produced any code. This is usually a timeout on a very large build. You can retry, or split this into a smaller first step (build the core screen, then add features in follow-up messages). Your prompt is preserved below.'
+          : 'The build model finished without returning a usable project. Please retry the same request.',
+      }],
     }
     setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
     return
@@ -618,7 +627,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K3' : 'Qwen 3.5') : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Chutes (SN64)' : 'Running inference through Vercel AI Gateway', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5') : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Chutes (SN64)' : 'Running inference through Vercel AI Gateway', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
