@@ -551,10 +551,15 @@ export async function POST(req: Request) {
     // builds should finish promptly; Best Quality gets a larger reasoning window.
     //
     // Give Best Quality the whole window that fits under maxDuration (800s),
-    // leaving ~60s for finalization. A tighter 420s looked like plenty next to
-    // K2.6's 201s bare-prompt run, but this route's larger system prompt makes it
-    // reason ~10x more, and real builds aborted mid-file at 420s. Do not tune
-    // this from a bare-prompt measurement.
+    // leaving ~60s for finalization. 420s is NOT enough: Chutes throughput varies
+    // hugely run to run (measured 154 chars/sec vs 11 chars/sec on the identical
+    // request), so a build that normally lands in ~200s can legitimately need
+    // 700s+ and would otherwise abort mid-file.
+    //
+    // Note: an earlier version of this comment claimed the system prompt makes
+    // K2.6 "reason 10x more". That was a measurement artifact from running two
+    // builds concurrently. Sequentially it is 3.3k vs 3.7k reasoning chars - the
+    // prompt does not inflate reasoning. The timeout is about provider variance.
     //
     // K3 (selector-only) measured 672-1092s, so even 740s can be too short for
     // it. That is a reason to keep it non-default, not to raise maxDuration.
