@@ -760,7 +760,7 @@ Before finishing, inspect the actual HTML and CSS you wrote—not just your inte
       //
       // Trim the redundant "think harder" scaffolding while keeping every actual
       // requirement.
-      if (isHeavyReasoningModel) {
+      if (isHeavyReasoningModel || req.headers.get('x-v0-ab-trim')) { // [v0] TEMP AB HOOK
         systemPrompt = systemPrompt
           .replace(
             '- The logic must actually WORK, not just look good. Before finishing, mentally trace through the core logic and the main user interactions to confirm it behaves correctly. Visual polish never excuses broken behavior.',
