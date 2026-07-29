@@ -7,7 +7,10 @@ import { z } from 'zod'
 import { extractHtmlDocument, validateHtmlDocument } from '@/lib/code-validation'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
+// This route takes Puppeteer screenshots AND then runs a Kimi K3 repair pass.
+// K3 is a reasoning model that alone needs 700s+ before emitting anything, so
+// 300s could never complete the repair. See app/api/chat/route.ts for details.
+export const maxDuration = 1800
 
 const MAX_HTML_BYTES = 1_500_000
 
@@ -125,7 +128,9 @@ async function repairHtml(html: string, instructions: string) {
 
   const { text } = await generateText({
     model,
-    maxOutputTokens: 32_000,
+    // K3 bills its reasoning against this budget, so 32k left too little for
+    // the repaired document and it came back truncated mid-file.
+    maxOutputTokens: 96_000,
     temperature: 0.2,
     prompt: `You are repairing one self-contained HTML build after automated quality review.\n\nFix every issue below without removing working features or changing the product's intent. The result must be a complete, launch-ready responsive page—not a fragment, wireframe, or thin template. For a business website, preserve or add a strong hero, meaningful services or offering, trust/proof, real-looking contact details, repeated conversion CTA, complete footer, mobile navigation, accessible controls, and subject-appropriate reliable imagery. Preserve the existing visual direction unless the critique identifies a visual problem. Do not leave TODOs, placeholders, dead controls, or false capability claims. Return ONLY one complete <!DOCTYPE html> document, with all CSS and JavaScript inline. No markdown fence and no explanation.\n\nISSUES TO FIX:\n${instructions}\n\nCURRENT HTML:\n${html}`,
   })
