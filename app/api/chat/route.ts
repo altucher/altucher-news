@@ -564,6 +564,10 @@ export async function POST(req: Request) {
     // K3 (selector-only) measured 672-1092s, so even 740s can be too short for
     // it. That is a reason to keep it non-default, not to raise maxDuration.
     const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
+
+    // Separate from the timeout gate above: which models get the trimmed prompt.
+    // Both Kimi reasoning models do. See the measurement note at the trim site.
+    const trimReasoningScaffolding = /Kimi-K3|Kimi-K2\.6/i.test(selectedModel)
     const providerTimeoutMs = codeMode
     ? (buildQuality === 'best' || isHeavyReasoningModel ? 740_000 : 165_000)
     : 3 * 60_000
@@ -751,16 +755,32 @@ Before finishing, inspect the actual HTML and CSS you wrote—not just your inte
       // Measured on one kanban prompt, K3 went 21k reasoning chars bare -> 146k
       // through this route, and the stream died silently with no output.
       //
-      // Scope: K3 ONLY. An earlier version of this comment claimed the same 10x
-      // amplification hit K2.6 and that it was "a property of the prompt, not the
-      // model". That was wrong - it came from measuring two builds running
-      // CONCURRENTLY. Run sequentially, K2.6 is 3.3k trimmed vs 3.7k untrimmed:
-      // no amplification at all. So K2.6 keeps the full self-review text, which
-      // is a quality feature, and only K3 gets trimmed.
+      // Scope: BOTH Kimi models. This flipped twice, so here is the actual data.
+      // A proper sequential A/B on the kanban prompt (.v0/abtrim.mjs, one arm at a
+      // time, never concurrent) gave:
+      //
+      //                    untrimmed   trimmed    delta
+      //   reasoning chars     48,966    31,980   -34.7%   <- throughput-independent
+      //   reasoning phase       321s      215s   -33.0%
+      //   total build           459s      360s   -21.7%
+      //   quality        1 media query / 5 transitions -> 3 / 9, both complete,
+      //                  both zero console errors, focus-visible + dnd intact
+      //
+      // Trust the CHARS row above all: it is a token count, so unlike wall-clock
+      // it is immune to Chutes' ~14x throughput swings. 49k -> 32k is genuinely
+      // less work, and the time saving follows it.
+      //
+      // Two earlier claims in this comment were both wrong and are recorded so
+      // nobody re-derives them: (1) "10x amplification, a property of the prompt
+      // not the model" came from running two builds CONCURRENTLY; (2) the
+      // correction that replaced it ("K2.6 is 3.3k vs 3.7k, no amplification, so
+      // trim K3 only") was measured on a run that never reached the code phase -
+      // real reasoning here is 49k, ~13x that figure. n=1 per arm, so treat the
+      // percentages as approximate; the direction is solid.
       //
       // Trim the redundant "think harder" scaffolding while keeping every actual
       // requirement.
-      if (isHeavyReasoningModel || req.headers.get('x-v0-ab-trim')) { // [v0] TEMP AB HOOK
+      if (trimReasoningScaffolding) {
         systemPrompt = systemPrompt
           .replace(
             '- The logic must actually WORK, not just look good. Before finishing, mentally trace through the core logic and the main user interactions to confirm it behaves correctly. Visual polish never excuses broken behavior.',
