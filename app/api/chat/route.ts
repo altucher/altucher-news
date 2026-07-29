@@ -564,6 +564,10 @@ export async function POST(req: Request) {
     // K3 (selector-only) measured 672-1092s, so even 740s can be too short for
     // it. That is a reason to keep it non-default, not to raise maxDuration.
     const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
+
+    // Separate from the timeout gate above: which models get the trimmed prompt.
+    // Both Kimi reasoning models do. See the measurement note at the trim site.
+    const trimReasoningScaffolding = /Kimi-K3|Kimi-K2\.6/i.test(selectedModel)
     const providerTimeoutMs = codeMode
     ? (buildQuality === 'best' || isHeavyReasoningModel ? 740_000 : 165_000)
     : 3 * 60_000
@@ -746,19 +750,37 @@ Before finishing, inspect the actual HTML and CSS you wrote—not just your inte
       // wrote") tell a model to deliberate. Qwen needs that - it will not
       // double-check unless told.
       //
-      // On a REASONING model they backfire, because the model already
-      // deliberates natively and these instructions compound with it instead of
-      // replacing it. Measured on one kanban prompt, reasoning chars sent bare
-      // to Chutes vs through this route:
-      //   K3   -  21k bare -> 146k here (7x)  - silent stream death, no output
-      //   K2.6 - 2.8k bare ->  29k here (10x) - aborted mid-file
-      // I first scoped this to K3 only, assuming K2.6's short reasoning made it
-      // immune. It is not: the amplification is a property of the prompt, not
-      // the model, so it applies to every reasoning model we route here.
+      // On a HEAVY reasoning model (K3) they backfire: it already deliberates
+      // natively, so this scaffolding compounds with that instead of replacing it.
+      // Measured on one kanban prompt, K3 went 21k reasoning chars bare -> 146k
+      // through this route, and the stream died silently with no output.
+      //
+      // Scope: BOTH Kimi models. This flipped twice, so here is the actual data.
+      // A proper sequential A/B on the kanban prompt (.v0/abtrim.mjs, one arm at a
+      // time, never concurrent) gave:
+      //
+      //                    untrimmed   trimmed    delta
+      //   reasoning chars     48,966    31,980   -34.7%   <- throughput-independent
+      //   reasoning phase       321s      215s   -33.0%
+      //   total build           459s      360s   -21.7%
+      //   quality        1 media query / 5 transitions -> 3 / 9, both complete,
+      //                  both zero console errors, focus-visible + dnd intact
+      //
+      // Trust the CHARS row above all: it is a token count, so unlike wall-clock
+      // it is immune to Chutes' ~14x throughput swings. 49k -> 32k is genuinely
+      // less work, and the time saving follows it.
+      //
+      // Two earlier claims in this comment were both wrong and are recorded so
+      // nobody re-derives them: (1) "10x amplification, a property of the prompt
+      // not the model" came from running two builds CONCURRENTLY; (2) the
+      // correction that replaced it ("K2.6 is 3.3k vs 3.7k, no amplification, so
+      // trim K3 only") was measured on a run that never reached the code phase -
+      // real reasoning here is 49k, ~13x that figure. n=1 per arm, so treat the
+      // percentages as approximate; the direction is solid.
       //
       // Trim the redundant "think harder" scaffolding while keeping every actual
       // requirement.
-      if (isHeavyReasoningModel) {
+      if (trimReasoningScaffolding) {
         systemPrompt = systemPrompt
           .replace(
             '- The logic must actually WORK, not just look good. Before finishing, mentally trace through the core logic and the main user interactions to confirm it behaves correctly. Visual polish never excuses broken behavior.',
