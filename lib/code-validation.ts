@@ -102,7 +102,85 @@ export function validateHtmlDocument(html: string): ValidationResult {
     }
   }
 
+  findings.push(...findBrokenSelectors(html))
+
   // Keep repair prompts concise and deterministic.
   const unique = findings.filter((finding, index) => findings.findIndex((item) => item.code === finding.code) === index)
   return { valid: !unique.some((finding) => finding.severity === 'error'), findings: unique }
+}
+
+// Every HTML element name that can legitimately lead a selector. Anything else
+// in that position is either a custom element or a typo.
+const KNOWN_TAGS = new Set([
+  'a','abbr','address','area','article','aside','audio','b','base','bdi','bdo','blockquote','body','br',
+  'button','canvas','caption','cite','code','col','colgroup','data','datalist','dd','del','details','dfn',
+  'dialog','div','dl','dt','em','embed','fieldset','figcaption','figure','footer','form','h1','h2','h3',
+  'h4','h5','h6','head','header','hgroup','hr','html','i','iframe','img','input','ins','kbd','label',
+  'legend','li','link','main','map','mark','menu','meta','meter','nav','noscript','object','ol','optgroup',
+  'option','output','p','param','picture','pre','progress','q','rp','rt','ruby','s','samp','script',
+  'search','section','select','slot','small','source','span','strong','style','sub','summary','sup','svg',
+  'table','tbody','td','template','textarea','tfoot','th','thead','time','title','tr','track','u','ul',
+  'var','video','wbr','circle','path','rect','g','line','polygon','polyline','text','use','defs',
+])
+
+/**
+ * Catch selector strings whose leading token looks like a tag name but is really
+ * a CSS class that lost its dot - e.g. `card-list[data-status="todo"]` instead of
+ * `.card-list[...]`. This fails SILENTLY at runtime: querySelector returns null,
+ * an `if (!el) return` swallows it, and the page renders with empty containers
+ * while any count derived from the data still looks correct. A real generated
+ * kanban board shipped exactly this bug and looked fine until the DOM was
+ * inspected, so syntax-only validation cannot catch it.
+ *
+ * Only flags a name that is NOT a known HTML tag, contains no dot/hash, and does
+ * appear as a class value in the document - that combination is unambiguous
+ * enough to report as an error rather than a warning.
+ */
+export function findBrokenSelectors(html: string): ValidationFinding[] {
+  const classAttrValues = new Set<string>()
+  for (const match of html.matchAll(/\bclass\s*=\s*["']([^"']+)["']/gi)) {
+    for (const name of match[1].trim().split(/\s+/)) classAttrValues.add(name)
+  }
+
+  // Scan selector-shaped string literals anywhere in <script>, NOT just the ones
+  // written inline inside querySelector(...). The real kanban stored them in a
+  // lookup object (`colMap = { todo: 'card-list[data-status="todo"]' }`) and
+  // passed the variable in, so a querySelector-anchored regex found nothing and
+  // my first version of this check reported a clean bill of health on a file
+  // whose columns were provably empty.
+  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).join('\n')
+
+  // Match each string literal by ITS OWN delimiter, then inspect the contents.
+  // A single character class cannot do this: the real selector is
+  // 'card-list[data-status="todo"]' - a single-quoted string containing double
+  // quotes - so any pattern that excludes quotes inside the brackets misses it.
+  const literals: string[] = []
+  for (const re of [/'((?:[^'\\\n]|\\.)*)'/g, /"((?:[^"\\\n]|\\.)*)"/g, /`((?:[^`\\]|\\.)*)`/g]) {
+    for (const match of scripts.matchAll(re)) literals.push(match[1])
+  }
+
+  const broken = new Set<string>()
+  for (const literal of literals) {
+    const selector = literal.trim()
+    // Must look like a selector: a tag-like leading token plus an attribute filter.
+    if (!/^[A-Za-z][\w-]*\[[^\]]*\]/.test(selector)) continue
+    // Leading token, up to the first attribute/descendant/pseudo boundary.
+    const lead = selector.split(/[[\s>+~:,]/)[0]
+    if (!lead) continue
+    if (lead.includes('.') || lead.includes('#') || lead.includes('*')) continue
+    if (KNOWN_TAGS.has(lead.toLowerCase())) continue
+    if (lead.includes('-') && !classAttrValues.has(lead)) continue // likely a real custom element
+    if (!classAttrValues.has(lead)) continue
+    broken.add(selector)
+  }
+
+  if (broken.size === 0) return []
+  const list = [...broken].slice(0, 4).map((s) => `"${s}"`).join(', ')
+  return [{
+    severity: 'error',
+    code: 'selector-missing-class-dot',
+    message:
+      `These querySelector calls target a tag name that does not exist, but matches a class in the markup: ${list}. ` +
+      `Add the missing "." prefix (e.g. ".card-list[data-status=\\"todo\\"]") so the elements are actually found.`,
+  }]
 }
