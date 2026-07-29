@@ -565,9 +565,9 @@ export async function POST(req: Request) {
     // it. That is a reason to keep it non-default, not to raise maxDuration.
     const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
 
-    // Separate from the timeout gate above: which models get the trimmed prompt.
-    // Both Kimi reasoning models do. See the measurement note at the trim site.
-    const trimReasoningScaffolding = /Kimi-K3|Kimi-K2\.6/i.test(selectedModel)
+    // Which models get the trimmed prompt. K3 ONLY - K2.6 was tried and reverted;
+    // see the measurement note at the trim site for the data.
+    const trimReasoningScaffolding = /Kimi-K3/i.test(selectedModel)
     const providerTimeoutMs = codeMode
     ? (buildQuality === 'best' || isHeavyReasoningModel ? 740_000 : 165_000)
     : 3 * 60_000
@@ -755,28 +755,33 @@ Before finishing, inspect the actual HTML and CSS you wrote—not just your inte
       // Measured on one kanban prompt, K3 went 21k reasoning chars bare -> 146k
       // through this route, and the stream died silently with no output.
       //
-      // Scope: BOTH Kimi models. This flipped twice, so here is the actual data.
-      // A proper sequential A/B on the kanban prompt (.v0/abtrim.mjs, one arm at a
-      // time, never concurrent) gave:
+      // Scope: K3 ONLY. K2.6 was tried here and REVERTED. Full data, because this
+      // question has now been answered wrongly three times:
       //
-      //                    untrimmed   trimmed    delta
-      //   reasoning chars     48,966    31,980   -34.7%   <- throughput-independent
-      //   reasoning phase       321s      215s   -33.0%
-      //   total build           459s      360s   -21.7%
-      //   quality        1 media query / 5 transitions -> 3 / 9, both complete,
-      //                  both zero console errors, focus-visible + dnd intact
+      //   run                        trim   reasoning chars
+      //   dev, kanban prompt          off            48,966
+      //   dev, kanban prompt          ON             31,980   (looked like -34.7%)
+      //   prod, same prompt           ON             56,733   <- highest of all three
       //
-      // Trust the CHARS row above all: it is a token count, so unlike wall-clock
-      // it is immune to Chutes' ~14x throughput swings. 49k -> 32k is genuinely
-      // less work, and the time saving follows it.
+      // The trimmed prod run produced MORE reasoning than the untrimmed baseline,
+      // which refutes "the trim reduces reasoning". The apparent -34.7% was one
+      // sample against one sample.
       //
-      // Two earlier claims in this comment were both wrong and are recorded so
-      // nobody re-derives them: (1) "10x amplification, a property of the prompt
-      // not the model" came from running two builds CONCURRENTLY; (2) the
-      // correction that replaced it ("K2.6 is 3.3k vs 3.7k, no amplification, so
-      // trim K3 only") was measured on a run that never reached the code phase -
-      // real reasoning here is 49k, ~13x that figure. n=1 per arm, so treat the
-      // percentages as approximate; the direction is solid.
+      // The reasoning LENGTH this model emits is stochastic (sampling), so a char
+      // count is NOT the reliable metric I assumed. Char counts are immune to
+      // Chutes' throughput swings but not to sampling variance - only a repeated
+      // (n>=3 per arm) test can separate a real effect from noise here. Do not ship
+      // a prompt change off n=1 in either direction.
+      //
+      // Since the speed benefit is unproven and this scaffolding is a deliberate
+      // quality feature (it is what makes the model self-check its own HTML), the
+      // conservative default is to KEEP it for K2.6. K3 still needs the trim for a
+      // different, well-evidenced reason: it died outright at 146k reasoning chars.
+      //
+      // Also wrong earlier, recorded so nobody re-derives them: (a) "10x
+      // amplification, a property of the prompt not the model" came from two
+      // CONCURRENT builds; (b) "K2.6 is 3.3k vs 3.7k" came from a run that never
+      // reached the code phase, so it captured only the opening reasoning.
       //
       // Trim the redundant "think harder" scaffolding while keeping every actual
       // requirement.
