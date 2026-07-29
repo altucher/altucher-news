@@ -4,13 +4,14 @@ import { gateway } from '@ai-sdk/gateway'
 import { applyProjectPatches, bundleProject, extractPatchArtifact, extractProjectArtifact, normalizeProject, serializeProject, validateProject } from '@/lib/project-document'
 import { validateHtmlDocument } from '@/lib/code-validation'
 
-// Best Quality uses Kimi K3, a reasoning model that spends tens of thousands of
-// tokens (and many minutes) thinking before it emits anything. See the extended
-// note in app/api/chat/route.ts: 800s truncated real edits mid-file.
-export const maxDuration = 1800
+// Best Quality uses Kimi K2.6, a light reasoning model (~2.8k chars of thinking,
+// first output at ~18s). 800s is the standard Vercel Pro maximum and is ample.
+// This was briefly Kimi K3, which needed the 1800s beta extended duration and
+// still truncated edits - see the detailed note in app/api/chat/route.ts.
+export const maxDuration = 800
 
 const QUICK_MODEL = 'Qwen/Qwen3.5-397B-A17B-TEE'
-const BEST_MODEL = 'moonshotai/Kimi-K3-TEE'
+const BEST_MODEL = 'moonshotai/Kimi-K2.6-TEE'
 
 function getModel(best: boolean) {
   const key = process.env.CHUTES_API_KEY

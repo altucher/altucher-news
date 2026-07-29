@@ -11,20 +11,17 @@ import { stripKimiToolTokens } from '@/lib/strip-kimi-tokens'
 import { normalizeProject, serializeProject } from '@/lib/project-document'
 
 // Chutes streams tokens slowly and routes to variable-speed instances, so a
-// long code generation can run well past 5 minutes. 300s was cutting some
-// builds off mid-stream, and 800s (the standard Pro max) was still not enough:
-// Kimi K3 streams 70k+ chars of reasoning before its first visible token, and
-// measured end-to-end times are 672-1092s, so Best Quality aborted mid-file.
+// long code generation can run well past 5 minutes, so 300s was cutting builds
+// off mid-stream. 800s is the standard Vercel Pro maximum and is comfortable for
+// Best Quality on Kimi K2.6 (measured 201s end to end, first code at 18s).
 //
-// 1800s uses Vercel's "extended max duration" (Pro/Enterprise, beta), which
-// must be set per-function in code — project-level defaults above 800s are not
-// supported. Requires a nodejs20/22/24.x runtime (this project is on 24.x) and
-// is incompatible with Secure Compute / Static IPs (not used here).
+// Vercel Pro can go to 1800s via "extended max duration" (beta, must be set
+// per-function in code; project-level defaults cannot exceed 800s). That was
+// needed only for Kimi K3, which is no longer the default - so we stay on the
+// standard limit rather than depending on a beta feature. If K3 is ever made
+// default again, this must go back to 1800.
 // See https://vercel.com/docs/functions/configuring-functions/duration
-//
-// Note: the route forwards reasoning deltas to the client, which doubles as the
-// heartbeat traffic the docs recommend so idle connections are not dropped.
-export const maxDuration = 1800
+export const maxDuration = 800
 
 // CORS headers for embed widget
 const corsHeaders = {
@@ -47,11 +44,12 @@ const FALLBACK_MODEL = 'openai/gpt-4o-mini'
 // full HTML page can finish in one go.
 const MAX_OUTPUT_TOKENS_DEFAULT = 8000
 // Reasoning models spend this SAME budget on their private thinking before they
-// emit any code. Kimi K3 used ~25.7k tokens of reasoning on a simple kanban
-// prompt, leaving under 6.3k for the file itself, so the HTML was cut off
-// mid-script with a clean `finish` (no abort) - a truncation that looks nothing
-// like a timeout. 96000 leaves room for a long reasoning pass AND a complete
-// file; Chutes accepts up to at least 200k for K3.
+// emit any code, so it must cover reasoning AND the finished file. Kimi K3 used
+// ~25.7k reasoning tokens on a simple kanban prompt, leaving under 6.3k of the
+// old 32000 for the document itself: the HTML was cut off mid-script while the
+// stream ended with a clean `finish` and no abort, a truncation that looks
+// nothing like a timeout. K2.6 reasons far less (~2.8k chars) but generated
+// files alone run past 44k chars, so keep generous headroom here regardless.
 const MAX_OUTPUT_TOKENS_CODE = 96000
 
 // Lazy initialization to avoid build-time errors
@@ -486,28 +484,40 @@ export async function POST(req: Request) {
     //  - Normal text chat uses GLM 5.2 through Vercel AI Gateway.
     //  - Image chat uses GLM 5V Turbo because GLM 5.2 is text-only.
     //  - Code mode keeps the benchmarked Chutes quality choices: Qwen 3.5 for
-    //    Quick and Kimi K3 for Best. New agent builds stay on Qwen because it
+    //    Quick and Kimi K2.6 for Best. New agent builds stay on Qwen because it
     //    is more reliable for the required structured project document.
+    //
+    // Best was briefly Kimi K3. K3 is a heavy reasoning model that emits nothing
+    // visible until it has finished deliberating, and on this route it produced
+    // 146k chars of reasoning and blew every limit, so builds returned "finished
+    // without returning a usable project". Measured on the same kanban prompt:
+    //   K3    - first code at 203s, 21k reasoning direct / 146k via this route
+    //   K2.6  - first code at  18s,  2.8k reasoning, done in 201s, complete HTML
+    // K2.6 is still a reasoning model but a light one, so it fits comfortably in
+    // a normal request and the user sees code almost immediately. K3 stays
+    // available through the explicit model selector.
     const requestText = getLastUserMessage(messages)
     const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
 
     const hasImageAttachment = messages.some((message) => message.parts?.some((part) => part.type === 'file' && part.mediaType.startsWith('image/')))
     const defaultModel = codeMode
-      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K3-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
+      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
       : hasImageAttachment ? 'zai/glm-5v-turbo' : 'zai/glm-5.2'
     // Explicit model overrides apply to Code mode's existing Chutes selector.
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : defaultModel
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
     //
-    // Best Quality must sit just UNDER `maxDuration`, not well below it. K3
-    // streams 70k+ chars of reasoning before its first visible token, and
-    // measured end-to-end times are 672-1092s. Both 600s and 760s aborted it
-    // mid-stream, so the UI reported "finished without returning a usable
-    // project". With maxDuration raised to 1800s, 1740s leaves ~60s of headroom
-    // for finalization while still bounding a genuinely hung upstream call.
+    // Key this off the SELECTED MODEL, not buildQuality: K3 remains reachable via
+    // the model selector and needs a far longer window than the K2.6 default.
+    // K2.6 finished the same prompt in 201s, so 420s is ~2x headroom while still
+    // bounding a hung call; K3 measured 672-1092s and gets everything that fits
+    // under maxDuration (800s) minus finalization headroom. Note that even 740s
+    // is not always enough for K3 - that is a reason to leave it non-default,
+    // not a reason to raise it further.
+    const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
     const providerTimeoutMs = codeMode
-    ? (buildQuality === 'best' ? 1_740_000 : 165_000)
+    ? (isHeavyReasoningModel ? 740_000 : buildQuality === 'best' ? 420_000 : 165_000)
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
@@ -566,7 +576,7 @@ export async function POST(req: Request) {
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
 
 ABOUT YOU:
-      - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K3' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
+      - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
 - If Chutes is at capacity, you fail over to Targon (Bittensor Subnet 4), another decentralized inference network, so you stay online
 - Your web search is powered by Desearch, running on Bittensor Subnet 22
 - Bittensor is a decentralized AI network where miners compete to provide the best AI inference
@@ -589,7 +599,7 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by Kimi K3 on Chutes (SN64), with Targon (SN4) as failover.
+    // Powered by Kimi K2.6 on Chutes (SN64), with Targon (SN4) as failover.
     if (codeMode) {
       systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
 
@@ -683,20 +693,21 @@ COMPONENT PATTERNS (build these properly — they are what separate a real site 
 Before finishing, inspect the actual HTML and CSS you wrote—not just your intent. Confirm all of these are present in code: a fitting design kit applied through :root CSS variables; 3-5 purposeful colors; a real heading/body font pairing; a composed hero with topical imagery; responsive nav; complete footer; mobile media rules; and hover plus focus-visible states. If any item is missing, revise the project before closing the artifact. A technically valid but visually generic page has failed this review.
 - Be direct and concise. Do not moralize, lecture, or add unnecessary disclaimers.${memorySection}`
 
-      // Best Quality runs Kimi K3, a REASONING model: it deliberates privately
-      // before emitting a single character. The self-review instructions above
-      // ("mentally trace", "test the edge cases in your head", "before
-      // finishing, inspect the actual HTML you wrote") are written for
-      // non-reasoning models like Qwen, which need to be told to double-check.
-      // On K3 they compound with its native deliberation instead of replacing
-      // it: the same kanban prompt produced 21k chars of reasoning sent bare to
-      // Chutes but 146k chars through this route - a 7x blow-up that pushed the
-      // request past an upstream connection drop and returned nothing at all.
+      // The self-review instructions above ("mentally trace", "test the edge
+      // cases in your head", "before finishing, inspect the actual HTML you
+      // wrote") tell a model to deliberate. That is what we want from Qwen and
+      // from K2.6, whose own reasoning pass is short (~2.8k chars).
       //
-      // So for reasoning models we ask for the same rigor ONCE, briefly, and
-      // let the model's own reasoning pass do the work. This trims the
-      // redundant "think harder" scaffolding, not any actual requirement.
-      if (buildQuality === 'best') {
+      // On a HEAVY reasoning model they backfire: K3 compounds them with its
+      // native deliberation instead of replacing it, and the same kanban prompt
+      // produced 21k chars of reasoning sent bare to Chutes but 146k chars
+      // through this route - a 7x blow-up that pushed the request past an
+      // upstream connection drop and returned nothing at all.
+      //
+      // So trim the redundant "think harder" scaffolding for heavy reasoners
+      // only, keeping every actual requirement. Do NOT widen this to all of
+      // Best Quality: K2.6 benefits from the explicit self-review pass.
+      if (isHeavyReasoningModel) {
         systemPrompt = systemPrompt
           .replace(
             '- The logic must actually WORK, not just look good. Before finishing, mentally trace through the core logic and the main user interactions to confirm it behaves correctly. Visual polish never excuses broken behavior.',
