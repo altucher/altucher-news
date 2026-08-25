@@ -404,8 +404,12 @@ function getLastUserMessage(messages: UIMessage[]): string {
  * place, so the failover cannot drift out of scope again as this handler grows.
  */
 type FailoverContext = {
-  targonApiKey: string
+  // Null when that provider's key is missing; each failover block guards on its
+  // own key so one unset env var never disables the other provider.
+  targonApiKey: string | null
   targonModel: string
+  engyApiKey: string | null
+  engyModel: string
   systemPrompt: string
   fileContextSection: string
   modelMessages: ModelMessage[]
@@ -597,6 +601,25 @@ export async function POST(req: Request) {
       'qwen3-32b': 'Qwen/Qwen3-32B',
     }
     const targonModel = (model && targonModelOptions[model]) || 'moonshotai/Kimi-K2-Instruct'
+
+    // Engy (engy.ai) — verified-inference provider, third in the failover chain
+    // so a request only reaches centralized OpenAI when Chutes, Targon, AND Engy
+    // are all down. OpenAI-compatible endpoint; same integration as VideoTao.AI.
+    const engyApiKey = process.env.ENGY_API_KEY
+    // Map our model ids to Engy's roster (verified against /v1/models 2026-08-24:
+    // kimi-k3, glm-5.2, deepseek-v4-flash-0731, qwen3.6-35b-a3b, qwen3.8-27b).
+    const engyModelOptions: Record<string, string> = {
+      // Engy serves Kimi K3 natively — the Kimi picks map to it directly.
+      'kimi-k3': 'kimi-k3',
+      'kimi-k2.6': 'kimi-k3',
+      'kimi-k2.5': 'kimi-k3',
+      // No big Qwen or DeepSeek V3.x on Engy; closest strong equivalents.
+      'qwen3.5': 'glm-5.2',
+      'deepseek-v3.2': 'deepseek-v4-flash-0731',
+      'qwen3-32b': 'qwen3.6-35b-a3b',
+    }
+    // glm-5.2 default: production-proven on VideoTao.AI, mid-priced, 262K context.
+    const engyModel = (model && engyModelOptions[model]) || 'glm-5.2'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
@@ -912,10 +935,12 @@ When answering questions, refer to this document content. You can summarize it, 
 
     // Snapshot what the Targon failover needs before we hand off to the primary
     // provider. Must stay immediately above this call so it cannot go stale.
-    if (targonApiKey) {
+    if (targonApiKey || engyApiKey) {
       failover = {
-        targonApiKey,
+        targonApiKey: targonApiKey ?? null,
         targonModel,
+        engyApiKey: engyApiKey ?? null,
+        engyModel,
         systemPrompt,
         fileContextSection,
         modelMessages,
@@ -967,7 +992,7 @@ When answering questions, refer to this document content. You can summarize it, 
       
       // First failover: Targon (Bittensor SN4) — keeps inference decentralized
       // before resorting to the centralized OpenAI fallback.
-      if (failover) {
+      if (failover?.targonApiKey) {
         try {
           console.log('[v0] Primary provider unavailable, trying Targon (SN4)')
           const targon = createOpenAICompatible({
@@ -1005,10 +1030,53 @@ When answering questions, refer to this document content. You can summarize it, 
           })
         } catch (targonError) {
           console.log('[v0] Targon failover also failed:', String(targonError))
+          // fall through to the Engy failover below
+        }
+      }
+
+      // Second failover: Engy (engy.ai) verified inference — last stop before
+      // the centralized OpenAI fallback.
+      if (failover?.engyApiKey) {
+        try {
+          console.log('[v0] Targon unavailable, trying Engy')
+          const engy = createOpenAICompatible({
+            name: 'engy',
+            baseURL: 'https://api.engy.ai/v1',
+            headers: {
+              'Authorization': `Bearer ${failover.engyApiKey}`,
+            },
+          })
+
+          const engyResult = streamText({
+            model: engy.chatModel(failover.engyModel),
+            system: failover.systemPrompt + failover.fileContextSection,
+            messages: failover.modelMessages,
+            maxOutputTokens: failover.codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
+            // Same long window as the Targon retry: kimi-k3 is a heavy reasoner,
+            // and a short clock here would abort Best Quality builds mid-file.
+            abortSignal: AbortSignal.any([
+              req.signal,
+              AbortSignal.timeout(
+                failover.codeMode
+                  ? (failover.buildQuality === 'best' ? 740_000 : 165_000)
+                  : 3 * 60_000,
+              ),
+            ]),
+            experimental_transform: stripKimiToolTokens(),
+          })
+
+          trackAnalyticsEvent('chat_query', failover.lastMessage, `engy/${failover.engyModel}`, 0.002, failover.location, failover.usedDesearch)
+
+          return engyResult.toUIMessageStreamResponse({
+            originalMessages: failover.messages,
+            consumeSseStream: consumeStream,
+          })
+        } catch (engyError) {
+          console.log('[v0] Engy failover also failed:', String(engyError))
           // fall through to OpenAI fallback below
         }
       }
-      
+
       console.log('[v0] Primary providers unavailable, falling back to OpenAI GPT-4o-mini')
       
       // Final fallback to OpenAI - use saved data from request
