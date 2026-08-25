@@ -7,11 +7,22 @@
 # Only run this when the checkpoint you uploaded is final.
 #
 # Usage: ./02_submit_checkpoint.sh <HOTKEY> <MODEL_NAME> <MODEL_DIR>
+#
+# Teutonic II round: MODEL_NAME must satisfy the chain.toml repo pattern
+# ^[^/]+/teutonic-II-110B-.+$ when published (e.g. teutonic-II-110B-mychallenger),
+# and the checkpoint must keep every pinned file (config, tokenizer, MIMO
+# implementation) byte-identical to genesis — only weights may change.
 set -euo pipefail
 
 HOTKEY="${1:?Usage: $0 <HOTKEY> <MODEL_NAME> <MODEL_DIR>}"
 MODEL_NAME="${2:?Usage: $0 <HOTKEY> <MODEL_NAME> <MODEL_DIR>}"
 MODEL_DIR="${3:?Usage: $0 <HOTKEY> <MODEL_NAME> <MODEL_DIR>}"
+
+case "$MODEL_NAME" in
+  teutonic-II-110B-*) ;;
+  *) echo "WARNING: '$MODEL_NAME' does not match the Teutonic II naming pattern"
+     echo "         (teutonic-II-110B-<something>). Check chain.toml for the live round." ;;
+esac
 
 [ -d "$MODEL_DIR" ] || { echo "No such directory: $MODEL_DIR"; exit 1; }
 

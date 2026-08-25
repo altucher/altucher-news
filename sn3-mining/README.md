@@ -29,12 +29,36 @@ evaluator for paired cross-entropy scoring on held-out samples. Beat the king
 → **100% of SN3 emissions flow to your hotkey every epoch** until someone
 dethrones you.
 
-**Read that again — it's winner-take-all.** Second place earns nothing. The
-current king is a checkpoint of an 80B-parameter pretraining run; to dethrone
-it you continue-pretraining from the best public checkpoint (community
-checkpoints are published on HuggingFace — this is where **HF storage** comes
-in) with enough compute/data to lower cross-entropy. Budget accordingly: this
-is a serious-compute competition, not a set-and-forget miner.
+**Read that again — it's winner-take-all.** Second place earns nothing.
+
+### Current round: Teutonic II (per the repo's live `chain.toml`)
+
+The round parameters live in
+[`chain.toml`](https://github.com/unarbos/teutonic/blob/main/chain.toml) —
+**always re-read it before training; rounds rotate.** As of Aug 2026:
+
+- **Model:** Teutonic II — **110B-parameter mixture-of-experts** transformer
+  (256 experts, top-8 routing; custom `teutonic.archs.mimo` architecture).
+- **Genesis checkpoint (start here):** `dendriteholdings/teutonic-II-110B-genesis`
+  on HuggingFace.
+- **Checkpoint naming is enforced:** your HF repo must match
+  `^[^/]+/teutonic-II-110B-.+$` (e.g. `yourname/teutonic-II-110B-challenger1`),
+  safetensors weights.
+- **Locked files:** the config pins architecture/config/tokenizer/MIMO
+  implementation files by SHA-256 — you may only train the *weights*.
+  Changing architecture, config, or tokenizer files disqualifies the
+  checkpoint. Continue-pretrain from genesis (or the current king); don't
+  restructure the model.
+- **Evaluation:** cross-entropy on **finewebedu**, 2,000 samples, and the
+  challenger must beat the king by a **delta > 0.5** — a tie or marginal win
+  doesn't take the crown. Match your training data to this eval (a
+  FineWeb-Edu-style mix).
+
+Because only weights float and the eval set is known, the competition is:
+who can continue-pretraining a 110B MoE on FineWeb-Edu-like data most
+effectively. MoE helps you — ~110B total but far fewer active parameters per
+token than a dense 80B — but this is still a multi-node-scale training job.
+Budget accordingly: serious-compute competition, not a set-and-forget miner.
 
 ### Steps
 
@@ -65,9 +89,11 @@ is a serious-compute competition, not a set-and-forget miner.
    GPU_TYPE=H200 GPU_COUNT=8 ./01_rent_lium_pod.sh
    ```
 
-4. **Train your challenger** on the pod: pull the current king / best public
-   checkpoint from HuggingFace, continue pretraining (any hardware, any
-   approach is allowed), and save a full safetensors checkpoint. Then
+4. **Train your challenger** on the pod: pull the genesis/king checkpoint
+   from HuggingFace (`dendriteholdings/teutonic-II-110B-genesis`), continue
+   pretraining on FineWeb-Edu-style data (any hardware, any approach is
+   allowed — but keep every pinned file byte-identical), and save a full
+   safetensors checkpoint named `<you>/teutonic-II-110B-<name>`. Then
    `lium scp` it back (or run the submit step from the pod *without* your
    coldkey — only the miner CLI auth is needed post-registration).
 
