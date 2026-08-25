@@ -13,7 +13,10 @@ function initSendGrid() {
 
 // Create Chutes client lazily to ensure env var is available
 function getChutesClient() {
-  const apiKey = process.env.CHUTES_API_KEY || 'cpk_77d2f677a19d4c34b214f85509e2985c.76529c1096d454ef926e723b84884c28.9l6eVeIIq8tbWP0UZgmTPBjUv5SOpYvw'
+  const apiKey = process.env.CHUTES_API_KEY
+  if (!apiKey) {
+    throw new Error('CHUTES_API_KEY is not configured')
+  }
   return createOpenAICompatible({
     name: 'chutes',
     baseURL: 'https://llm.chutes.ai/v1',

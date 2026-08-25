@@ -156,7 +156,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const chutesKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
+    const chutesKey = process.env.CHUTES_API_KEY
     const falKey = process.env.FAL_KEY
     
     if (!chutesKey && !falKey) {

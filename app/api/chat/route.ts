@@ -514,7 +514,10 @@ export async function POST(req: Request) {
         .catch(err => console.error('Usage update failed:', err))
     }
 
-    const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
+    const apiKey = process.env.CHUTES_API_KEY
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'Chat is temporarily unavailable. No API key configured.' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+    }
 
     // Model selection - using available Chutes models
     const modelOptions: Record<string, string> = {

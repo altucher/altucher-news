@@ -141,7 +141,8 @@ const INSTAGRAM_IMAGE_MODELS = [
 ]
 
 async function generateInstagramImage(prompt: string) {
-  const apiKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
+  const apiKey = process.env.CHUTES_API_KEY
+  if (!apiKey) return null
   for (const endpoint of INSTAGRAM_IMAGE_MODELS) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120_000)
@@ -568,7 +569,10 @@ export async function POST(request: Request) {
     }
   }
   const isDossierAgent = isViralScout || isGiftFinder || isInstagramCreator
-  const chutesKey = process.env.CHUTES_API_KEY || 'cpk_afde1f0b527846fdbbbd5a7d93c03da3.76529c1096d454ef926e723b84884c28.D4SlcUViJeOli3X9N37tp76DzF3vP0Di'
+  const chutesKey = process.env.CHUTES_API_KEY
+  if (!chutesKey) {
+    return Response.json({ error: 'The agent runtime is temporarily unavailable. No API key configured.' }, { status: 503 })
+  }
   const chutes = createOpenAICompatible({ name: 'chutes', baseURL: 'https://llm.chutes.ai/v1', headers: { Authorization: `Bearer ${chutesKey}` } })
   const allTools = makeTools()
   const enabledNames = new Set(manifest.tools?.length ? manifest.tools : ['web_search', 'inspect_evidence'])
