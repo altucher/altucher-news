@@ -53,15 +53,26 @@ The round parameters live in
 - **Evaluation:** cross-entropy on **finewebedu**, 2,000 samples
   (`[evaluation] dataset_label="finewebedu", n=2000, delta_threshold=0.5`).
   Match your training data to this eval (a FineWeb-Edu-style mix).
-- **`delta_threshold = 0.5` — UNITS ARE UNDOCUMENTED, AND THIS DECIDES YOUR
-  BUDGET.** chain.toml carries no comment, and the evaluator runs a
-  `paired-bootstrap-v1` policy. Two readings, ~100x apart in cost:
-  - *A bootstrap win-rate* (challenger must win >50% of paired resamples) →
-    any genuine improvement can take the crown; a modest run may suffice.
-  - *A cross-entropy margin of 0.5 nats* → an enormous bar (perplexity cut by
-    ~1.65x); realistically a full pretraining-scale budget.
-  Resolve this in the SN3 Discord, or by reading the evaluator's comparison
-  code, BEFORE committing compute.
+- **`delta_threshold = 0.5` is 0.5 NATS of cross-entropy** (confirmed via SN3
+  Discord, Aug 2026). This is a deliberately chunky bar, not a
+  statistical-significance margin: your challenger must cut perplexity by
+  ~39% versus the king (`e^0.5 = 1.65x`). For scale, the loss gap between a
+  well-trained 7B and 70B is typically only ~0.2-0.3 nats.
+
+  **Consequence — viability is a property of where the king sits on its loss
+  curve, and the architecture is FIXED (weights only), so there is a floor
+  below which no budget wins.** Measure before spending:
+
+  | King's CE on FineWeb-Edu | Read | Action |
+  |---|---|---|
+  | > ~3.0 | early on the curve, still dropping fast | 0.5 nats is a normal increment — proceed to cost the run |
+  | ~2.5-3.0 | marginal | run the slope probe below before deciding |
+  | < ~2.5 | near this architecture's asymptote | 0.5 nats likely unreachable at ANY budget — walk away |
+
+  **Slope probe (the actual go/no-go, ~2-3 TAO):** measure the king's CE,
+  then train for a few hours and measure dCE/dToken. Extrapolate the tokens
+  needed for 0.5 nats. If the extrapolation exceeds what you can fund, stop
+  there — that is the cheapest possible answer to this question.
 
 Because only weights float and the eval set is known, the competition is:
 who can continue-pretraining a 110B MoE on FineWeb-Edu-like data most
