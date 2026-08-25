@@ -39,5 +39,5 @@ curl -fsSL "$RAW_URL" | head -5
 cat <<EOF
 
 Hosted. Submit it on-chain with:
-    ./scripts/05_submit.sh ${RAW_URL}
+    ./crusades/05_submit.sh ${RAW_URL}
 EOF

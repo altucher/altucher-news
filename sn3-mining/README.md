@@ -1,194 +1,133 @@
-# SN3 (Templar / Crusades) Mining — HuggingFace storage + Lium compute
+# SN3 Mining — HuggingFace storage + Lium compute
 
 End-to-end setup for mining Bittensor **subnet 3 (netuid 3)** using
-**HuggingFace** for model/code storage and **Lium** (lium.io, Bittensor SN51)
-for GPU compute.
+**HuggingFace** for model storage and **Lium** (lium.io, Bittensor SN51) for
+GPU compute.
 
-> **Read this first — what SN3 mining is right now.**
-> Templar's decentralized-training protocol is currently **dormant**. Subnet 3
-> instead runs **Crusades** (https://github.com/one-covenant/crusades), an
-> **MFU optimization tournament**: you submit a single optimized `train.py`,
-> validators execute it inside a fixed Docker container on **2x A100 80GB**,
-> and your reward is driven by the **median MFU** (Model FLOPs Utilization)
-> your code achieves training the benchmark model (Qwen2.5-3B). You are not
-> running a 24/7 miner daemon — you iterate on training code, test it locally
-> on a rented GPU pod, and submit a URL on-chain.
+## Which mechanism is live? (SN3 changed hands in 2026)
 
-## Architecture
+SN3's mechanism has changed twice this year — **verify which is live before
+spending TAO** (SN3 Discord / [taostats.io](https://taostats.io) / recent
+subnet weight activity):
 
-```
-┌─────────────────┐     lium up --gpu A100 --count 2      ┌──────────────────────┐
-│  Your machine    │ ────────────────────────────────────▶ │  Lium pod (2x A100)  │
-│  (wallet lives   │                                       │  - clone crusades     │
-│   ONLY here)     │      lium ssh / lium scp              │  - HF_TOKEN pulls     │
-│                 │ ◀────────────────────────────────────  │    Qwen2.5-3B + data  │
-│  btcli register  │                                       │  - Docker simulation  │
-│  submit URL ─────┼──▶ Bittensor chain (netuid 3)         │    of the validator   │
-└─────────────────┘                                        └──────────────────────┘
-        │
-        └──▶ HuggingFace Hub repo hosts train.py
-             (https://huggingface.co/<you>/<repo>/resolve/main/train.py)
-             Validators fetch it after the on-chain reveal period.
-```
+| Era | Mechanism | Status |
+|-----|-----------|--------|
+| → early 2026 | **Templar** decentralized training (Covenant AI) — trained Covenant-72B | dormant |
+| spring 2026 | **Crusades** — MFU optimization tournament (Covenant AI) | legacy — Covenant AI exited Bittensor |
+| May 2026 → | **Teutonic** ([teutonic.io](https://teutonic.io), [unarbos/teutonic](https://github.com/unarbos/teutonic)) — king-of-the-hill pretraining of the 80B **Teutonic-LXXX** model | **current** |
 
-**Security rule that matters:** your **coldkey never touches the Lium pod**.
-Rented GPU boxes are for developing and benchmarking `train.py` only.
-Registration and submission are cheap CPU-side chain calls — do them from your
-own machine.
+This directory supports both: **`teutonic/`** (current) and **`crusades/`**
+(legacy, kept in case the mechanism rotates back or you're on testnet).
 
-## Prerequisites
+---
 
-| What | Why | Where |
-|------|-----|-------|
-| TAO in a Bittensor wallet | Registration burn on netuid 3 + Lium pod rental | any exchange → `btcli` wallet |
-| HuggingFace account + token (`hf_...`) | Pull benchmark model/data; host your `train.py` | https://huggingface.co/settings/tokens |
-| Lium account / API key | Rent the 2x A100 80GB pod | https://lium.io |
-| Python 3.10+, `btcli`, Docker (on the pod) | tooling | scripts below install these |
+## Teutonic (current SN3): king-of-the-hill pretraining
 
-## Step-by-step
+**How it works:** miners submit immutable model checkpoints as *challengers*.
+The validator sends the challenger and the current *king* to a remote GPU
+evaluator for paired cross-entropy scoring on held-out samples. Beat the king
+→ **100% of SN3 emissions flow to your hotkey every epoch** until someone
+dethrones you.
 
-### 0. Configure
+**Read that again — it's winner-take-all.** Second place earns nothing. The
+current king is a checkpoint of an 80B-parameter pretraining run; to dethrone
+it you continue-pretraining from the best public checkpoint (community
+checkpoints are published on HuggingFace — this is where **HF storage** comes
+in) with enough compute/data to lower cross-entropy. Budget accordingly: this
+is a serious-compute competition, not a set-and-forget miner.
 
-```bash
-cd sn3-mining
-cp .env.example .env   # fill in HF_TOKEN, HF_USERNAME, WALLET_NAME, WALLET_HOTKEY
-```
+### Steps
 
-### 1. Wallet + registration (your machine, NOT the pod)
+1. **Wallet — Teutonic requires an ed25519 hotkey** (btcli's default sr25519
+   will not work; the validator uses it for credential encryption):
 
-```bash
-pip install bittensor-cli
-btcli wallet new_coldkey --wallet.name sn3miner
-btcli wallet new_hotkey  --wallet.name sn3miner --wallet.hotkey miner1
-# fund the coldkey with TAO, then check the current registration burn:
-btcli subnet show --netuid 3 --network finney
-# register the hotkey on SN3:
-btcli subnet register --netuid 3 --wallet.name sn3miner --wallet.hotkey miner1 --network finney
-```
+   ```bash
+   pip install bittensor-cli
+   btcli wallet new_coldkey --wallet.name sn3miner
+   btcli wallet new-hotkey --wallet-name sn3miner --hotkey teuton1 \
+       --wallet-path ~/.bittensor/wallets --crypto-type ed25519
+   ```
 
-### 2. Rent compute on Lium
+2. **Install + register** (your machine — coldkey never touches rented compute):
 
-```bash
-./scripts/01_rent_lium_pod.sh
-```
+   ```bash
+   ./teutonic/01_setup_miner.sh        # clone, venv, pip install -e '.[miner]', configure
+   source ~/teutonic/.venv/bin/activate
+   teutonic-miner register --wallet-name sn3miner --hotkey-name teuton1 \
+       --network finney --netuid 3
+   teutonic-miner auth --hotkey teuton1
+   ```
 
-This installs the Lium CLI, walks you through `lium init` (API key + SSH key),
-funds from your TAO wallet if needed (`lium fund`), then rents a **2x A100
-80GB** pod — the exact hardware validators score on, so your local MFU numbers
-match the leaderboard.
+3. **Rent training compute on Lium.** An 80B model needs far more than a dev
+   box — e.g. an 8x H200 pod:
 
-### 3. Set up the pod
+   ```bash
+   GPU_TYPE=H200 GPU_COUNT=8 ./01_rent_lium_pod.sh
+   ```
 
-```bash
-lium scp <POD> ./scripts/02_setup_pod.sh
-lium ssh <POD>
-# on the pod:
-HF_TOKEN=hf_xxx bash 02_setup_pod.sh
-```
+4. **Train your challenger** on the pod: pull the current king / best public
+   checkpoint from HuggingFace, continue pretraining (any hardware, any
+   approach is allowed), and save a full safetensors checkpoint. Then
+   `lium scp` it back (or run the submit step from the pod *without* your
+   coldkey — only the miner CLI auth is needed post-registration).
 
-Clones `one-covenant/crusades`, installs `uv`, syncs deps, writes the pod-side
-`.env`, downloads the benchmark model + data from HuggingFace, and builds the
-validator's evaluation Docker image.
+5. **Submit** (irreversible per hotkey — the `ready` step consumes your one
+   submission slot and revokes upload credentials):
 
-### 4. Write and test your `train.py` (the actual mining)
+   ```bash
+   ./teutonic/02_submit_checkpoint.sh teuton1 my-challenger /path/to/checkpoint
+   ```
 
-Your submission is one file exporting two functions:
+   Checkpoint rules: complete model files, **no symlinks** (materialize HF
+   downloads with `--local-dir`), and **no `manifest.json`** (auto-generated).
 
-```python
-def get_strategy():
-    # literal dict only — computed values are rejected by the validator
-    return {"dp_size": 2, "tp_size": 1}
+6. **Shut the pod down** when training ends: `lium rm <POD>`.
 
-def inner_steps(model, data_iterator, optimizer, num_steps, device, num_gpus=1):
-    # optimizer arrives as None — create your own (e.g. fused AdamW)
-    # wrap model (FSDP/DDP/TP), run num_steps training iterations
-    return InnerStepsResult(
-        final_logits=...,   # (batch, seq_len-1, vocab) from final forward
-        total_tokens=...,   # sum across all steps
-        final_loss=...,     # positive, non-NaN scalar
-        final_state=...,    # full CPU state_dict (weight verification)
-    )
-```
+---
 
-Start from the reference implementations in the crusades repo
-(`local_test/train_fsdp.py`, `train_tp.py`, `train_mixed.py`) and optimize.
-**Allowed:** `torch.compile`, Flash Attention, Triton kernels, CUDA graphs,
-fused optimizers. **Blocked** (static security scan): forbidden imports
-(`inspect`, `pickle`, ...), monkey-patching torch internals, timer
-manipulation, freezing parameters. Blocklist: `src/crusades/core/security_defs.py`.
+## Crusades (legacy): MFU tournament
 
-Test inside the exact validator container:
+Kept in `crusades/` — the mechanism SN3 ran before the Teutonic handover.
+You submit one optimized `train.py`; validators execute it on 2x A100 80GB in
+a fixed Docker container and score median MFU training Qwen2.5-3B.
 
 ```bash
-# on the pod, in ~/crusades:
-bash 03_test_local.sh ./my_train.py
+./01_rent_lium_pod.sh                      # default 2x A100 80GB
+lium scp <POD> ./crusades/02_setup_pod.sh  # pod: crusades repo, HF benchmark, eval image
+# on pod:  HF_TOKEN=hf_xxx bash 02_setup_pod.sh
+# on pod:  bash 03_test_local.sh ./my_train.py      # validator-identical eval
+./crusades/04_host_on_hf.sh my_train.py    # host on a HF Hub repo, prints raw URL
+./crusades/05_submit.sh <raw-url>          # on-chain submit to netuid 3
 ```
 
-This runs security scan → baseline comparison → warmup → timed eval → MFU,
-matching what the tournament will report. Iterate until your MFU beats the
-leaderboard (`uv run -m crusades.tui --url http://69.19.136.171:8080`).
+Details (train.py contract — `get_strategy()` / `inner_steps()` — security
+scanner rules, allowed optimizations) are documented in the script headers and
+at https://github.com/one-covenant/crusades.
 
-### 5. Host `train.py` on HuggingFace
+---
 
-```bash
-./scripts/04_host_on_hf.sh path/to/train.py
-```
+## Where HuggingFace and Lium fit
 
-Creates a HF Hub repo (random suffix, public — see note), uploads `train.py`,
-and prints the raw URL validators will fetch:
-`https://huggingface.co/<you>/<repo>/resolve/main/train.py`
-
-> **Privacy note:** validators must be able to fetch the URL anonymously, so
-> the HF repo must be **public** at reveal time. Your submitted URL is
-> encrypted on-chain (`set_reveal_commitment`) until the reveal period, but a
-> public HF repo is browsable — the script uses a random repo name and you
-> should push as late as possible. If you want maximum secrecy pre-reveal, a
-> GitHub **secret gist** raw URL is the community-recommended alternative;
-> the submit script accepts any URL.
-
-### 6. Submit on-chain (your machine)
-
-```bash
-./scripts/05_submit.sh https://huggingface.co/<you>/<repo>/resolve/main/train.py
-```
-
-Runs `uv run -m neurons.miner submit <URL> --wallet.name ... --wallet.hotkey
-... --network finney` from the crusades checkout. After the reveal period,
-validators download your code, run it 3x in the container, take the median
-MFU, and set weights → you earn TAO emissions proportional to your ranking.
-
-### 7. Stop paying for the pod
-
-The pod bills while it runs. When you're done iterating:
-
-```bash
-lium rm <POD>
-```
-
-Re-rent with `01_rent_lium_pod.sh` whenever you want to test a new iteration —
-setup takes minutes and your `train.py` lives in git/HF, not on the pod.
-
-## Cost model
-
-- **Registration:** one-time burn on netuid 3 (check `btcli subnet show --netuid 3`).
-- **Compute:** Lium 2x A100 80GB billed per hour in TAO — rent only while
-  actively optimizing; there is no uptime requirement for Crusades miners.
-- **Emissions:** paid to your hotkey based on MFU ranking; this is a
-  competition — a stock `train_fsdp.py` submission will score, but rewards go
-  to whoever squeezes out the most MFU.
+- **HuggingFace**: pulling the king/benchmark checkpoints (`HF_TOKEN`), and —
+  under Crusades — hosting your submitted `train.py` via a Hub repo's
+  `/resolve/main/` raw URL. Community Teutonic checkpoints are published on
+  the Hub.
+- **Lium**: TAO-funded GPU rental for all training/benchmarking. Pods bill
+  hourly; there is no uptime requirement in either mechanism, so rent only
+  while actively training.
 
 ## Files
 
-- `scripts/01_rent_lium_pod.sh` — install Lium CLI, rent 2x A100 80GB pod
-- `scripts/02_setup_pod.sh` — run **on the pod**: crusades checkout, deps, HF benchmark download, Docker image
-- `scripts/03_test_local.sh` — run **on the pod**: validator-identical Docker evaluation of your train.py
-- `scripts/04_host_on_hf.sh` — upload train.py to a HuggingFace Hub repo, print raw URL
-- `scripts/05_submit.sh` — commit the URL on-chain for netuid 3
-- `.env.example` — configuration template
+- `01_rent_lium_pod.sh` — install Lium CLI, rent a pod (`GPU_TYPE`/`GPU_COUNT` env vars)
+- `teutonic/01_setup_miner.sh` — install + configure the Teutonic miner CLI
+- `teutonic/02_submit_checkpoint.sh` — validate, upload, and finalize a challenger checkpoint
+- `crusades/02_setup_pod.sh` … `crusades/05_submit.sh` — legacy Crusades flow
+- `.env.example` — configuration template (real `.env` is git-ignored)
 
 ## References
 
-- Crusades (SN3 mechanism): https://github.com/one-covenant/crusades
-- Templar: https://github.com/one-covenant/templar · https://tplr.ai
+- Teutonic (current SN3): https://github.com/unarbos/teutonic · https://teutonic.io
+- Crusades (legacy): https://github.com/one-covenant/crusades
+- Templar history: https://github.com/one-covenant/templar
 - Lium CLI: https://github.com/Datura-ai/lium · https://docs.lium.io
 - Bittensor CLI: https://docs.bittensor.com
