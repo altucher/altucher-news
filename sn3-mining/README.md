@@ -173,6 +173,7 @@ at https://github.com/one-covenant/crusades.
 ## Files
 
 - `01_rent_lium_pod.sh` — install Lium CLI, rent a pod (`GPU_TYPE`/`GPU_COUNT` env vars)
+- `teutonic/00_fetch_king.sh` — fetch the king (or genesis) onto the pod: disk check, symlink-free download, submission-shape verification
 - `teutonic/01_setup_miner.sh` — install + configure the Teutonic miner CLI
 - `teutonic/02_submit_checkpoint.sh` — validate, upload, and finalize a challenger checkpoint
 - `crusades/02_setup_pod.sh` … `crusades/05_submit.sh` — legacy Crusades flow
