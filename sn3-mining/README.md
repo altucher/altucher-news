@@ -39,8 +39,9 @@ The round parameters live in
 
 - **Model:** Teutonic II — **110B-parameter mixture-of-experts** transformer
   (256 experts, top-8 routing; custom `teutonic.archs.mimo` architecture).
-- **Genesis checkpoint (start here):** `dendriteholdings/teutonic-II-110B-genesis`
-  on HuggingFace.
+- **Start from the KING, not genesis.** See "Where to get the king" below.
+  Genesis (`dendriteholdings/teutonic-II-110B-genesis`) is only the base for
+  the round's *first* challenger.
 - **Checkpoint naming is enforced:** your HF repo must match
   `^[^/]+/teutonic-II-110B-.+$` (e.g. `yourname/teutonic-II-110B-challenger1`),
   safetensors weights.
@@ -59,6 +60,32 @@ who can continue-pretraining a 110B MoE on FineWeb-Edu-like data most
 effectively. MoE helps you — ~110B total but far fewer active parameters per
 token than a dense 80B — but this is still a multi-node-scale training job.
 Budget accordingly: serious-compute competition, not a set-and-forget miner.
+
+### Where to get the king (train from this, not genesis)
+
+Teutonic runs three Cloudflare R2 buckets (see the repo's `DEPLOY.md`):
+
+| Bucket | Access | Contents |
+|--------|--------|----------|
+| `teutonic-private-models-enam` | private, one prefix per registration | your challenger while it awaits evaluation |
+| `teutonic-models-enam` | **public** | "Genesis and promoted immutable models" — i.e. genesis plus every crowned king |
+| `teutonic-dash-enam` | public read | dashboard/leaderboard state + encrypted credential mailboxes |
+
+A "Promotion worker" handles "private-to-public model promotion and
+crowning": when a challenger wins, its checkpoint is copied from the private
+bucket into the **public** bucket and it becomes the king. So the reigning
+king's weights are publicly downloadable, and that is your training base.
+
+**Why this matters economically:** the win threshold is a delta > 0.5 against
+the *king*. Start from the king and you need to add 0.5 of improvement. Start
+from genesis and you must first re-derive every token of training the king
+already accumulated, *then* add 0.5 — you'd be paying for the whole
+lineage's compute to reach parity. Cumulative building is the design intent
+of king-of-the-hill; genesis is only the base for a round's first challenger.
+
+Resolve the current king's object path from the dashboard state (the
+`teutonic-dash-enam` public base URL) before each run — the king changes
+whenever someone is crowned, and the checkpoint is immutable per crowning.
 
 ### Steps
 
@@ -89,11 +116,12 @@ Budget accordingly: serious-compute competition, not a set-and-forget miner.
    GPU_TYPE=H200 GPU_COUNT=8 ./01_rent_lium_pod.sh
    ```
 
-4. **Train your challenger** on the pod: pull the genesis/king checkpoint
-   from HuggingFace (`dendriteholdings/teutonic-II-110B-genesis`), continue
+4. **Train your challenger** on the pod: download the **current king** from
+   the public bucket `teutonic-models-enam` (see "Where to get the king" —
+   not genesis, unless no king has been crowned this round), continue
    pretraining on FineWeb-Edu-style data (any hardware, any approach is
    allowed — but keep every pinned file byte-identical), and save a full
-   safetensors checkpoint named `<you>/teutonic-II-110B-<name>`. Then
+   safetensors checkpoint named `teutonic-II-110B-<name>`. Then
    `lium scp` it back (or run the submit step from the pod *without* your
    coldkey — only the miner CLI auth is needed post-registration).
 
