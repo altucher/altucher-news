@@ -423,6 +423,42 @@ type FailoverContext = {
   location: { country?: string; city?: string; region?: string }
 }
 
+/**
+ * Cheap liveness probe for the primary (Chutes) provider, used by code mode.
+ *
+ * Why this exists: `streamText()` returns as soon as the request is dispatched,
+ * so a provider failure that arrives with the response - 402, 429, 503 - never
+ * throws into this route's catch block. It surfaces as an error part inside the
+ * already-returned stream, which means the failover chain below could NEVER run
+ * for the failures it was written to handle. Verified 2026-08-25, when the
+ * Chutes balance went negative: every code-mode build died with a bare
+ * "Payment Required" while Engy sat there healthy and unused.
+ *
+ * A 1-token completion costs ~350ms and converts those provider outages back
+ * into a real throw that the failover can act on.
+ *
+ * Deliberately narrow: only an explicit non-OK HTTP status fails over. Network
+ * errors and timeouts are swallowed, because a slow-but-working provider must
+ * not be pushed aside by an impatient probe.
+ */
+async function preflightPrimary(apiKey: string, model: string, signal: AbortSignal): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch('https://llm.chutes.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+    })
+  } catch {
+    return // network hiccup or slow probe - let the real request decide
+  }
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 200).replace(/\s+/g, ' ')
+    throw new Error(`Primary provider preflight failed: HTTP ${res.status} ${detail}`)
+  }
+}
+
 export async function POST(req: Request) {
   // Populated just before the primary streamText call, so the catch block can
   // retry on Targon. Null means we failed before there was anything to retry.
@@ -956,6 +992,13 @@ When answering questions, refer to this document content. You can summarize it, 
       }
     }
 
+    // Code mode is the only path that talks to Chutes directly, so it is the
+    // only one that needs the probe. Normal chat goes through AI Gateway, which
+    // surfaces its own errors before streaming starts.
+    if (codeMode && (failover?.engyApiKey || failover?.targonApiKey)) {
+      await preflightPrimary(apiKey, selectedModel, req.signal)
+    }
+
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
     const result = streamText({
@@ -991,6 +1034,16 @@ When answering questions, refer to this document content. You can summarize it, 
         errorMessage.includes('capacity') ||
         errorMessage.includes('maximum capacity') ||
         errorMessage.includes('No instances available') ||
+        // Billing failures. On 2026-08-25 the Chutes balance went negative and
+        // every code-mode request died with a bare "Payment Required" for users:
+        // a 402 is not a capacity error, so none of the conditions above matched
+        // and the failover chain never ran. An exhausted account is exactly when
+        // the other providers should take over.
+        errorMessage.includes('402') ||
+        errorMessage.includes('Payment Required') ||
+        errorMessage.includes('Quota exceeded') ||
+        errorMessage.includes('account balance') ||
+        errorMessage.includes('insufficient') ||
         errorMessage.includes('AI_RetryError'))) {
       
       // First failover: Targon (Bittensor SN4) — keeps inference decentralized
