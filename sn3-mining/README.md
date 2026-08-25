@@ -50,10 +50,18 @@ The round parameters live in
   Changing architecture, config, or tokenizer files disqualifies the
   checkpoint. Continue-pretrain from genesis (or the current king); don't
   restructure the model.
-- **Evaluation:** cross-entropy on **finewebedu**, 2,000 samples, and the
-  challenger must beat the king by a **delta > 0.5** — a tie or marginal win
-  doesn't take the crown. Match your training data to this eval (a
-  FineWeb-Edu-style mix).
+- **Evaluation:** cross-entropy on **finewebedu**, 2,000 samples
+  (`[evaluation] dataset_label="finewebedu", n=2000, delta_threshold=0.5`).
+  Match your training data to this eval (a FineWeb-Edu-style mix).
+- **`delta_threshold = 0.5` — UNITS ARE UNDOCUMENTED, AND THIS DECIDES YOUR
+  BUDGET.** chain.toml carries no comment, and the evaluator runs a
+  `paired-bootstrap-v1` policy. Two readings, ~100x apart in cost:
+  - *A bootstrap win-rate* (challenger must win >50% of paired resamples) →
+    any genuine improvement can take the crown; a modest run may suffice.
+  - *A cross-entropy margin of 0.5 nats* → an enormous bar (perplexity cut by
+    ~1.65x); realistically a full pretraining-scale budget.
+  Resolve this in the SN3 Discord, or by reading the evaluator's comparison
+  code, BEFORE committing compute.
 
 Because only weights float and the eval set is known, the competition is:
 who can continue-pretraining a 110B MoE on FineWeb-Edu-like data most
