@@ -1562,7 +1562,7 @@ export default function ChatInterface() {
                 setCodeMode(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <Code className="w-5 h-5 flex-shrink-0" />
               code
@@ -1574,38 +1574,38 @@ export default function ChatInterface() {
                 setShowProjectsPanel(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <FolderCode className="w-5 h-5 flex-shrink-0" />
               projects
             </button>
           )}
           <Link href="/detect" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Sparkles className="w-5 h-5 flex-shrink-0" />
               is it ai?
             </span>
           </Link>
           <Link href="/mining" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Pickaxe className="w-5 h-5 flex-shrink-0" />
               mining
             </span>
           </Link>
           <Link href="/agents" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Store className="w-5 h-5 flex-shrink-0" />
               agents
             </span>
           </Link>
           <Link href="/fun" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <PartyPopper className="w-5 h-5 flex-shrink-0" />
               fun
             </span>
           </Link>
           <Link href="/developers" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Code className="w-5 h-5 flex-shrink-0" />
               embed
             </span>
@@ -1828,17 +1828,14 @@ export default function ChatInterface() {
                 <div className="hero-sunburst" aria-hidden="true" />
 
                 <div className="mb-8 relative">
-                  <div className="absolute inset-0 -z-10 blur-2xl opacity-60 bg-primary/30 rounded-full" aria-hidden="true" />
-                  <BlueTaoLogo className="w-20 h-20 text-primary drop-shadow-[0_0_25px_var(--primary)]" />
+                  <div className="absolute inset-0 -z-10 blur-3xl opacity-45 bg-primary/40 rounded-full" aria-hidden="true" />
+                  <BlueTaoLogo className="w-24 h-24 text-primary opacity-100 drop-shadow-[0_0_18px_color-mix(in_oklch,var(--primary)_70%,transparent)]" />
                 </div>
 
                 {/* Title: one typeface throughout. The accent word is separated by
                     colour alone, not by a second family in a clashing hue. */}
-                <h1 className="text-[3rem] md:text-[3.75rem] text-[oklch(0.97_0.006_250)] font-bold tracking-[-0.025em] leading-[1.05] mb-6 text-balance hero-glow">
-                  Ask{' '}
-                  <span className="font-normal text-[oklch(0.78_0.11_252)]">
-                    anything
-                  </span>
+                <h1 className="font-serif text-[3.25rem] md:text-[4rem] text-[oklch(0.98_0.005_250)] font-medium tracking-[-0.02em] leading-[1.04] mb-6 text-balance hero-glow">
+                  Ask <span className="italic">anything</span>
                 </h1>
                 <p className="text-muted-foreground text-[1.1rem] leading-relaxed mb-14 max-w-md text-pretty">
                   Intelligent answers powered by decentralized AI
