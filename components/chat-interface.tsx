@@ -19,6 +19,34 @@ import Link from 'next/link'
 import { extractHtmlDocument } from '@/lib/code-validation'
 import { bundleProject, extractPatchArtifact, extractProjectArtifact, projectFromBundledHtml, serializeProject, validateInteractiveBuild } from '@/lib/project-document'
 
+interface UsageInfo {
+  tier: string
+  messageCount: number
+  messageLimit: number
+  remaining: number
+}
+
+interface Chat {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+interface NewsHeadline {
+  title: string
+  source: string
+  link: string
+}
+
+interface DbMessage {
+  id: string
+  chat_id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
 function replaceHtmlDocument(text: string, originalHtml: string, reviewedHtml: string) {
   return text.replace(originalHtml, reviewedHtml)
 }
@@ -93,85 +121,6 @@ function ModeToggle({
 }
 
 // Lets the user trade speed for quality in Build mode. "Quick" runs the faster
-// Qwen 3.5 for a fast first version; "Best" runs the deeper-reasoning Kimi K2.6
-// for a more complete, correct, polished build (slower). Default is Quick.
-function BuildQualityToggle({
-  quality,
-  setQuality,
-  compact = false,
-}: {
-  quality: 'quick' | 'best'
-  setQuality: (v: 'quick' | 'best') => void
-  compact?: boolean
-}) {
-  const base = cn(
-    'inline-flex items-center gap-1.5 rounded-full font-medium transition-all',
-    compact ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'
-  )
-  return (
-    <div className="inline-flex items-center rounded-full border border-border bg-card p-1 shadow-sm">
-      <button
-        type="button"
-        onClick={() => setQuality('quick')}
-        aria-pressed={quality === 'quick'}
-        title="A fast first version"
-        className={cn(
-          base,
-          quality === 'quick'
-            ? 'bg-sky-500 text-white shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'
-        )}
-      >
-        <Zap className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-        Quick Build
-      </button>
-      <button
-        type="button"
-        onClick={() => setQuality('best')}
-        aria-pressed={quality === 'best'}
-        title="Slower, but more complete and polished"
-        className={cn(
-          base,
-          quality === 'best'
-            ? 'bg-[var(--gold)] text-black shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'
-        )}
-      >
-        <Gem className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-        Best Quality
-      </button>
-    </div>
-  )
-}
-
-interface UsageInfo {
-  tier: string
-  messageCount: number
-  messageLimit: number
-  remaining: number
-}
-
-interface Chat {
-  id: string
-  title: string
-  created_at: string
-  updated_at: string
-}
-
-interface NewsHeadline {
-  title: string
-  source: string
-  link: string
-}
-
-interface DbMessage {
-  id: string
-  chat_id: string
-  role: 'user' | 'assistant'
-  content: string
-  created_at: string
-}
-
 function getMessageText(message: UIMessage): string {
   if (!message.parts || !Array.isArray(message.parts)) return ''
   return message.parts
@@ -235,7 +184,10 @@ export default function ChatInterface() {
   // Build-mode speed/quality trade-off. Default to Quick: most first attempts
   // are exploratory, and users can opt up to Best Quality when they know what
   // they want (it will then refine their existing build).
-  const [buildQuality, setBuildQuality] = useState<'quick' | 'best'>('quick')
+  // One build path now - the Quick/Best choice is gone from the UI, and every
+  // build runs the benchmarked model. Kept as a constant so the request shape
+  // and the review/timeout logic below stay unchanged.
+  const buildQuality = 'best' as const
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [messageTimestamps, setMessageTimestamps] = useState<Record<string, number>>({})
   const [uploadedFile, setUploadedFile] = useState<{ name: string; content: string } | null>(null)
@@ -442,7 +394,7 @@ export default function ChatInterface() {
       setReviewPhase('idle')
       stop()
       setBuildIssue(codeMode
-        ? 'Quick Build exceeded three minutes and was stopped instead of leaving you waiting. Your prompt is preserved below—click Retry build to run it again.'
+        ? 'The build ran past its time limit and was stopped instead of leaving you waiting. Your prompt is preserved below—click Retry build to run it again.'
         : 'This response stalled at the AI provider and was stopped. Please retry.')
     }, Math.max(0, timeoutMs - (Date.now() - requestStartedAtRef.current)))
     return () => window.clearTimeout(timeout)
@@ -627,7 +579,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? (buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5') : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Chutes (SN64)' : 'Running inference through Vercel AI Gateway', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? 'Qwen 3.8-27B' : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Chutes (SN64)' : 'Running inference through Vercel AI Gateway', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
@@ -1871,12 +1823,6 @@ export default function ChatInterface() {
                   <div className="mb-3 flex justify-center">
                     <ModeToggle codeMode={codeMode} setCodeMode={setCodeMode} />
                   </div>
-                  {codeMode && (
-                    <div className="mb-3 flex flex-col items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Do you want this built:</span>
-                      <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} />
-                    </div>
-                  )}
 
                   {/* Build-mode helper banner. Switches to an "editing" state
                       when the user is continuing a saved project, so it's always
@@ -1930,7 +1876,7 @@ export default function ChatInterface() {
   <div role="status" aria-live="polite" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/60">
    <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
     <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-    <span className="truncate">{codeMode ? (status === 'submitted' ? `Starting ${buildQuality === 'best' ? 'Best Quality build' : 'Quick Build'}…` : 'Building your project…') : (status === 'submitted' ? 'Thinking…' : 'Responding…')}</span>
+    <span className="truncate">{codeMode ? (status === 'submitted' ? 'Starting your build…' : 'Building your project…') : (status === 'submitted' ? 'Thinking…' : 'Responding…')}</span>
     <span className="shrink-0 text-xs tabular-nums text-sky-700 dark:text-sky-300">{elapsedSeconds}s</span>
    </div>
    <Button type="button" size="sm" variant="outline" onClick={handleStopGeneration} className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10">
@@ -2511,7 +2457,7 @@ export default function ChatInterface() {
                   <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                     <span className="truncate">
-                      {codeMode ? (status === 'submitted' ? `Starting ${buildQuality === 'best' ? 'Best Quality build' : 'Quick Build'}…` : 'Building your project…') : (status === 'submitted' ? 'Thinking…' : 'Responding…')}
+                      {codeMode ? (status === 'submitted' ? 'Starting your build…' : 'Building your project…') : (status === 'submitted' ? 'Thinking…' : 'Responding…')}
                     </span>
                     <span className="shrink-0 text-xs tabular-nums text-sky-700 dark:text-sky-300">{elapsedSeconds}s</span>
                   </div>
@@ -2547,7 +2493,6 @@ export default function ChatInterface() {
               {codeMode && (
                 <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
                   <span className="text-xs text-muted-foreground">Build this:</span>
-                  <BuildQualityToggle quality={buildQuality} setQuality={setBuildQuality} compact />
                 </div>
               )}
               {/* File upload indicator */}

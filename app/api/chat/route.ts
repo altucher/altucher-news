@@ -645,9 +645,28 @@ export async function POST(req: Request) {
     // Qwen 3.8-27B also scored 77/77, ran faster than K3, and costs ~1/23rd as
     // much per output token, so it takes Quick. New agent builds stay on the
     // Qwen for the structured project document.
-    const engyDefault = codeMode
-      ? (buildQuality === 'best' && !isNewAgentBuild ? 'kimi-k3' : 'qwen3.8-27b')
-      : 'glm-5.2'
+    // Both code tiers run Qwen 3.8-27B on Engy. It matched Kimi K3 case for
+    // case (77/77 each) while running faster and costing ~1/23rd per output
+    // token, and unlike K3 it never spiralled - K3 was previously made Best
+    // here and had to be reverted for exactly that. The tiers differ by
+    // DELIBERATION BUDGET instead of by model (see codeThinkingBudget below),
+    // which is the axis that actually moved accuracy in testing: every trial
+    // that missed an edge case was a shorter-thinking one.
+    // Best: Qwen 3.8-27B — 77/77, matched Kimi K3 case for case while running
+    // faster and costing ~1/23rd per output token, and it does not spiral the
+    // way K3 did when K3 last held this slot.
+    //
+    // Quick: DeepSeek V4-Flash. Qwen 3.8-27B is a reasoning model and could not
+    // finish a tip-calculator build inside the 165s Quick window even with a
+    // 3000-token thinking cap — it aborted mid-stream, which is worse than a
+    // slower tier. V4-Flash scored 72/77 and ran the whole 4-task benchmark in
+    // 49s (~12s a task, an order of magnitude faster than anything else here).
+    // It fails only the hardest task, which is what the Best tier is for.
+    // One build path: every code request runs Qwen 3.8-27B. It tied the top
+    // score on the 77-case benchmark (https://benchspec.vercel.app) at $0.32
+    // per million output tokens against Kimi K3's $7.50 here and $15.00 on
+    // Chutes, and unlike K3 it does not deliberate itself out of an answer.
+    const engyDefault = codeMode ? 'qwen3.8-27b' : 'glm-5.2'
     // Explicit model overrides apply to Code mode's selector, per provider.
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : chutesDefault
     const selectedEngyModel = codeMode && model && engyModelOptions[model] ? engyModelOptions[model] : engyDefault
@@ -671,21 +690,44 @@ export async function POST(req: Request) {
     //
     // K3 (selector-only) measured 672-1092s, so even 740s can be too short for
     // it. That is a reason to keep it non-default, not to raise maxDuration.
-    const isHeavyReasoningModel = /Kimi-K3/i.test(selectedModel)
+    // Test the model that will actually run, not the Chutes id: with Engy
+    // primary these differ, and keying off the wrong one gave Qwen builds K3's
+    // 740s window while leaving a real K3 run on the short one.
+    const activeModel = usePrimaryEngy ? selectedEngyModel : selectedModel
+    const isHeavyReasoningModel = /Kimi-K3/i.test(activeModel)
 
     // Which models get the trimmed prompt. K3 ONLY - K2.6 was tried and reverted;
     // see the measurement note at the trim site for the data.
-    const trimReasoningScaffolding = /Kimi-K3/i.test(selectedModel)
+    const trimReasoningScaffolding = /Kimi-K3/i.test(activeModel)
     const providerTimeoutMs = codeMode
-    ? (buildQuality === 'best' || isHeavyReasoningModel ? 740_000 : 165_000)
+    ? 740_000
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
+
+    // Engy honours `thinking.budget_tokens` (Chutes ignores it and honours
+    // `enable_thinking:false` instead - verified 2026-08-25). A prompt-level
+    // budget alone is NOT enough: Qwen 3.8-27B drafted an entire page inside its
+    // reasoning stream and hit the 165s Quick abort without emitting one content
+    // token. A hard server-side cap makes it stop thinking and start writing.
+    const engyThinkingBudget = codeMode ? 12000 : 1500
 
     // Engy client for the primary path (and reused by the failover below).
     const engy = createOpenAICompatible({
       name: 'engy',
       baseURL: 'https://api.engy.ai/v1',
       headers: { 'Authorization': `Bearer ${engyKey ?? ''}` },
+      // The SDK has no first-class field for this, so inject it into the request
+      // body. Malformed bodies are passed through untouched rather than thrown.
+      fetch: async (url, init) => {
+        if (init?.body && typeof init.body === 'string') {
+          try {
+            const body = JSON.parse(init.body)
+            body.thinking = { type: 'enabled', budget_tokens: engyThinkingBudget }
+            init = { ...init, body: JSON.stringify(body) }
+          } catch { /* leave the body as-is */ }
+        }
+        return fetch(url, init)
+      },
     })
 
     // Create a Chutes client
@@ -776,8 +818,22 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by Kimi K3 (Best) / Qwen 3.8-27B (Quick) on Engy by default,
-    // with Chutes (SN64) and Targon (SN4) behind it. See INFERENCE_PRIMARY.
+    // Bound deliberation explicitly.
+    //
+    // Reasoning-tuned models will re-verify edge cases indefinitely on a
+    // spec-dense request and never emit code: measured 110k-190k characters of
+    // reasoning with zero output, on Kimi K3, GLM 5.2 AND Qwen3-32B, at
+    // temperature 0 and 0.6, on both providers. That is what took Kimi K3 out of
+    // the Best slot here once already. One paragraph of budget took the same
+    // model from 998s to 119s - an 8.4x speedup - for the cost of one edge case.
+    //
+    // Accuracy tracked reasoning volume, not model choice, so the budget is what
+    // separates the tiers now that both run the same weights: Best thinks longer
+    // and catches more, Quick answers sooner.
+    const codeThinkingBudget = `\n\nDELIBERATION BUDGET: think it through, but converge. Plan the approach, check the handful of cases that actually matter, then WRITE THE CODE. Do not re-verify every operator, token, and edge case before starting. You MUST output the finished code block; begin it within roughly 8000 tokens of thinking.`
+
+    // Both code tiers run Qwen 3.8-27B on Engy; Chutes keeps K3 for Best.
+    // Chutes (SN64) and Targon (SN4) sit behind it. See INFERENCE_PRIMARY.
     if (codeMode) {
       systemPrompt = `You are BlueTAO Code, an expert AI programming assistant ${networkLine}. Today's date is ${currentDate}.
 
@@ -1035,6 +1091,10 @@ When answering questions, refer to this document content. You can summarize it, 
 
       return { role: msg.role as 'user' | 'assistant' | 'system', content: text }
     })
+
+    // Applied last so none of the conditional prompt branches above can drop it
+    // and the K3 scaffolding rewrites cannot mangle it.
+    if (codeMode) systemPrompt += codeThinkingBudget
 
     // Snapshot what the Targon failover needs before we hand off to the primary
     // provider. Must stay immediately above this call so it cannot go stale.
