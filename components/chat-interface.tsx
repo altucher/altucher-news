@@ -179,7 +179,8 @@ export default function ChatInterface() {
   const [generatingVideo, setGeneratingVideo] = useState(false)
   const [generatedVideos, setGeneratedVideos] = useState<Array<{id: string, prompt: string, videoUrl: string, createdAt: number}>>([])
   const [currentVideoPrompt, setCurrentVideoPrompt] = useState<string | null>(null)
-  // Code mode: routes chat to a coding-optimized system prompt on Chutes (SN64)
+  // Code mode: routes chat to a coding-optimised system prompt on Engy (Kimi K3),
+  // with Chutes (SN64) behind it as failover
   const [codeMode, setCodeMode] = useState(false)
   // Build-mode speed/quality trade-off. Default to Quick: most first attempts
   // are exploratory, and users can opt up to Best Quality when they know what
@@ -595,7 +596,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? 'Qwen 3.8-27B' : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Chutes (SN64)' : 'Running inference through Vercel AI Gateway', 'Pulling the relevant knowledge'] },
+          { status: `Processing with ${codeMode ? 'Kimi K3' : 'GLM 5.2'}...`, details: [codeMode ? 'Running inference on Engy' : 'Running inference on Engy', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }

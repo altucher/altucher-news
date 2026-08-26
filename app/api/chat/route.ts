@@ -662,11 +662,21 @@ export async function POST(req: Request) {
     // slower tier. V4-Flash scored 72/77 and ran the whole 4-task benchmark in
     // 49s (~12s a task, an order of magnitude faster than anything else here).
     // It fails only the hardest task, which is what the Best tier is for.
-    // One build path: every code request runs Qwen 3.8-27B. It tied the top
-    // score on the 77-case benchmark (https://benchspec.vercel.app) at $0.32
-    // per million output tokens against Kimi K3's $7.50 here and $15.00 on
-    // Chutes, and unlike K3 it does not deliberate itself out of an answer.
-    const engyDefault = codeMode ? 'qwen3.8-27b' : 'glm-5.2'
+    // One build path: every code request runs Kimi K3.
+    //
+    // A three-trial head-to-head against Qwen 3.8-27B on this provider
+    // (https://benchspec.vercel.app) put K3 at a 517s median against 1176s,
+    // with the two ranges not overlapping — K3's slowest run beat Qwen's
+    // fastest — and K3 returned a perfect 77/77 in every trial while Qwen
+    // ranged 68-77. The gap is almost entirely on SIMPLE requests: Qwen spent
+    // up to 359s on a CSV parser K3 finished in 18s, so the everyday build
+    // feels far quicker on K3 even though the two tie on the hardest task.
+    //
+    // K3 held this slot once before and was reverted for reasoning instead of
+    // writing code. What changed is the deliberation control below: a 3500
+    // token thinking cap plus the prompt budget. Do not raise those without
+    // re-running the head-to-head.
+    const engyDefault = codeMode ? 'kimi-k3' : 'glm-5.2'
     // Explicit model overrides apply to Code mode's selector, per provider.
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : chutesDefault
     const selectedEngyModel = codeMode && model && engyModelOptions[model] ? engyModelOptions[model] : engyDefault
