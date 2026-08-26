@@ -45,7 +45,7 @@
 
 .dark {
   /* Linear-style near-black theme: deep blue-tinted charcoal + bright blue accent */
-  --background: oklch(0.155 0.012 265);
+  --background: oklch(0.16 0.018 262);
   --foreground: oklch(0.97 0.004 250);
   --card: oklch(0.195 0.014 265);
   --card-foreground: oklch(0.97 0.004 250);
@@ -59,7 +59,8 @@
   --secondary: oklch(0.24 0.018 265);
   --secondary-foreground: oklch(0.97 0.004 250);
   --muted: oklch(0.24 0.018 265);
-  --muted-foreground: oklch(0.84 0.02 260);
+  /* Secondary text was failing contrast against the dark canvas. */
+  --muted-foreground: oklch(0.86 0.022 260);
   --accent: oklch(0.3 0.05 260);
   --accent-foreground: oklch(0.92 0.03 255);
   --destructive: oklch(0.62 0.21 25);
@@ -181,14 +182,14 @@
   background:
     repeating-conic-gradient(
       from 0deg at 50% 8%,
-      color-mix(in oklch, var(--gold) 14%, transparent) 0deg,
-      color-mix(in oklch, var(--gold) 14%, transparent) 0.35deg,
+      color-mix(in oklch, var(--primary) 10%, transparent) 0deg,
+      color-mix(in oklch, var(--primary) 10%, transparent) 0.35deg,
       transparent 0.35deg,
       transparent 5deg
     );
   -webkit-mask-image: radial-gradient(70% 55% at 50% 8%, black 0%, transparent 72%);
   mask-image: radial-gradient(70% 55% at 50% 8%, black 0%, transparent 72%);
-  opacity: 0.5;
+  opacity: 0.26;
 }
 
 /* Warm gold text glow for accent (serif-italic) headline words */
@@ -217,4 +218,27 @@
 /* Subtle blue text glow for the hero headline */
 .hero-glow {
   text-shadow: 0 0 40px color-mix(in oklch, var(--primary) 30%, transparent);
+}
+
+
+/* --- Round 3: atmospheric depth -------------------------------------------
+   The benchmark's advantage is a full-bleed photographic ground that makes it
+   feel premium. We cannot borrow that image, but we can stop presenting a flat
+   void: a deep vertical wash plus one soft radial bloom behind the hero gives
+   the canvas a light source and a horizon. Purely decorative, sits behind all
+   content, and never intercepts input. */
+.dark body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, oklch(0.34 0.09 255 / 0.5) 0%, transparent 58%),
+    radial-gradient(90% 60% at 50% 108%, oklch(0.26 0.06 268 / 0.4) 0%, transparent 62%),
+    linear-gradient(180deg, oklch(0.185 0.024 262) 0%, oklch(0.145 0.014 265) 62%, oklch(0.13 0.012 266) 100%);
+  background-attachment: fixed;
+}
+
+/* The composer is the one thing every visitor must find. Lift it off the
+   canvas with a real edge and a cast shadow rather than a flat fill. */
+.composer-shell {
+  border: 1px solid oklch(1 0 0 / 0.11);
+  box-shadow: 0 10px 34px oklch(0 0 0 / 0.5), inset 0 1px 0 oklch(1 0 0 / 0.05);
+  backdrop-filter: blur(10px);
 }
