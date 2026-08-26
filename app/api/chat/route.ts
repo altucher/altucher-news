@@ -350,7 +350,13 @@ function needsCurrentInfo(text: string): boolean {
     'right now', 'at the moment', 'currently', 'now', 'nowadays', 'these days', 'as of',
     'what happened', 'did .* win', 'did .* happen', 'is .* still',
     'has .* been', 'have .* been',
-    'price of', 'stock price', 'how much is', 'score', 'standings',
+    // Valuation vocabulary. "what should TAO be valued at" matched nothing here
+    // and silently skipped the search, which matters a lot on a Bittensor site
+    // where price questions are among the most common things asked.
+    'price of', 'price', 'stock price', 'how much is', 'how much does', 'how much are',
+    'valued at', 'valuation', 'worth', 'market cap', 'marketcap', 'market capitalization',
+    'trading at', 'exchange rate', 'all time high', 'all-time high', 'ath',
+    'bull case', 'bear case', 'forecast', 'outlook', 'score', 'standings',
     'weather in', 'temperature',
     'where is .* now', 'what is .* doing', 'is .* alive', 'is .* dead',
     'how old is', 'age of',
@@ -803,6 +809,8 @@ export async function POST(req: Request) {
       : "running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover"
 
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant ${networkLine}. Today's date is ${currentDate}.
+
+NEVER say you are about to search, look something up, check sources, or "check for current context". You have no browsing tool in this turn: when live data has been retrieved for you it is already included below, and when it is not, no amount of announcing will fetch it. If a question needs data you do not have, answer from what you know, say plainly which part may be out of date, and stop - do not promise a lookup you cannot perform.
 
 ABOUT YOU:
       - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)

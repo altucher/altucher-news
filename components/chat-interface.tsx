@@ -432,6 +432,13 @@ export default function ChatInterface() {
         return
       }
 
+      // The review had no time limit of its own: the AbortController was only
+      // fired by effect cleanup, so a stalled /api/code-review left the UI
+      // sitting on "Reviewing desktop and mobile previews…" indefinitely with a
+      // frozen 0s timer. It is a polish pass over a build the user can already
+      // see, so it must never be able to hold the finished work hostage.
+      let timedOut = false
+      const reviewTimeout = window.setTimeout(() => { timedOut = true; controller.abort() }, 90_000)
       try {
         setReviewPhase('validating')
         await new Promise((resolve) => setTimeout(resolve, 350))
@@ -468,12 +475,15 @@ export default function ChatInterface() {
         }
         setReviewNotice(result.status === 'improved' ? 'Reviewed and improved.' : result.status === 'passed' ? 'Review passed.' : (result.summary || 'Review unavailable; showing the original build.'))
       } catch (error) {
-        if (!controller.signal.aborted) setReviewNotice('Review unavailable; showing the original build.')
+        setReviewNotice(timedOut
+          ? 'Review timed out; showing the original build.'
+          : 'Review unavailable; showing the original build.')
       } finally {
-        if (!controller.signal.aborted) {
-          setReviewPhase('idle')
-          setPendingReviewMessage(null)
-        }
+        window.clearTimeout(reviewTimeout)
+        // Always release the UI. Gating this on `!aborted` meant a timed-out
+        // review never cleared its phase and the spinner ran forever.
+        setReviewPhase('idle')
+        setPendingReviewMessage(null)
       }
     }
 
