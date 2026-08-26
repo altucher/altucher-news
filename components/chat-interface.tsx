@@ -79,7 +79,7 @@ function ModeToggle({
   compact?: boolean
 }) {
   const base = cn(
-    'inline-flex items-center gap-1.5 rounded-full font-medium transition-all',
+    'inline-flex items-center gap-1.5 rounded-full font-medium transition-colors',
     compact ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-sm'
   )
   return (
@@ -93,7 +93,7 @@ function ModeToggle({
           !codeMode
             ? cn(
                 'bg-primary text-primary-foreground shadow-sm',
-                compact ? 'px-4 py-1.5 text-sm' : 'px-5 py-2 text-base'
+                compact ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-sm'
               )
             : 'text-muted-foreground hover:text-foreground'
         )}
@@ -109,8 +109,8 @@ function ModeToggle({
           base,
           'font-semibold',
           codeMode
-            ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 ring-1 ring-sky-300/60'
-            : 'bg-sky-600 text-white shadow-sm hover:bg-sky-500'
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
         )}
       >
         <Code className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
@@ -262,9 +262,9 @@ export default function ChatInterface() {
       ...message,
       parts: [{
         type: 'text',
-        text: codeMode && buildQuality === 'best'
-          ? 'Best Quality stopped before it produced any code. This is usually a timeout on a very large build. You can retry, or split this into a smaller first step (build the core screen, then add features in follow-up messages). Your prompt is preserved below.'
-          : 'The build model finished without returning a usable project. Please retry the same request.',
+        text: codeMode
+          ? 'The build spent its whole budget planning and never wrote any code. This happens on very large builds. Retry, or split it into a smaller first step (build the core screen, then add features).'
+          : 'The model finished without returning a usable response. Please retry the same request.',
       }],
     }
     setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
@@ -307,6 +307,12 @@ export default function ChatInterface() {
     setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
   }
   let repairIssues = artifact ? validateInteractiveBuild(artifact, currentBuildRequestRef.current) : []
+  // The build the user can already see and play. validateInteractiveBuild is a
+  // regex heuristic — a complete Space Invaders that never says "wave" or
+  // "victory" trips it — so a repair being triggered says nothing about whether
+  // this artifact works.
+  const deliveredArtifact = artifact && !serializationFailed ? artifact : null
+  const deliveredMessage = finalMessage
   if (codeMode && ((containsProjectMarker && (!artifact || serializationFailed)) || repairIssues.length > 0)) {
     try {
       setReviewPhase(repairIssues.length ? 'validating' : 'repairing')
@@ -336,7 +342,17 @@ export default function ChatInterface() {
       setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
     } catch {
       setReviewPhase('idle')
-      setBuildIssue('BlueTAO detected an incomplete build and could not safely repair it. Your prompt is preserved—click Retry build to try again.')
+      // Repair is a polish pass over an artifact that already rendered. When a
+      // usable build exists, keep it and stay quiet: the previous behaviour told
+      // the user their working game was "incomplete", which was simply untrue
+      // (the repair call had timed out, most often on a large game file).
+      if (deliveredArtifact) {
+        finalMessage = deliveredMessage
+        setMessages((current) => current.map((item) => item.id === message.id ? finalMessage : item))
+        setBuildIssue(null)
+        return
+      }
+      setBuildIssue('BlueTAO could not finish this build. Your prompt is preserved—click Retry build to try again.')
       return
     }
   }
@@ -1535,7 +1551,7 @@ export default function ChatInterface() {
                 setCodeMode(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <Code className="w-5 h-5 flex-shrink-0" />
               code
@@ -1547,38 +1563,38 @@ export default function ChatInterface() {
                 setShowProjectsPanel(true)
                 setSidebarOpen(false)
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors"
             >
               <FolderCode className="w-5 h-5 flex-shrink-0" />
               projects
             </button>
           )}
           <Link href="/detect" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Sparkles className="w-5 h-5 flex-shrink-0" />
               is it ai?
             </span>
           </Link>
           <Link href="/mining" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Pickaxe className="w-5 h-5 flex-shrink-0" />
               mining
             </span>
           </Link>
           <Link href="/agents" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Store className="w-5 h-5 flex-shrink-0" />
               agents
             </span>
           </Link>
           <Link href="/fun" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <PartyPopper className="w-5 h-5 flex-shrink-0" />
               fun
             </span>
           </Link>
           <Link href="/developers" onClick={() => setSidebarOpen(false)}>
-            <span className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-[var(--gold)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.875rem] font-medium text-[oklch(0.84_0.02_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
               <Code className="w-5 h-5 flex-shrink-0" />
               embed
             </span>
@@ -1770,7 +1786,7 @@ export default function ChatInterface() {
             {user ? (
               <>
                 <Link href="/pricing" className="hidden sm:block ml-1">
-                  <span className="flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity">
+                  <span className="flex items-center gap-1.5 rounded-full border border-border bg-transparent px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity">
                     <Zap className="w-4 h-4" />
                     upgrade
                   </span>
@@ -1782,7 +1798,7 @@ export default function ChatInterface() {
             ) : (
               <button
                 onClick={() => router.push('/auth/login')}
-                className="ml-1 rounded-full bg-[var(--gold)] px-4 py-1.5 text-sm font-medium text-[var(--gold-foreground)] shadow-sm hover:opacity-90 transition-opacity"
+                className="ml-1 rounded-full border border-border bg-transparent px-4 py-1.5 text-sm font-medium text-foreground hover:bg-sidebar-accent shadow-sm hover:opacity-90 transition-opacity"
               >
                 sign in
               </button>
@@ -1805,16 +1821,16 @@ export default function ChatInterface() {
                   <BlueTaoLogo className="w-20 h-20 text-primary drop-shadow-[0_0_25px_var(--primary)]" />
                 </div>
 
-                {/* Title: bold sans paired with a serif-italic gold accent word */}
-                <h1 className="text-5xl md:text-7xl text-foreground font-bold tracking-tighter mb-4 text-balance hero-glow">
+                {/* Title: one typeface throughout. The accent word is separated by
+                    colour alone, not by a second family in a clashing hue. */}
+                <h1 className="text-[3rem] md:text-[3.75rem] text-[oklch(0.97_0.006_250)] font-bold tracking-[-0.025em] leading-[1.05] mb-6 text-balance hero-glow">
                   Ask{' '}
-                  <span className="font-serif italic font-medium tracking-normal text-[var(--gold)] gold-glow">
+                  <span className="font-normal text-[oklch(0.78_0.11_252)]">
                     anything
                   </span>
                 </h1>
-                <p className="text-muted-foreground text-lg mb-12 max-w-md text-pretty">
-                  Intelligent answers powered by{' '}
-                  <span className="font-serif italic text-foreground/90">decentralized AI</span>
+                <p className="text-muted-foreground text-[1.1rem] leading-relaxed mb-14 max-w-md text-pretty">
+                  Intelligent answers powered by decentralized AI
                 </p>
                 
                 {/* Input Area */}
@@ -1886,7 +1902,7 @@ export default function ChatInterface() {
   </div>
  )}
  <form onSubmit={handleSubmit} className="relative">
-  <div className="glass-panel relative flex items-center rounded-full transition-all">
+  <div className="glass-panel composer-shell relative flex min-h-[58px] items-center rounded-full transition-all">
                       <Button
                         type="button"
                         size="icon"
@@ -1929,8 +1945,8 @@ export default function ChatInterface() {
                           className={cn(
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingVideo
-                              ? 'bg-rose-600 text-white hover:bg-rose-500'
-                              : 'bg-rose-500/25 text-rose-300 disabled:opacity-100'
+                              ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                              : 'bg-slate-700/40 text-slate-400 disabled:opacity-100'
                           )}
                         >
                           {generatingVideo ? (
@@ -1957,8 +1973,8 @@ export default function ChatInterface() {
                           className={cn(
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingMusic
-                              ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                              : 'bg-emerald-500/25 text-emerald-300 disabled:opacity-100'
+                              ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                              : 'bg-slate-700/40 text-slate-400 disabled:opacity-100'
                           )}
                         >
                           {generatingMusic ? (
@@ -1985,8 +2001,8 @@ export default function ChatInterface() {
                           className={cn(
                             'mr-1 h-10 w-10 rounded-full transition-all',
                             input.trim() && !isLoading && !generatingImage
-                              ? 'bg-violet-600 text-white hover:bg-violet-500'
-                              : 'bg-violet-500/25 text-violet-300 disabled:opacity-100'
+                              ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                              : 'bg-slate-700/40 text-slate-400 disabled:opacity-100'
                           )}
                         >
                           {generatingImage ? (
@@ -2059,7 +2075,7 @@ export default function ChatInterface() {
                 <div className="mt-16">
                   <Link
                     href="/mining"
-                    className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium flex items-center gap-1.5 transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-[0.8rem] font-normal flex items-center gap-1.5 transition-colors"
                   >
                     <Pickaxe className="w-4 h-4" />
                     Make money Mining TAO Subnets
@@ -2509,7 +2525,7 @@ export default function ChatInterface() {
                 </div>
               )}
               <form onSubmit={handleSubmit} className="relative">
-                <div className="glass-panel relative flex items-center rounded-full transition-all">
+                <div className="glass-panel composer-shell relative flex min-h-[58px] items-center rounded-full transition-all">
                   <Button
                     type="button"
                     size="icon"
@@ -2570,8 +2586,8 @@ export default function ChatInterface() {
                       className={cn(
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingVideo
-                          ? 'bg-rose-600 text-white hover:bg-rose-500'
-                          : 'bg-rose-500/25 text-rose-300 disabled:opacity-100'
+                          ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                          : 'bg-slate-700/40 text-slate-400 disabled:opacity-100'
                       )}
                     >
                       {generatingVideo ? (
@@ -2598,8 +2614,8 @@ export default function ChatInterface() {
                       className={cn(
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingMusic
-                          ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                          : 'bg-emerald-500/25 text-emerald-300 disabled:opacity-100'
+                          ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                          : 'bg-slate-700/40 text-slate-400 disabled:opacity-100'
                       )}
                     >
                       {generatingMusic ? (
@@ -2626,8 +2642,8 @@ export default function ChatInterface() {
                       className={cn(
                         'mr-1 h-9 w-9 rounded-full transition-all',
                         input.trim() && !isLoading && !generatingImage
-                          ? 'bg-violet-600 text-white hover:bg-violet-500'
-                          : 'bg-violet-500/25 text-violet-300 disabled:opacity-100'
+                          ? 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                          : 'bg-slate-700/40 text-slate-400 disabled:opacity-100'
                       )}
                     >
                       {generatingImage ? (

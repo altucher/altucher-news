@@ -709,7 +709,7 @@ export async function POST(req: Request) {
     // budget alone is NOT enough: Qwen 3.8-27B drafted an entire page inside its
     // reasoning stream and hit the 165s Quick abort without emitting one content
     // token. A hard server-side cap makes it stop thinking and start writing.
-    const engyThinkingBudget = codeMode ? 12000 : 1500
+    const engyThinkingBudget = codeMode ? 3500 : 1500
 
     // Engy client for the primary path (and reused by the failover below).
     const engy = createOpenAICompatible({
@@ -830,7 +830,7 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     // Accuracy tracked reasoning volume, not model choice, so the budget is what
     // separates the tiers now that both run the same weights: Best thinks longer
     // and catches more, Quick answers sooner.
-    const codeThinkingBudget = `\n\nDELIBERATION BUDGET: think it through, but converge. Plan the approach, check the handful of cases that actually matter, then WRITE THE CODE. Do not re-verify every operator, token, and edge case before starting. You MUST output the finished code block; begin it within roughly 8000 tokens of thinking.`
+    const codeThinkingBudget = `\n\nDELIBERATION BUDGET: think it through, but converge. Plan the approach, check the handful of cases that actually matter, then WRITE THE CODE. Do not re-verify every operator, token, and edge case before starting. You MUST output the finished code block; begin it within roughly 3000 tokens of thinking.`
 
     // Both code tiers run Qwen 3.8-27B on Engy; Chutes keeps K3 for Best.
     // Chutes (SN64) and Targon (SN4) sit behind it. See INFERENCE_PRIMARY.
