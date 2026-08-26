@@ -410,6 +410,11 @@ type FailoverContext = {
   targonModel: string
   engyApiKey: string | null
   engyModel: string
+  // Which provider actually served the primary attempt, so the retry chain can
+  // skip it instead of asking the same dead upstream twice.
+  usedEngyPrimary: boolean
+  chutesApiKey: string | null
+  chutesModel: string
   systemPrompt: string
   fileContextSection: string
   modelMessages: ModelMessage[]
@@ -441,10 +446,10 @@ type FailoverContext = {
  * errors and timeouts are swallowed, because a slow-but-working provider must
  * not be pushed aside by an impatient probe.
  */
-async function preflightPrimary(apiKey: string, model: string, signal: AbortSignal): Promise<void> {
+async function preflightPrimary(baseURL: string, apiKey: string, model: string, signal: AbortSignal): Promise<void> {
   let res: Response
   try {
-    res = await fetch('https://llm.chutes.ai/v1/chat/completions', {
+    res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
@@ -551,7 +556,25 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.CHUTES_API_KEY
-    if (!apiKey) {
+
+    // Which network serves the request first. Benchmarked 2026-08-25 over 77
+    // hidden coding cases and 20 chat checks (https://benchspec.vercel.app):
+    // quality is identical across providers for the same weights, and Engy is
+    // ~1.55x faster than Chutes and ~1.66x faster (and ~2.9x cheaper) than the
+    // Vercel Gateway on the same GLM 5.2.
+    //
+    // This is a FLAG rather than a rewrite because it is also a positioning
+    // decision, not only an engineering one: Chutes is Bittensor Subnet 64 and
+    // is what makes "decentralized AI" true of this site, while Engy is a
+    // centralized verified-inference provider. Set INFERENCE_PRIMARY=chutes to
+    // put every request back on Bittensor; the system prompt below follows this
+    // value so the assistant never claims a network it is not running on.
+    const primaryProvider = (process.env.INFERENCE_PRIMARY || 'engy') === 'chutes' ? 'chutes' : 'engy'
+    const engyKey = process.env.ENGY_API_KEY
+    // Fall back to Chutes-primary if the Engy key is missing entirely.
+    const primary = primaryProvider === 'engy' && engyKey ? 'engy' : 'chutes'
+
+    if (!apiKey && !engyKey) {
       return new Response(JSON.stringify({ error: 'Chat is temporarily unavailable. No API key configured.' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
     }
 
@@ -588,11 +611,50 @@ export async function POST(req: Request) {
     const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
 
     const hasImageAttachment = messages.some((message) => message.parts?.some((part) => part.type === 'file' && part.mediaType.startsWith('image/')))
-    const defaultModel = codeMode
-      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K2.6-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
+    // Engy (engy.ai) — verified-inference provider. Primary for code and text
+    // chat when INFERENCE_PRIMARY is unset or 'engy'; otherwise a failover step.
+    // OpenAI-compatible endpoint; same integration as VideoTao.AI.
+    const engyApiKey = engyKey
+    // Map our model ids to Engy's roster (verified against /v1/models 2026-08-24:
+    // kimi-k3, glm-5.2, deepseek-v4-flash-0731, qwen3.6-35b-a3b, qwen3.8-27b).
+    const engyModelOptions: Record<string, string> = {
+      // Engy serves Kimi K3 natively — the Kimi picks map to it directly.
+      'kimi-k3': 'kimi-k3',
+      'kimi-k2.6': 'kimi-k3',
+      'kimi-k2.5': 'kimi-k3',
+      // Engy has no 397B Qwen, so the Quick pick maps to qwen3.8-27b: it is the
+      // only model that scored 77/77 on the 4-task benchmark AND beat Kimi K3's
+      // time there (625s vs 704s), at ~1/23rd of K3's output price. glm-5.2 used
+      // to serve this slot and failed the hardest task outright on Engy.
+      'qwen3.5': 'qwen3.8-27b',
+      'deepseek-v3.2': 'deepseek-v4-flash-0731',
+      'qwen3-32b': 'qwen3.6-35b-a3b',
+      'qwen3.8-27b': 'qwen3.8-27b',
+    }
+    // Default to the benchmark winner rather than glm-5.2: 77/77 vs a failed
+    // task, faster, and far cheaper. glm-5.2 stays available by explicit pick.
+    const engyModel = (model && engyModelOptions[model]) || 'qwen3.8-27b'
+
+    // Chutes defaults. Quick stays on Qwen 3.5-397B here on purpose: Qwen
+    // 3.8-27B wins the benchmark on Engy but is 2.9x SLOWER on Chutes (2348s vs
+    // 625s), so the best model depends on who is serving it.
+    const chutesDefault = codeMode
+      ? (buildQuality === 'best' && !isNewAgentBuild ? 'moonshotai/Kimi-K3-TEE' : 'Qwen/Qwen3.5-397B-A17B-TEE')
       : hasImageAttachment ? 'zai/glm-5v-turbo' : 'zai/glm-5.2'
-    // Explicit model overrides apply to Code mode's existing Chutes selector.
-    const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : defaultModel
+    // Engy defaults, straight off the benchmark: Kimi K3 scored 77/77 for Best;
+    // Qwen 3.8-27B also scored 77/77, ran faster than K3, and costs ~1/23rd as
+    // much per output token, so it takes Quick. New agent builds stay on the
+    // Qwen for the structured project document.
+    const engyDefault = codeMode
+      ? (buildQuality === 'best' && !isNewAgentBuild ? 'kimi-k3' : 'qwen3.8-27b')
+      : 'glm-5.2'
+    // Explicit model overrides apply to Code mode's selector, per provider.
+    const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : chutesDefault
+    const selectedEngyModel = codeMode && model && engyModelOptions[model] ? engyModelOptions[model] : engyDefault
+
+    // Images have no tested Engy path (Engy serves no vision model), so image
+    // chat stays on the Gateway regardless of the primary flag.
+    const usePrimaryEngy = primary === 'engy' && !hasImageAttachment
     // Do not let an upstream inference connection stay open forever. Quick
     // builds should finish promptly; Best Quality gets a larger reasoning window.
     //
@@ -619,6 +681,13 @@ export async function POST(req: Request) {
     : 3 * 60_000
     const providerAbortSignal = AbortSignal.any([req.signal, AbortSignal.timeout(providerTimeoutMs)])
 
+    // Engy client for the primary path (and reused by the failover below).
+    const engy = createOpenAICompatible({
+      name: 'engy',
+      baseURL: 'https://api.engy.ai/v1',
+      headers: { 'Authorization': `Bearer ${engyKey ?? ''}` },
+    })
+
     // Create a Chutes client
     const chutes = createOpenAICompatible({
       name: 'chutes',
@@ -644,29 +713,6 @@ export async function POST(req: Request) {
     }
     const targonModel = (model && targonModelOptions[model]) || 'moonshotai/Kimi-K2-Instruct'
 
-    // Engy (engy.ai) — verified-inference provider, third in the failover chain
-    // so a request only reaches centralized OpenAI when Chutes, Targon, AND Engy
-    // are all down. OpenAI-compatible endpoint; same integration as VideoTao.AI.
-    const engyApiKey = process.env.ENGY_API_KEY
-    // Map our model ids to Engy's roster (verified against /v1/models 2026-08-24:
-    // kimi-k3, glm-5.2, deepseek-v4-flash-0731, qwen3.6-35b-a3b, qwen3.8-27b).
-    const engyModelOptions: Record<string, string> = {
-      // Engy serves Kimi K3 natively — the Kimi picks map to it directly.
-      'kimi-k3': 'kimi-k3',
-      'kimi-k2.6': 'kimi-k3',
-      'kimi-k2.5': 'kimi-k3',
-      // Engy has no 397B Qwen, so the Quick pick maps to qwen3.8-27b: it is the
-      // only model that scored 77/77 on the 4-task benchmark AND beat Kimi K3's
-      // time there (625s vs 704s), at ~1/23rd of K3's output price. glm-5.2 used
-      // to serve this slot and failed the hardest task outright on Engy.
-      'qwen3.5': 'qwen3.8-27b',
-      'deepseek-v3.2': 'deepseek-v4-flash-0731',
-      'qwen3-32b': 'qwen3.6-35b-a3b',
-      'qwen3.8-27b': 'qwen3.8-27b',
-    }
-    // Default to the benchmark winner rather than glm-5.2: 77/77 vs a failed
-    // task, faster, and far cheaper. glm-5.2 stays available by explicit pick.
-    const engyModel = (model && engyModelOptions[model]) || 'qwen3.8-27b'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
@@ -695,7 +741,16 @@ export async function POST(req: Request) {
     // Track whether Desearch was used for this query
     let usedDesearch = false
     
-    let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant running on Bittensor's decentralized AI network. Today's date is ${currentDate}.
+    // Describe the real routing. BlueTAO's positioning rests on running on
+    // Bittensor, so this string follows INFERENCE_PRIMARY rather than hardcoding
+    // a claim: on Chutes-primary it is Bittensor end to end; on Engy-primary the
+    // first hop is a centralized verified-inference provider with Bittensor
+    // (Chutes SN64, Targon SN4) as failover. Never let the model state the wrong one.
+    const networkLine = usePrimaryEngy
+      ? 'running on Engy verified inference, with Bittensor (Chutes Subnet 64, Targon Subnet 4) as failover'
+      : "running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover"
+
+    let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant ${networkLine}. Today's date is ${currentDate}.
 
 ABOUT YOU:
       - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
@@ -721,9 +776,10 @@ You answer questions directly and helpfully. You do not add unnecessary disclaim
     }
     
     // Code mode: swap in a coding-focused system prompt and skip web search.
-    // Powered by Kimi K2.6 on Chutes (SN64), with Targon (SN4) as failover.
+    // Powered by Kimi K3 (Best) / Qwen 3.8-27B (Quick) on Engy by default,
+    // with Chutes (SN64) and Targon (SN4) behind it. See INFERENCE_PRIMARY.
     if (codeMode) {
-      systemPrompt = `You are BlueTAO Code, an expert AI programming assistant running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover. Today's date is ${currentDate}.
+      systemPrompt = `You are BlueTAO Code, an expert AI programming assistant ${networkLine}. Today's date is ${currentDate}.
 
 You are a senior software engineer helping people build things. Many of your users have NO programming experience, so be friendly, clear, and jargon-free in your explanations.
 
@@ -988,6 +1044,9 @@ When answering questions, refer to this document content. You can summarize it, 
         targonModel,
         engyApiKey: engyApiKey ?? null,
         engyModel,
+        usedEngyPrimary: usePrimaryEngy,
+        chutesApiKey: apiKey ?? null,
+        chutesModel: codeMode ? selectedModel : 'moonshotai/Kimi-K2.6-TEE',
         systemPrompt,
         fileContextSection,
         modelMessages,
@@ -1003,14 +1062,24 @@ When answering questions, refer to this document content. You can summarize it, 
     // Code mode is the only path that talks to Chutes directly, so it is the
     // only one that needs the probe. Normal chat goes through AI Gateway, which
     // surfaces its own errors before streaming starts.
-    if (codeMode && (failover?.engyApiKey || failover?.targonApiKey)) {
-      await preflightPrimary(apiKey, selectedModel, req.signal)
+    // Chat is probed too now, not just code: it moved off the Gateway onto a
+    // single upstream, so it needs the same protection that stopped the
+    // 2026-08-25 code outage. Image chat still goes to the Gateway, which
+    // surfaces its own errors before streaming, so it is left alone.
+    if (!hasImageAttachment && (failover?.engyApiKey || failover?.targonApiKey || apiKey)) {
+      await (usePrimaryEngy
+        ? preflightPrimary('https://api.engy.ai/v1', engyKey ?? '', selectedEngyModel, req.signal)
+        : codeMode
+          ? preflightPrimary('https://llm.chutes.ai/v1', apiKey ?? '', selectedModel, req.signal)
+          : Promise.resolve())
     }
 
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
     const result = streamText({
-      model: codeMode ? chutes.chatModel(selectedModel) : gateway(selectedModel),
+      model: usePrimaryEngy
+        ? engy.chatModel(selectedEngyModel)
+        : codeMode ? chutes.chatModel(selectedModel) : gateway(chutesDefault),
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
       maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
@@ -1019,7 +1088,7 @@ When answering questions, refer to this document content. You can summarize it, 
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, selectedModel, 0.002, location, usedDesearch)
+    trackAnalyticsEvent('chat_query', lastMessage, usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
@@ -1054,6 +1123,43 @@ When answering questions, refer to this document content. You can summarize it, 
         errorMessage.includes('insufficient') ||
         errorMessage.includes('AI_RetryError'))) {
       
+      // When Engy served as primary, Chutes is the first retry - it keeps the
+      // request on Bittensor and is the whole reason the decentralised claim
+      // holds. (When Chutes was primary this block is skipped; retrying the
+      // provider that just failed would only burn the user's time.)
+      if (failover?.usedEngyPrimary && failover.chutesApiKey) {
+        try {
+          console.log('[v0] Engy unavailable, trying Chutes (SN64)')
+          const chutesRetry = createOpenAICompatible({
+            name: 'chutes',
+            baseURL: 'https://llm.chutes.ai/v1',
+            headers: { 'Authorization': `Bearer ${failover.chutesApiKey}` },
+          })
+          const chutesResult = streamText({
+            model: chutesRetry.chatModel(failover.chutesModel),
+            system: failover.systemPrompt + failover.fileContextSection,
+            messages: failover.modelMessages,
+            maxOutputTokens: failover.codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
+            abortSignal: AbortSignal.any([
+              req.signal,
+              AbortSignal.timeout(
+                failover.codeMode
+                  ? (failover.buildQuality === 'best' ? 740_000 : 165_000)
+                  : 3 * 60_000,
+              ),
+            ]),
+            experimental_transform: stripKimiToolTokens(),
+          })
+          trackAnalyticsEvent('chat_query', failover.lastMessage, `chutes/${failover.chutesModel}`, 0.002, failover.location, failover.usedDesearch)
+          return chutesResult.toUIMessageStreamResponse({
+            originalMessages: failover.messages,
+            consumeSseStream: consumeStream,
+          })
+        } catch (chutesError) {
+          console.log('[v0] Chutes failover also failed:', String(chutesError))
+        }
+      }
+
       // First failover: Targon (Bittensor SN4) — keeps inference decentralized
       // before resorting to the centralized OpenAI fallback.
       if (failover?.targonApiKey) {
@@ -1100,7 +1206,7 @@ When answering questions, refer to this document content. You can summarize it, 
 
       // Second failover: Engy (engy.ai) verified inference — last stop before
       // the centralized OpenAI fallback.
-      if (failover?.engyApiKey) {
+      if (failover?.engyApiKey && !failover.usedEngyPrimary) {
         try {
           console.log('[v0] Targon unavailable, trying Engy')
           const engy = createOpenAICompatible({
