@@ -561,8 +561,11 @@ export async function POST(req: Request) {
       'deepseek-v3.2': 'deepseek-ai/DeepSeek-V3.2-TEE',
       'kimi-k3': 'moonshotai/Kimi-K3-TEE',
       'kimi-k2.6': 'moonshotai/Kimi-K2.6-TEE',
-      'kimi-k2.5': 'moonshotai/Kimi-K2.5-TEE',
+      // Chutes retired Kimi K2.5 - /v1/models lists only K2.6 and K3, so the
+      // old id 404s. Point it at K2.6 so saved chats using it keep working.
+      'kimi-k2.5': 'moonshotai/Kimi-K2.6-TEE',
       'qwen3-32b': 'Qwen/Qwen3-32B-TEE',
+      'qwen3.8-27b': 'Qwen/Qwen3.8-27B-TEE',
     }
     
     // Model-aware defaults:
@@ -652,13 +655,18 @@ export async function POST(req: Request) {
       'kimi-k3': 'kimi-k3',
       'kimi-k2.6': 'kimi-k3',
       'kimi-k2.5': 'kimi-k3',
-      // No big Qwen or DeepSeek V3.x on Engy; closest strong equivalents.
-      'qwen3.5': 'glm-5.2',
+      // Engy has no 397B Qwen, so the Quick pick maps to qwen3.8-27b: it is the
+      // only model that scored 77/77 on the 4-task benchmark AND beat Kimi K3's
+      // time there (625s vs 704s), at ~1/23rd of K3's output price. glm-5.2 used
+      // to serve this slot and failed the hardest task outright on Engy.
+      'qwen3.5': 'qwen3.8-27b',
       'deepseek-v3.2': 'deepseek-v4-flash-0731',
       'qwen3-32b': 'qwen3.6-35b-a3b',
+      'qwen3.8-27b': 'qwen3.8-27b',
     }
-    // glm-5.2 default: production-proven on VideoTao.AI, mid-priced, 262K context.
-    const engyModel = (model && engyModelOptions[model]) || 'glm-5.2'
+    // Default to the benchmark winner rather than glm-5.2: 77/77 vs a failed
+    // task, faster, and far cheaper. glm-5.2 stays available by explicit pick.
+    const engyModel = (model && engyModelOptions[model]) || 'qwen3.8-27b'
 
     // Check if user is asking about news and pre-fetch results
     const lastMessage = getLastUserMessage(messages)
