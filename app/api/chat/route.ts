@@ -2,8 +2,11 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { gateway } from '@ai-sdk/gateway'
 import {
   consumeStream,
+  stepCountIs,
   streamText,
+  tool,
 } from 'ai'
+import { z } from 'zod'
 import type { UIMessage, ModelMessage } from 'ai'
 import { createClient } from '@supabase/supabase-js'
 import { getMessageLimit } from '@/lib/products'
@@ -371,6 +374,29 @@ function needsCurrentInfo(text: string): boolean {
     return lowerText.includes(pattern)
   })
 }
+
+/**
+ * Web search as a real tool the model can call, rather than a server-side
+ * pre-fetch gated on regex.
+ *
+ * The pre-fetch below still runs and still helps, but it can only fire for
+ * phrasings someone thought to add to a list. "what should TAO be valued at"
+ * matched none of them, so the model answered from stale weights - and worse,
+ * announced "let me check for current context first" and then stopped, because
+ * that sentence normally precedes a tool result that in a single-shot
+ * architecture never arrives. Giving it an actual tool lets it decide, and
+ * makes the sentence true when it says it.
+ */
+const webSearchTool = tool({
+  description: 'Search the web for current, real-time information: prices, valuations, market data, news, recent events, or anything that may have changed since training. Call this whenever the answer depends on up-to-date facts.',
+  inputSchema: z.object({
+    query: z.string().describe('The search query, phrased as you would type it into a search engine.'),
+  }),
+  execute: async ({ query }: { query: string }) => {
+    const results = await searchWeb(query)
+    return results || 'No results returned for that query.'
+  },
+})
 
 // Extract the last user message text
 function getLastUserMessage(messages: UIMessage[]): string {
@@ -810,7 +836,7 @@ export async function POST(req: Request) {
 
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant ${networkLine}. Today's date is ${currentDate}.
 
-NEVER say you are about to search, look something up, check sources, or "check for current context". You have no browsing tool in this turn: when live data has been retrieved for you it is already included below, and when it is not, no amount of announcing will fetch it. If a question needs data you do not have, answer from what you know, say plainly which part may be out of date, and stop - do not promise a lookup you cannot perform.
+SEARCH: when a question depends on current facts - prices, valuations, market data, news, recent events, anything that may have moved since training - call the web_search tool instead of guessing. Do NOT narrate the intention ("let me check current context") and then stop: either call the tool, or answer from what you know while saying plainly which part may be out of date. Never promise a lookup you do not actually perform.
 
 ABOUT YOU:
       - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
@@ -1154,6 +1180,12 @@ When answering questions, refer to this document content. You can summarize it, 
 
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
+    // Chat gets a real search tool; code mode does not (a build should write
+    // code, not browse). The pre-fetch above still runs and still injects
+    // results for obvious cases - the tool covers everything the patterns miss,
+    // which is what left "what should TAO be valued at" answered from stale
+    // weights. stepCountIs caps the loop so it cannot search forever.
+    const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY
     const result = streamText({
       model: usePrimaryEngy
         ? engy.chatModel(selectedEngyModel)
@@ -1163,6 +1195,7 @@ When answering questions, refer to this document content. You can summarize it, 
       maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
       abortSignal: providerAbortSignal,
       experimental_transform: stripKimiToolTokens(),
+      ...(useSearchTool ? { tools: { web_search: webSearchTool }, stopWhen: stepCountIs(4) } : {}),
     })
 
     // Track the chat query event (async, don't wait)
