@@ -393,6 +393,11 @@ export default function ChatInterface() {
   // removed: the sidebar is one click away on the same toggle that already
   // exists on mobile, and returns permanently the moment a chat starts.
   const isLandingView = messages.length === 0
+  // "Learn more about BlueTAO" shipped with a chevron and no click handler, so
+  // it did nothing. It now opens a panel that carries the attribution and, on
+  // the landing view where the sidebar is collapsed, surfaces the nav so the
+  // sections stay one click away rather than only behind the menu icon.
+  const [learnOpen, setLearnOpen] = useState(false)
 
 
   const isLoading = status === 'streaming' || status === 'submitted'
@@ -2105,13 +2110,51 @@ export default function ChatInterface() {
                 </div>
 
                 {/* Footer Link */}
-                <div className="mt-4">
-                  <button className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 transition-colors">
+                <div className="mt-4 w-full max-w-xl">
+                  <button
+                    type="button"
+                    onClick={() => setLearnOpen((v) => !v)}
+                    aria-expanded={learnOpen}
+                    className="mx-auto text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 transition-colors"
+                  >
                     Learn more about BlueTAO
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className={cn('w-4 h-4 transition-transform duration-200', learnOpen && 'rotate-180')}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
+
+                  {learnOpen && (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 text-center backdrop-blur-sm">
+                      <p className="text-[0.82rem] leading-relaxed text-muted-foreground">
+                        Created by <span className="text-foreground">James Altucher</span>
+                        <span className="mx-1.5 text-muted-foreground/50">/</span>
+                        <span className="text-foreground">TAO Synergies</span>
+                        <span className="ml-1.5 text-muted-foreground/70">(Nasdaq: TAOX)</span>
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
+                        {[
+                          { href: '/detect', label: 'is it ai?' },
+                          { href: '/mining', label: 'mining' },
+                          { href: '/agents', label: 'agents' },
+                          { href: '/fun', label: 'fun' },
+                          { href: '/developers', label: 'embed' },
+                          { href: '/pricing', label: 'pricing' },
+                        ].map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="rounded-full px-3 py-1.5 text-[0.82rem] text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
