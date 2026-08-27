@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rent a GPU pod on Lium (Bittensor SN51). Run from YOUR machine.
 # Default: 2x A100 80GB (Crusades' validator hardware). For Teutonic
-# (continued pretraining of an 80B model) you'll want much more, e.g.:
+# (continued pretraining of the 110B MoE Teutonic II) you'll want much more, e.g.:
 #   GPU_TYPE=H200 GPU_COUNT=8 ./01_rent_lium_pod.sh
 set -euo pipefail
 

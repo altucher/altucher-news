@@ -14,7 +14,7 @@ subnet weight activity):
 |-----|-----------|--------|
 | → early 2026 | **Templar** decentralized training (Covenant AI) — trained Covenant-72B | dormant |
 | spring 2026 | **Crusades** — MFU optimization tournament (Covenant AI) | legacy — Covenant AI exited Bittensor |
-| May 2026 → | **Teutonic** ([teutonic.io](https://teutonic.io), [unarbos/teutonic](https://github.com/unarbos/teutonic)) — king-of-the-hill pretraining of the 80B **Teutonic-LXXX** model | **current** |
+| May 2026 → | **Teutonic** ([teutonic.io](https://teutonic.io), [unarbos/teutonic](https://github.com/unarbos/teutonic)) — king-of-the-hill pretraining — current round is the 110B MoE **Teutonic II** | **current** |
 
 This directory supports both: **`teutonic/`** (current) and **`crusades/`**
 (legacy, kept in case the mechanism rotates back or you're on testnet).
@@ -77,7 +77,8 @@ The round parameters live in
 Because only weights float and the eval set is known, the competition is:
 who can continue-pretraining a 110B MoE on FineWeb-Edu-like data most
 effectively. MoE helps you — ~110B total but far fewer active parameters per
-token than a dense 80B — but this is still a multi-node-scale training job.
+token (~10-15B active) than a dense model of comparable size — but this is
+still a multi-node-scale training job.
 Budget accordingly: serious-compute competition, not a set-and-forget miner.
 
 ### Where to get the king (train from this, not genesis)
@@ -128,8 +129,8 @@ whenever someone is crowned, and the checkpoint is immutable per crowning.
    teutonic-miner auth --hotkey teuton1
    ```
 
-3. **Rent training compute on Lium.** An 80B model needs far more than a dev
-   box — e.g. an 8x H200 pod:
+3. **Rent training compute on Lium.** A 110B MoE needs far more than a dev
+   box — the checkpoint alone is ~220GB — e.g. an 8x H200 pod:
 
    ```bash
    GPU_TYPE=H200 GPU_COUNT=8 ./01_rent_lium_pod.sh
