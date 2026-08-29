@@ -662,6 +662,7 @@ export async function POST(req: Request) {
       'deepseek-v3.2': 'deepseek-v4-flash-0731',
       'qwen3-32b': 'qwen3.6-35b-a3b',
       'qwen3.8-27b': 'qwen3.8-27b',
+      'glm-5.3': 'glm-5.3',
     }
     // Default to the benchmark winner rather than glm-5.2: 77/77 vs a failed
     // task, faster, and far cheaper. glm-5.2 stays available by explicit pick.
@@ -708,7 +709,19 @@ export async function POST(req: Request) {
     // writing code. What changed is the deliberation control below: a 3500
     // token thinking cap plus the prompt budget. Do not raise those without
     // re-running the head-to-head.
-    const engyDefault = codeMode ? 'kimi-k3' : 'glm-5.2'
+    // Chat moves to GLM 5.3; code stays on Kimi K3. Measured 2026-08-26:
+    //
+    // Chat - 5.3 matches 5.2's perfect 20/20 and is 3.3x faster on short
+    // prompts (1.5s vs 5.0s median) and 3x faster at 16 turns of history
+    // (10.1s vs 31.5s). Decisive point: on a long 16-turn thread asking for a
+    // long answer, 5.2 produced 16k characters of reasoning and NO content at
+    // all, while 5.3 answered in 55.7s. That is a user-facing failure 5.3 does
+    // not have. It costs 2.1x more ($0.98/$3.08 vs $0.68/$1.50); worth it on
+    // the surface where a request returning nothing is the worst outcome.
+    //
+    // Code stays on K3 - GLM 5.3 failed the hardest task twice in a row with
+    // an empty response (47/77), against K3's 77/77.
+    const engyDefault = codeMode ? 'kimi-k3' : 'glm-5.3'
     // Explicit model overrides apply to Code mode's selector, per provider.
     const selectedModel = codeMode && model && modelOptions[model] ? modelOptions[model] : chutesDefault
     const selectedEngyModel = codeMode && model && engyModelOptions[model] ? engyModelOptions[model] : engyDefault
