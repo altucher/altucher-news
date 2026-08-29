@@ -16,3 +16,6 @@ node_modules
 .vercel
 /.swc
 .env*
+
+# SN3 mining secrets
+sn3-mining/.env
