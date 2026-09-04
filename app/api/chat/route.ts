@@ -360,6 +360,9 @@ function needsCurrentInfo(text: string): boolean {
     'valued at', 'valuation', 'worth', 'market cap', 'marketcap', 'market capitalization',
     'trading at', 'exchange rate', 'all time high', 'all-time high', 'ath',
     'bull case', 'bear case', 'forecast', 'outlook', 'score', 'standings',
+    'good buy', 'worth buying', 'should i buy', 'should i sell', 'should i hold',
+    'invest in', 'investment', 'bullish', 'bearish', 'undervalued', 'overvalued',
+    'good investment', 'buy or sell', 'moon', 'dip', 'rally', 'crash',
     'weather in', 'temperature',
     'where is .* now', 'what is .* doing', 'is .* alive', 'is .* dead',
     'how old is', 'age of',
@@ -484,7 +487,10 @@ async function preflightPrimary(baseURL: string, apiKey: string, model: string, 
     res = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
+      // max_tokens: 1 is rejected outright by some models (GPT-6 via SayGM
+      // returns 400 "output limit was reached"), which made a healthy provider
+      // look dead. 16 is still negligible and every provider accepts it.
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 16 }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
     })
   } catch {
@@ -601,6 +607,20 @@ export async function POST(req: Request) {
     // centralized verified-inference provider. Set INFERENCE_PRIMARY=chutes to
     // put every request back on Bittensor; the system prompt below follows this
     // value so the assistant never claims a network it is not running on.
+    // SayGM - Bittensor SN482, a confidential-compute inference marketplace.
+    // Requests go to an Intel TDX-attested gateway which proxies to a frontier
+    // model from inside the enclave, so the operator cannot read prompts. It is
+    // OpenAI-shaped, so it drops into the same client as every other provider.
+    //
+    // Entirely config-driven: set SAYGM_BASE_URL and SAYGM_API_KEY (plus
+    // SAYGM_CHAT_MODEL, default gpt-6) and text chat routes here. With them
+    // unset nothing changes. The base URL is deliberately NOT hardcoded - it
+    // must be the gateway URL from the SayGM dashboard.
+    const saygmKey = process.env.SAYGM_API_KEY
+    const saygmBase = process.env.SAYGM_BASE_URL
+    const saygmModel = process.env.SAYGM_CHAT_MODEL || 'gpt-6'
+    const useSaygmChat = Boolean(saygmKey && saygmBase)
+
     const primaryProvider = (process.env.INFERENCE_PRIMARY || 'engy') === 'chutes' ? 'chutes' : 'engy'
     const engyKey = process.env.ENGY_API_KEY
     // Fall back to Chutes-primary if the Engy key is missing entirely.
@@ -766,6 +786,29 @@ export async function POST(req: Request) {
     // token. A hard server-side cap makes it stop thinking and start writing.
     const engyThinkingBudget = codeMode ? 3500 : 1500
 
+    const saygm = useSaygmChat
+      ? createOpenAICompatible({
+          name: 'saygm',
+          baseURL: saygmBase!.replace(/\/$/, ''),
+          headers: { 'Authorization': `Bearer ${saygmKey}` },
+          // GPT-6 refuses function tools alongside a reasoning_effort on
+          // /v1/chat/completions ("use /v1/responses or set reasoning_effort to
+          // 'none'"). We want the web_search tool, so pin it to none - which is
+          // also how it stays fast: it emitted zero reasoning tokens in testing,
+          // and that is why it costs only 1.4x GLM despite a 15x list price.
+          fetch: async (url, init) => {
+            if (init?.body && typeof init.body === 'string') {
+              try {
+                const body = JSON.parse(init.body)
+                delete body.reasoning_effort
+                init = { ...init, body: JSON.stringify(body) }
+              } catch { /* leave the body alone */ }
+            }
+            return fetch(url, init)
+          },
+        })
+      : null
+
     // Engy client for the primary path (and reused by the failover below).
     const engy = createOpenAICompatible({
       name: 'engy',
@@ -843,7 +886,9 @@ export async function POST(req: Request) {
     // a claim: on Chutes-primary it is Bittensor end to end; on Engy-primary the
     // first hop is a centralized verified-inference provider with Bittensor
     // (Chutes SN64, Targon SN4) as failover. Never let the model state the wrong one.
-    const networkLine = usePrimaryEngy
+    const networkLine = (saygm && !codeMode && !hasImageAttachment)
+      ? 'running on SayGM, a confidential-compute subnet on Bittensor (SN482), where inference happens inside a hardware-attested enclave'
+      : usePrimaryEngy
       ? 'running on Engy verified inference, with Bittensor (Chutes Subnet 64, Targon Subnet 4) as failover'
       : "running on Bittensor's decentralized AI network (Chutes, Subnet 64), with Targon (Subnet 4) as failover"
 
@@ -1184,7 +1229,9 @@ When answering questions, refer to this document content. You can summarize it, 
     // 2026-08-25 code outage. Image chat still goes to the Gateway, which
     // surfaces its own errors before streaming, so it is left alone.
     if (!hasImageAttachment && (failover?.engyApiKey || failover?.targonApiKey || apiKey)) {
-      await (usePrimaryEngy
+      await (saygm && !codeMode
+        ? preflightPrimary(saygmBase!.replace(/\/$/, ''), saygmKey ?? '', saygmModel, req.signal)
+        : usePrimaryEngy
         ? preflightPrimary('https://api.engy.ai/v1', engyKey ?? '', selectedEngyModel, req.signal)
         : codeMode
           ? preflightPrimary('https://llm.chutes.ai/v1', apiKey ?? '', selectedModel, req.signal)
@@ -1193,16 +1240,19 @@ When answering questions, refer to this document content. You can summarize it, 
 
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
+    const routeToSaygm = Boolean(saygm && !codeMode && !hasImageAttachment)
     // Chat gets a real search tool; code mode does not (a build should write
     // code, not browse). The pre-fetch above still runs and still injects
     // results for obvious cases - the tool covers everything the patterns miss,
     // which is what left "what should TAO be valued at" answered from stale
     // weights. stepCountIs caps the loop so it cannot search forever.
-    const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY
+    const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY && !routeToSaygm
     const result = streamText({
-      model: usePrimaryEngy
-        ? engy.chatModel(selectedEngyModel)
-        : codeMode ? chutes.chatModel(selectedModel) : gateway(chutesDefault),
+      model: routeToSaygm
+        ? saygm.chatModel(saygmModel)
+        : usePrimaryEngy
+          ? engy.chatModel(selectedEngyModel)
+          : codeMode ? chutes.chatModel(selectedModel) : gateway(chutesDefault),
       system: systemPrompt + fileContextSection,
       messages: modelMessages,
       maxOutputTokens: codeMode ? MAX_OUTPUT_TOKENS_CODE : MAX_OUTPUT_TOKENS_DEFAULT,
@@ -1212,7 +1262,7 @@ When answering questions, refer to this document content. You can summarize it, 
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
+    trackAnalyticsEvent('chat_query', lastMessage, routeToSaygm ? `saygm/${saygmModel}` : usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
