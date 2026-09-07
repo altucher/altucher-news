@@ -516,6 +516,41 @@ async function preflightPrimary(baseURL: string, apiKey: string, model: string, 
   billingFailures.delete(baseURL)
 }
 
+/**
+ * One Engy client for every path, so the primary and the failover cannot
+ * drift. Both deliberation controls live here: the thinking budget, and for
+ * chat a reasoning_effort of 'low'. Measured on the 16-turn + long-answer
+ * thread that users saw fail: GLM 5.3 with the budget alone took 59-108s to
+ * its first word behind 17-28k characters of reasoning and sometimes never
+ * produced one; with reasoning_effort=low it answered in 15-16s behind ~100
+ * characters, every trial. Kimi K3 behaves the same way.
+ *
+ * Previously the failover built its own bare client with neither control, so
+ * the moment the primary provider was down, chat ran uncapped - which is when
+ * users reported it being unreachable.
+ */
+function engyClient(apiKey: string, codeMode: boolean) {
+  const thinkingBudget = codeMode ? 3500 : 1500
+  return createOpenAICompatible({
+    name: 'engy',
+    baseURL: 'https://api.engy.ai/v1',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    // The SDK has no first-class field for these, so inject them into the
+    // request body. Malformed bodies pass through untouched rather than throw.
+    fetch: async (url, init) => {
+      if (init?.body && typeof init.body === 'string') {
+        try {
+          const body = JSON.parse(init.body)
+          body.thinking = { type: 'enabled', budget_tokens: thinkingBudget }
+          if (!codeMode) body.reasoning_effort = 'low'
+          init = { ...init, body: JSON.stringify(body) }
+        } catch { /* leave the body as-is */ }
+      }
+      return fetch(url, init)
+    },
+  })
+}
+
 export async function POST(req: Request) {
   // Populated just before the primary streamText call, so the catch block can
   // retry on Targon. Null means we failed before there was anything to retry.
@@ -798,7 +833,6 @@ export async function POST(req: Request) {
     // budget alone is NOT enough: Qwen 3.8-27B drafted an entire page inside its
     // reasoning stream and hit the 165s Quick abort without emitting one content
     // token. A hard server-side cap makes it stop thinking and start writing.
-    const engyThinkingBudget = codeMode ? 3500 : 1500
 
     const saygm = useSaygmChat
       ? createOpenAICompatible({
@@ -823,24 +857,8 @@ export async function POST(req: Request) {
         })
       : null
 
-    // Engy client for the primary path (and reused by the failover below).
-    const engy = createOpenAICompatible({
-      name: 'engy',
-      baseURL: 'https://api.engy.ai/v1',
-      headers: { 'Authorization': `Bearer ${engyKey ?? ''}` },
-      // The SDK has no first-class field for this, so inject it into the request
-      // body. Malformed bodies are passed through untouched rather than thrown.
-      fetch: async (url, init) => {
-        if (init?.body && typeof init.body === 'string') {
-          try {
-            const body = JSON.parse(init.body)
-            body.thinking = { type: 'enabled', budget_tokens: engyThinkingBudget }
-            init = { ...init, body: JSON.stringify(body) }
-          } catch { /* leave the body as-is */ }
-        }
-        return fetch(url, init)
-      },
-    })
+    // Engy client for the primary path.
+    const engy = engyClient(engyKey ?? '', codeMode ?? false)
 
     // Create a Chutes client
     const chutes = createOpenAICompatible({
@@ -1214,13 +1232,22 @@ When answering questions, refer to this document content. You can summarize it, 
 
     // Snapshot what the Targon failover needs before we hand off to the primary
     // provider. Must stay immediately above this call so it cannot go stale.
+    // Text chat goes to SayGM when it is configured. Decided here, before the
+    // failover snapshot, because the snapshot has to know which provider really
+    // served the primary attempt.
+    const routeToSaygm = useSaygmChat && !codeMode && !hasImageAttachment
+
     if (targonApiKey || engyApiKey) {
       failover = {
         targonApiKey: targonApiKey ?? null,
         targonModel,
         engyApiKey: engyApiKey ?? null,
         engyModel,
-        usedEngyPrimary: usePrimaryEngy,
+        // When SayGM served the primary attempt, Engy has not been tried yet.
+        // Reporting it as "used" made the failover skip Engy and send chat to
+        // Kimi K2.6 on Chutes with no deliberation cap - the slow, spiralling
+        // path users hit whenever SayGM was down.
+        usedEngyPrimary: usePrimaryEngy && !routeToSaygm,
         chutesApiKey: apiKey ?? null,
         chutesModel: codeMode ? selectedModel : 'moonshotai/Kimi-K2.6-TEE',
         systemPrompt,
@@ -1254,7 +1281,6 @@ When answering questions, refer to this document content. You can summarize it, 
 
     // Normal chat runs on GLM through AI Gateway; Code mode stays on Chutes.
     // The existing decentralized and OpenAI fallbacks remain available.
-    const routeToSaygm = Boolean(saygm && !codeMode && !hasImageAttachment)
     // Chat gets a real search tool; code mode does not (a build should write
     // code, not browse). The pre-fetch above still runs and still injects
     // results for obvious cases - the tool covers everything the patterns miss,
@@ -1397,13 +1423,7 @@ When answering questions, refer to this document content. You can summarize it, 
       if (failover?.engyApiKey && !failover.usedEngyPrimary) {
         try {
           console.log('[v0] Targon unavailable, trying Engy')
-          const engy = createOpenAICompatible({
-            name: 'engy',
-            baseURL: 'https://api.engy.ai/v1',
-            headers: {
-              'Authorization': `Bearer ${failover.engyApiKey}`,
-            },
-          })
+          const engy = engyClient(failover.engyApiKey, failover.codeMode ?? false)
 
           const engyResult = streamText({
             model: engy.chatModel(failover.engyModel),
