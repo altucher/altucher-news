@@ -481,7 +481,17 @@ type FailoverContext = {
  * errors and timeouts are swallowed, because a slow-but-working provider must
  * not be pushed aside by an impatient probe.
  */
+// Providers that returned a hard billing failure, and when. A 402 persists
+// until someone adds credit, so re-probing it on every request only costs the
+// user latency. Cleared after 10 minutes so a top-up is picked up promptly.
+const billingFailures = new Map<string, number>()
+const BILLING_COOLDOWN_MS = 10 * 60 * 1000
+
 async function preflightPrimary(baseURL: string, apiKey: string, model: string, signal: AbortSignal): Promise<void> {
+  const downSince = billingFailures.get(baseURL)
+  if (downSince && Date.now() - downSince < BILLING_COOLDOWN_MS) {
+    throw new Error(`Primary provider preflight skipped: ${baseURL} returned 402 recently (out of credit)`)
+  }
   let res: Response
   try {
     res = await fetch(`${baseURL}/chat/completions`, {
@@ -498,8 +508,12 @@ async function preflightPrimary(baseURL: string, apiKey: string, model: string, 
   }
   if (!res.ok) {
     const detail = (await res.text().catch(() => '')).slice(0, 200).replace(/\s+/g, ' ')
+    if (res.status === 402 || /quota|insufficient|add credits/i.test(detail)) {
+      billingFailures.set(baseURL, Date.now())
+    }
     throw new Error(`Primary provider preflight failed: HTTP ${res.status} ${detail}`)
   }
+  billingFailures.delete(baseURL)
 }
 
 export async function POST(req: Request) {
@@ -1249,7 +1263,7 @@ When answering questions, refer to this document content. You can summarize it, 
     const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY && !routeToSaygm
     const result = streamText({
       model: routeToSaygm
-        ? saygm.chatModel(saygmModel)
+        ? saygm!.chatModel(saygmModel)
         : usePrimaryEngy
           ? engy.chatModel(selectedEngyModel)
           : codeMode ? chutes.chatModel(selectedModel) : gateway(chutesDefault),
