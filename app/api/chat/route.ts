@@ -735,7 +735,6 @@ export async function POST(req: Request) {
     }
     // Default to the benchmark winner rather than glm-5.2: 77/77 vs a failed
     // task, faster, and far cheaper. glm-5.2 stays available by explicit pick.
-    const engyModel = (model && engyModelOptions[model]) || 'qwen3.8-27b'
 
     // Chutes defaults. Quick stays on Qwen 3.5-397B here on purpose: Qwen
     // 3.8-27B wins the benchmark on Engy but is 2.9x SLOWER on Chutes (2348s vs
@@ -1242,7 +1241,13 @@ When answering questions, refer to this document content. You can summarize it, 
         targonApiKey: targonApiKey ?? null,
         targonModel,
         engyApiKey: engyApiKey ?? null,
-        engyModel,
+        // The failover must reach the SAME model the primary Engy path would
+        // have used. A stale separate default here ('qwen3.8-27b', left over
+        // from when Engy was a third-tier fallback) meant that whenever SayGM
+        // was down, chat silently ran on Qwen 3.8-27B - the model that scored
+        // 0/3 on the honesty checks - while analytics and everyone reading the
+        // code believed it was GLM 5.3.
+        engyModel: selectedEngyModel,
         // When SayGM served the primary attempt, Engy has not been tried yet.
         // Reporting it as "used" made the failover skip Engy and send chat to
         // Kimi K2.6 on Chutes with no deliberation cap - the slow, spiralling
