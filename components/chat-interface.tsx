@@ -1574,6 +1574,12 @@ export default function ChatInterface() {
         {/* Primary navigation — moved from the top header. Minimal, lowercase,
             uniform-muted rows with a single gold accent, saygm-style. */}
         <nav className="px-3 pb-3 space-y-0.5">
+          <Link href="/" onClick={() => setSidebarOpen(false)}>
+            <span className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[0.9rem] font-medium text-[oklch(0.88_0.018_258)] hover:bg-sidebar-accent hover:text-[var(--gold)] transition-colors">
+              <Bot className="w-5 h-5 flex-shrink-0" />
+              assistant
+            </span>
+          </Link>
           {user && (
             <button
               onClick={() => {
