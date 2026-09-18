@@ -892,6 +892,9 @@ export async function POST(req: Request) {
         })
       : null
 
+    // Filled in just before streamText so the James fetch wrapper can log the
+    // request with the cell James actually chose (from its x-james-route header).
+    const jamesTrack: { lastMessage?: string; location?: { country?: string; city?: string; region?: string } } = {}
     const james = useJamesChat
       ? createOpenAICompatible({
           name: 'james',
@@ -908,7 +911,19 @@ export async function POST(req: Request) {
                 init = { ...init, body: JSON.stringify(body) }
               } catch { /* leave the body alone */ }
             }
-            return fetch(url, init)
+            const res = await fetch(url, init)
+            // Every James-served request lands in analytics with the underlying
+            // provider and model James picked, e.g. "james/engy/glm-5.2".
+            let served = `james/${jamesModel}`
+            let usedSearch = false
+            try {
+              const r = JSON.parse(res.headers.get('x-james-route') || 'null')
+              if (r?.provider && r?.model) served = `james/${r.provider}/${r.model}`
+              else if (r?.harness) served = `james/${r.harness}`
+              usedSearch = /search/.test(r?.harness || '')
+            } catch { /* header absent: keep the generic label */ }
+            trackAnalyticsEvent('chat_query', jamesTrack.lastMessage ?? '', served, 0.002, jamesTrack.location, usedSearch)
+            return res
           },
         })
       : null
@@ -1351,6 +1366,7 @@ When answering questions, refer to this document content. You can summarize it, 
     // which is what left "what should TAO be valued at" answered from stale
     // weights. stepCountIs caps the loop so it cannot search forever.
     const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY && !routeToSaygm && !routeToJames
+    jamesTrack.lastMessage = lastMessage; jamesTrack.location = location
     const result = streamText({
       model: routeToJames
         ? james!.chatModel(jamesModel)
@@ -1368,7 +1384,8 @@ When answering questions, refer to this document content. You can summarize it, 
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, routeToJames ? `james/${jamesModel}` : routeToSaygm ? `saygm/${saygmModel}` : usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
+    // James requests are tracked inside its fetch wrapper (with the cell it chose).
+    if (!routeToJames) trackAnalyticsEvent('chat_query', lastMessage, routeToSaygm ? `saygm/${saygmModel}` : usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
