@@ -747,7 +747,11 @@ export async function POST(req: Request) {
     // must not mention a web_search tool when James serves the request: James has
     // no tools and does its own search grounding, and a model told to "call
     // web_search" with no tool writes the call as text.
-    const routeToJames = useJamesChat && !codeMode && !hasImageAttachment
+    // New code builds go to James too when JAMES_CODE=1: James plans, writes and verifies
+    // the files and returns BlueTAO's three-file project format. Edits of an existing
+    // project and agent builds stay on the existing path for now.
+    const routeToJamesCode = useJamesChat && process.env.JAMES_CODE === '1' && Boolean(codeMode) && !editingCode && !isNewAgentBuild && !hasImageAttachment
+    const routeToJames = (useJamesChat && !codeMode && !hasImageAttachment) || routeToJamesCode
     // Engy (engy.ai) — verified-inference provider. Primary for code and text
     // chat when INFERENCE_PRIMARY is unset or 'engy'; otherwise a failover step.
     // OpenAI-compatible endpoint; same integration as VideoTao.AI.
@@ -906,7 +910,7 @@ export async function POST(req: Request) {
             if (init?.body && typeof init.body === 'string') {
               try {
                 const body = JSON.parse(init.body)
-                body.metadata = { ...(body.metadata || {}), persona_name: 'BlueTAO', session_id: chatId ? `bluetao-${chatId}` : undefined }
+                body.metadata = { ...(body.metadata || {}), persona_name: 'BlueTAO', session_id: chatId ? `bluetao-${chatId}` : undefined, ...(codeMode ? { result_format: 'bluetao_project' } : {}) }
                 delete body.reasoning_effort
                 init = { ...init, body: JSON.stringify(body) }
               } catch { /* leave the body alone */ }
