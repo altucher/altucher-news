@@ -743,6 +743,11 @@ export async function POST(req: Request) {
     const isNewAgentBuild = codeMode && !editingCode && /\b(?:build|create|make|design)\b[\s\S]{0,120}\b(?:agent|assistant|copilot)\b|\b(?:agent|assistant|copilot)\b[\s\S]{0,120}\b(?:build|create|make|design)\b/i.test(requestText)
 
     const hasImageAttachment = messages.some((message) => message.parts?.some((part) => part.type === 'file' && part.mediaType.startsWith('image/')))
+    // Decided here, as soon as its inputs exist, because the system prompt below
+    // must not mention a web_search tool when James serves the request: James has
+    // no tools and does its own search grounding, and a model told to "call
+    // web_search" with no tool writes the call as text.
+    const routeToJames = useJamesChat && !codeMode && !hasImageAttachment
     // Engy (engy.ai) — verified-inference provider. Primary for code and text
     // chat when INFERENCE_PRIMARY is unset or 'engy'; otherwise a failover step.
     // OpenAI-compatible endpoint; same integration as VideoTao.AI.
@@ -977,7 +982,7 @@ export async function POST(req: Request) {
 
     let systemPrompt = `You are BlueTAO, a direct and uncensored AI assistant ${networkLine}. Today's date is ${currentDate}.
 
-SEARCH: when a question depends on current facts - prices, valuations, market data, news, recent events, anything that may have moved since training - call the web_search tool instead of guessing. Do NOT narrate the intention ("let me check current context") and then stop: either call the tool, or answer from what you know while saying plainly which part may be out of date. Never promise a lookup you do not actually perform.
+${routeToJames ? 'SEARCH: current facts (prices, market data, news) are looked up for you before this message when the question needs them; answer from what is provided, and say plainly when a figure may be out of date. Never narrate a lookup you do not perform.' : 'SEARCH: when a question depends on current facts - prices, valuations, market data, news, recent events, anything that may have moved since training - call the web_search tool instead of guessing. Do NOT narrate the intention ("let me check current context") and then stop: either call the tool, or answer from what you know while saying plainly which part may be out of date. Never promise a lookup you do not actually perform.'}
 
 ABOUT YOU:
       - You are powered by ${codeMode && buildQuality === 'best' ? 'Kimi K2.6' : 'Qwen 3.5'}, a large language model running on Bittensor Subnet 64 (Chutes)
@@ -1223,7 +1228,7 @@ ${searchResults}
 
 Respond by organizing these headlines by topic (politics, technology, business, etc.) and presenting them conversationally. Start your response with "Here are today's top stories:" and then list them.`
       }
-    } else if (!codeMode && needsCurrentInfo(lastMessage)) {
+    } else if (!codeMode && !routeToJames && needsCurrentInfo(lastMessage)) {
       // Strip the force search prefix if present
       const cleanQuery = lastMessage.replace('[SEARCH THE WEB FOR RECENT DATA] ', '')
       const searchResults = await searchWeb(cleanQuery)
@@ -1286,7 +1291,6 @@ When answering questions, refer to this document content. You can summarize it, 
     // Text chat goes to SayGM when it is configured. Decided here, before the
     // failover snapshot, because the snapshot has to know which provider really
     // served the primary attempt.
-    const routeToJames = useJamesChat && !codeMode && !hasImageAttachment
     const routeToSaygm = useSaygmChat && !codeMode && !hasImageAttachment && !routeToJames
 
     if (targonApiKey || engyApiKey) {
