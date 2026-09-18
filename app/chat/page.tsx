@@ -1,9 +1,6 @@
-import ChatInterface from '@/components/chat-interface'
+import { redirect } from 'next/navigation'
 
-// The classic BlueTAO chat (code mode, projects, agents). The home page is now
-// the personal assistant.
-export const dynamic = 'force-dynamic'
-
+// The classic chat moved back to the home page; keep old links working.
 export default function ChatPage() {
-  return <ChatInterface />
+  redirect('/')
 }

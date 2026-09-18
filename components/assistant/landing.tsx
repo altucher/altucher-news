@@ -39,7 +39,7 @@ export default function Landing() {
           <span className="font-[family-name:var(--font-playfair)] text-xl">BlueTAO</span>
         </div>
         <nav className="flex items-center gap-4 text-sm">
-          <Link href="/chat" className="text-muted-foreground hover:text-foreground">classic chat</Link>
+          <Link href="/" className="text-muted-foreground hover:text-foreground">classic chat</Link>
           <Link href="/auth/login" className="rounded-full border border-border px-4 py-1.5 hover:bg-secondary">I have an invite</Link>
         </nav>
       </header>
@@ -132,7 +132,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-sm text-muted-foreground">
           <span>BlueTAO · powered by decentralized compute</span>
           <div className="flex gap-4">
-            <Link href="/chat" className="hover:text-foreground">Classic chat</Link>
+            <Link href="/" className="hover:text-foreground">Classic chat</Link>
             <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
             <Link href="/developers" className="hover:text-foreground">Developers</Link>
           </div>

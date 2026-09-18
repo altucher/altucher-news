@@ -251,7 +251,7 @@ export function SetupPanel({ profile, address, emailLive, userEmail, onClose, on
       </section>
 
       <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-border pt-4 text-sm">
-        <Link href="/chat" className="underline hover:text-[var(--gold)]">Classic chat &amp; code</Link>
+        <Link href="/" className="underline hover:text-[var(--gold)]">Classic chat &amp; code</Link>
         <Link href="/pricing" className="underline hover:text-[var(--gold)]">Plans</Link>
         <button onClick={signOut} className="ml-auto flex items-center gap-1 text-muted-foreground hover:text-foreground"><LogOut className="h-4 w-4" /> Sign out</button>
       </div>

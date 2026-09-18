@@ -51,7 +51,7 @@ export default function Gate({ email }: { email: string }) {
         <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
           {waitlisted ? <span className="text-muted-foreground">You are on the waitlist.</span> : <button onClick={waitlist} disabled={busy} className="underline hover:text-[var(--gold)]">No code? Join the waitlist</button>}
           <span className="text-border">·</span>
-          <Link href="/chat" className="underline hover:text-[var(--gold)]">Use classic BlueTAO chat</Link>
+          <Link href="/" className="underline hover:text-[var(--gold)]">Use classic BlueTAO chat</Link>
           <span className="text-border">·</span>
           <button onClick={signOut} className="underline hover:text-[var(--gold)]">Sign out</button>
         </div>

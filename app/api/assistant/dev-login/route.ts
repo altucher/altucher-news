@@ -11,5 +11,5 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { error } = await supabase.auth.verifyOtp({ type: 'magiclink', token_hash: tokenHash })
   if (error) return new NextResponse(`Login failed: ${error.message}`, { status: 400 })
-  return NextResponse.redirect(new URL('/', req.url))
+  return NextResponse.redirect(new URL('/assistant', req.url))
 }

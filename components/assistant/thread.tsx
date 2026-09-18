@@ -188,7 +188,7 @@ export default function Thread({ initialProfile, address, emailLive, userEmail }
           <button onClick={() => setPanel('setup')} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm hover:bg-secondary" aria-label="Setup">
             <Settings className="h-4 w-4" /><span className="hidden sm:inline">setup</span>
           </button>
-          <Link href="/chat" className="hidden rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground md:block">classic</Link>
+          <Link href="/" className="hidden rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground md:block">classic</Link>
         </nav>
       </header>
 
