@@ -516,6 +516,26 @@ async function preflightPrimary(baseURL: string, apiKey: string, model: string, 
   billingFailures.delete(baseURL)
 }
 
+// James is probed on /health rather than with a completion: a James request
+// runs its classifier first, so a 16-token probe would cost a full round trip.
+async function preflightJames(baseURL: string, signal: AbortSignal): Promise<void> {
+  const downSince = billingFailures.get(baseURL)
+  if (downSince && Date.now() - downSince < BILLING_COOLDOWN_MS) {
+    throw new Error(`James preflight skipped: ${baseURL} failed recently`)
+  }
+  let res: Response
+  try {
+    res = await fetch(`${baseURL}/health`, { signal: AbortSignal.any([signal, AbortSignal.timeout(6000)]) })
+  } catch {
+    return // slow probe - let the real request decide
+  }
+  if (!res.ok) {
+    billingFailures.set(baseURL, Date.now())
+    throw new Error(`James preflight failed: HTTP ${res.status}`)
+  }
+  billingFailures.delete(baseURL)
+}
+
 /**
  * One Engy client for every path, so the primary and the failover cannot
  * drift. Both deliberation controls live here: the thinking budget, and for
@@ -570,9 +590,10 @@ export async function POST(req: Request) {
     const region = req.headers.get('x-vercel-ip-country-region') || undefined
     const location = { country, city, region }
 
-    const { messages, model, userId, fileContext, customContext, codeMode, buildQuality, editingCode }: { 
+    const { messages, model, userId, fileContext, customContext, codeMode, buildQuality, editingCode, id: chatId }: { 
       messages: UIMessage[]; 
       model?: string; 
+      id?: string; 
       userId?: string;
       fileContext?: { name: string; content: string } | null;
       customContext?: { company: string; context: string } | null;
@@ -669,6 +690,16 @@ export async function POST(req: Request) {
     const saygmBase = process.env.SAYGM_BASE_URL
     const saygmModel = process.env.SAYGM_CHAT_MODEL || 'gpt-6'
     const useSaygmChat = Boolean(saygmKey && saygmBase)
+
+    // James (the router-as-a-model) takes text chat when configured. It picks the
+    // provider and model per request from its own benchmarks, does its own search
+    // grounding, and keeps the BlueTAO persona via metadata.persona_name. Set
+    // JAMES_BASE_URL + JAMES_API_KEY to enable; unset, nothing changes. Code mode
+    // and image chat stay on their existing paths.
+    const jamesKey = process.env.JAMES_API_KEY
+    const jamesBase = (process.env.JAMES_BASE_URL || '').replace(/\/$/, '')
+    const jamesModel = process.env.JAMES_MODEL || 'james'
+    const useJamesChat = Boolean(jamesKey && jamesBase)
 
     const primaryProvider = (process.env.INFERENCE_PRIMARY || 'engy') === 'chutes' ? 'chutes' : 'engy'
     const engyKey = process.env.ENGY_API_KEY
@@ -847,6 +878,27 @@ export async function POST(req: Request) {
             if (init?.body && typeof init.body === 'string') {
               try {
                 const body = JSON.parse(init.body)
+                delete body.reasoning_effort
+                init = { ...init, body: JSON.stringify(body) }
+              } catch { /* leave the body alone */ }
+            }
+            return fetch(url, init)
+          },
+        })
+      : null
+
+    const james = useJamesChat
+      ? createOpenAICompatible({
+          name: 'james',
+          baseURL: `${jamesBase}/v1`,
+          headers: { 'Authorization': `Bearer ${jamesKey}` },
+          // James reads metadata for the persona and a stable session id; the SDK
+          // has no field for it, so it rides along in the body.
+          fetch: async (url, init) => {
+            if (init?.body && typeof init.body === 'string') {
+              try {
+                const body = JSON.parse(init.body)
+                body.metadata = { ...(body.metadata || {}), persona_name: 'BlueTAO', session_id: chatId ? `bluetao-${chatId}` : undefined }
                 delete body.reasoning_effort
                 init = { ...init, body: JSON.stringify(body) }
               } catch { /* leave the body alone */ }
@@ -1234,7 +1286,8 @@ When answering questions, refer to this document content. You can summarize it, 
     // Text chat goes to SayGM when it is configured. Decided here, before the
     // failover snapshot, because the snapshot has to know which provider really
     // served the primary attempt.
-    const routeToSaygm = useSaygmChat && !codeMode && !hasImageAttachment
+    const routeToJames = useJamesChat && !codeMode && !hasImageAttachment
+    const routeToSaygm = useSaygmChat && !codeMode && !hasImageAttachment && !routeToJames
 
     if (targonApiKey || engyApiKey) {
       failover = {
@@ -1252,7 +1305,7 @@ When answering questions, refer to this document content. You can summarize it, 
         // Reporting it as "used" made the failover skip Engy and send chat to
         // Kimi K2.6 on Chutes with no deliberation cap - the slow, spiralling
         // path users hit whenever SayGM was down.
-        usedEngyPrimary: usePrimaryEngy && !routeToSaygm,
+        usedEngyPrimary: usePrimaryEngy && !routeToSaygm && !routeToJames,
         chutesApiKey: apiKey ?? null,
         chutesModel: codeMode ? selectedModel : 'moonshotai/Kimi-K2.6-TEE',
         systemPrompt,
@@ -1275,7 +1328,9 @@ When answering questions, refer to this document content. You can summarize it, 
     // 2026-08-25 code outage. Image chat still goes to the Gateway, which
     // surfaces its own errors before streaming, so it is left alone.
     if (!hasImageAttachment && (failover?.engyApiKey || failover?.targonApiKey || apiKey)) {
-      await (saygm && !codeMode
+      await (routeToJames
+        ? preflightJames(jamesBase, req.signal)
+        : saygm && !codeMode
         ? preflightPrimary(saygmBase!.replace(/\/$/, ''), saygmKey ?? '', saygmModel, req.signal)
         : usePrimaryEngy
         ? preflightPrimary('https://api.engy.ai/v1', engyKey ?? '', selectedEngyModel, req.signal)
@@ -1291,9 +1346,11 @@ When answering questions, refer to this document content. You can summarize it, 
     // results for obvious cases - the tool covers everything the patterns miss,
     // which is what left "what should TAO be valued at" answered from stale
     // weights. stepCountIs caps the loop so it cannot search forever.
-    const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY && !routeToSaygm
+    const useSearchTool = !codeMode && !hasImageAttachment && !!process.env.DESEARCH_API_KEY && !routeToSaygm && !routeToJames
     const result = streamText({
-      model: routeToSaygm
+      model: routeToJames
+        ? james!.chatModel(jamesModel)
+        : routeToSaygm
         ? saygm!.chatModel(saygmModel)
         : usePrimaryEngy
           ? engy.chatModel(selectedEngyModel)
@@ -1307,7 +1364,7 @@ When answering questions, refer to this document content. You can summarize it, 
     })
 
     // Track the chat query event (async, don't wait)
-    trackAnalyticsEvent('chat_query', lastMessage, routeToSaygm ? `saygm/${saygmModel}` : usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
+    trackAnalyticsEvent('chat_query', lastMessage, routeToJames ? `james/${jamesModel}` : routeToSaygm ? `saygm/${saygmModel}` : usePrimaryEngy ? `engy/${selectedEngyModel}` : selectedModel, 0.002, location, usedDesearch)
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
