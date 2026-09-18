@@ -620,7 +620,7 @@ export default function ChatInterface() {
         )
       } else {
         phases.push(
-          { status: `Processing with ${codeMode ? 'Kimi K3' : 'GLM 5.3'}...`, details: [codeMode ? 'Running inference on Engy' : 'Running inference on Engy', 'Pulling the relevant knowledge'] },
+          { status: codeMode ? 'Processing with Kimi K3...' : 'Routing through James...', details: [codeMode ? 'Running inference on Engy' : 'James picks the best model for this request', 'Pulling the relevant knowledge'] },
           { status: 'Cross-referencing...', details: ['Connecting the related ideas', 'Checking it holds together'] },
         )
       }
