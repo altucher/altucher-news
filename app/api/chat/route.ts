@@ -748,9 +748,20 @@ export async function POST(req: Request) {
     // no tools and does its own search grounding, and a model told to "call
     // web_search" with no tool writes the call as text.
     // New code builds go to James too when JAMES_CODE=1: James plans, writes and verifies
-    // the files and returns BlueTAO's three-file project format. Edits of an existing
-    // project and agent builds stay on the existing path for now.
-    const routeToJamesCode = useJamesChat && process.env.JAMES_CODE === '1' && Boolean(codeMode) && !editingCode && !isNewAgentBuild && !hasImageAttachment
+    // the files and returns BlueTAO's three-file project format. JAMES_SWE=1 widens
+    // that to the software-engineering work on top: edits of an existing project
+    // (James returns a bluetao-patch) and agent builds (project plus the
+    // bluetao-agent manifest). The task kind rides to James in metadata.result_format
+    // so its SWE harness knows which format is expected. Image attachments stay on
+    // the existing path: James takes text only.
+    const jamesCodeTask: 'build' | 'edit' | 'agent' | null = !codeMode
+      ? null
+      : editingCode && editingCode.trim().length > 0 ? 'edit'
+      : isNewAgentBuild ? 'agent'
+      : 'build'
+    const jamesSwe = process.env.JAMES_SWE === '1'
+    const jamesCode = jamesSwe || process.env.JAMES_CODE === '1'
+    const routeToJamesCode = useJamesChat && jamesCode && jamesCodeTask !== null && !hasImageAttachment && (jamesSwe || jamesCodeTask === 'build')
     const routeToJames = (useJamesChat && !codeMode && !hasImageAttachment) || routeToJamesCode
     // Engy (engy.ai) — verified-inference provider. Primary for code and text
     // chat when INFERENCE_PRIMARY is unset or 'engy'; otherwise a failover step.
@@ -910,7 +921,8 @@ export async function POST(req: Request) {
             if (init?.body && typeof init.body === 'string') {
               try {
                 const body = JSON.parse(init.body)
-                body.metadata = { ...(body.metadata || {}), persona_name: 'BlueTAO', session_id: chatId ? `bluetao-${chatId}` : undefined, ...(codeMode ? { result_format: 'bluetao_project' } : {}) }
+                const resultFormat = jamesCodeTask === 'edit' ? 'bluetao_patch' : jamesCodeTask === 'agent' ? 'bluetao_agent' : jamesCodeTask === 'build' ? 'bluetao_project' : undefined
+                body.metadata = { ...(body.metadata || {}), persona_name: 'BlueTAO', session_id: chatId ? `bluetao-${chatId}` : undefined, ...(resultFormat ? { result_format: resultFormat, task: jamesCodeTask } : {}) }
                 delete body.reasoning_effort
                 init = { ...init, body: JSON.stringify(body) }
               } catch { /* leave the body alone */ }
