@@ -15,7 +15,7 @@ labels, you get back the label that fits and how sure the model is. There is no
 API key and no account, so the example below works the moment you paste it.
 
 A clone of classifier.dev (github.com/mrmps/classifier-dev), answered by
-Claude Fable 5.1.
+Kimi K3 on Engy.
 
 
 USAGE
@@ -36,12 +36,12 @@ EXAMPLES
     "labels": ["bug", "feature", "praise"]
   }'
   {
-    "tier": "fast", "model": "claude-fable-5-1",
-    "modelsUsed": ["claude-fable-5-1"],
+    "tier": "fast", "model": "engy/kimi-k3",
+    "modelsUsed": ["engy/kimi-k3"],
     "results": [{
       "label": "bug", "confidence": 0.9987,
       "scores": {"bug": 0.9987, "feature": 0.0011, "praise": 0.0002},
-      "ms": 1200, "model": "claude-fable-5-1"
+      "ms": 1200, "model": "engy/kimi-k3"
     }],
     "usage": {"classifications": 1, "escalated": 0, "ms": 1200}
   }
@@ -89,8 +89,8 @@ PARAMETERS
 
 CONFIDENCE
 
-  Every answer is structured output from Claude Fable 5.1: the label, and a
-  probability for every label, normalised to sum to one. The confidence is
+  Every answer is a JSON object from Kimi K3: the label, and a probability
+  for every label, normalised to sum to one. The confidence is
   the probability the model put on the label it chose. It is the model's own
   stated calibration rather than a measured logprob, so treat it as a strong
   ordering signal and set thresholds against your own data.
@@ -139,15 +139,15 @@ MULTI-LABEL
 
 TIERS
 
-  fast     Claude Fable 5.1 at low effort: one round trip, about a second.
+  fast     Kimi K3 with thinking off: one round trip, a second or two.
 
-  smart    The same model at high effort, so it reasons longer over every
-           input before answering. A few seconds per item. Multi-label
-           answers ignore the tier.
+  smart    The same model with a reasoning budget, so it thinks before it
+           answers. A few seconds per item. Multi-label answers ignore the
+           tier.
 
-  Both tiers answer from claude-fable-5-1. If a request to it fails, or no
-  Anthropic key is configured, a chain of OpenAI-compatible providers answers
-  instead (OpenRouter when a key is set, then Chutes, Targon and Engy); on
+  Both tiers answer from engy/kimi-k3. If a request to it fails, or no Engy
+  key is configured, a chain of OpenAI-compatible providers answers instead
+  (OpenRouter when a key is set, then Chutes, Targon and Engy GLM); on
   that chain the smart tier re-asks answers below 0.7 confidence of a
   reasoning model and marks them escalated: true. JSON responses always
   report which model actually answered.
@@ -181,8 +181,8 @@ ERRORS
         empty_label, duplicate_labels, empty_input, input_too_long, bad_tier
   404   not_found
   429   rate_limit_minute, rate_limit_day, with Retry-After
-  502   refused when the model declined the input, chain_exhausted or timeout
-        when every provider failed; upstream_other. Retry with backoff.
+  502   chain_exhausted or timeout when every provider failed; upstream_other.
+        Retry with backoff.
   503   no_provider when no inference key is configured on the server.
 
 
@@ -192,7 +192,7 @@ SOURCE
   https://github.com/mrmps/classifier-dev
   The original answers from a calibrated decision model and runs as a single
   Cloudflare Worker with a CLI and an MCP server; this clone keeps its HTTP
-  surface and answers from Claude Fable 5.1.
+  surface and answers from Kimi K3 on Engy.
 `
 
 export const isHeading = (l: string) => /^[A-Z][A-Z0-9 ,/()'-]{2,}$/.test(l) && l.trim() === l

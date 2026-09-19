@@ -6,15 +6,15 @@
  * to a chain of language models on OpenRouter. This port keeps the whole API
  * surface, the validation and the response shapes.
  *
- * Inference is Claude Fable 5.1 (see fable.ts) when ANTHROPIC_API_KEY is set:
- * structured output with a probability per label. When it is not set, or a
- * request to it fails, the OpenAI-compatible chain below answers instead:
- * OpenRouter when a key is set (the original's own chain), then Chutes,
- * Targon and Engy. That chain asks for one letter with logprobs so its score
- * over the letters is a real distribution; a provider that returns no
- * logprobs still answers, with confidence and scores null.
+ * Inference is Kimi K3 on Engy (see engy.ts) when ENGY_API_KEY is set: a
+ * JSON answer with a probability per label. When it is not set, or a request
+ * to it fails, the OpenAI-compatible chain below answers instead: OpenRouter
+ * when a key is set (the original's own chain), then Chutes, Targon and Engy
+ * GLM. That chain asks for one letter with logprobs so its score over the
+ * letters is a real distribution; a provider that returns no logprobs still
+ * answers, with confidence and scores null.
  */
-import { fableClassify, fableConfigured } from './fable'
+import { engyClassify, engyConfigured } from './engy'
 
 export const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 export const MAX_INPUTS = 1000
@@ -57,7 +57,6 @@ export type ErrorCode =
   | 'rate_limit_day'
   | 'no_provider'
   | 'chain_exhausted'
-  | 'refused'
   | 'timeout'
   | 'upstream_other'
 
@@ -514,14 +513,14 @@ export async function classifyMany(
   multi?: MultiOpts,
 ): Promise<{ results: Result[]; escalationFailed: number }> {
   const c = chains()
-  const fable = fableConfigured()
-  if (!fable && !c.fast.length) throw new Error('no provider configured')
+  const primary = engyConfigured()
+  if (!primary && !c.fast.length) throw new Error('no provider configured')
   // Single-label past 26 labels has no letter to ride on: run the multi prompt
   // and keep its top pick, so the response shape the caller asked for holds.
   const asMulti = multi ?? (labels.length > MAX_LABELS_SINGLE ? { max: 1 } : undefined)
   const out: Result[] = new Array(inputs.length)
   // Which results the fallback chain answered; only those can be escalated,
-  // since a Fable answer on the smart tier was already asked at high effort.
+  // since a K3 answer on the smart tier was already asked with reasoning on.
   const fromChain = new Set<number>()
   let next = 0
   await Promise.all(
@@ -529,11 +528,11 @@ export async function classifyMany(
       while (next < inputs.length) {
         const i = next++
         let r: Result | null = null
-        if (fable) {
+        if (primary) {
           try {
-            r = await fableClassify(inputs[i], labels, tier, instructions, multi)
+            r = await engyClassify(inputs[i], labels, tier, instructions, multi)
           } catch (e) {
-            console.warn(`[classifier] fable failed: ${(e as Error).message}`)
+            console.warn(`[classifier] kimi-k3 failed: ${(e as Error).message}`)
             if (!c.fast.length) throw e
           }
         }
@@ -556,7 +555,6 @@ export async function classifyMany(
 export function upstreamReason(msg: string): ErrorCode {
   const m = msg.toLowerCase()
   if (m.includes('no provider configured')) return 'no_provider'
-  if (m.includes('refusal')) return 'refused'
   if (m.includes('all models failed')) return 'chain_exhausted'
   if (m.includes('timeout') || m.includes('timed out')) return 'timeout'
   return 'upstream_other'
