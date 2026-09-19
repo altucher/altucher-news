@@ -212,7 +212,7 @@ export function chains(): { fast: ModelCfg[]; multi: ModelCfg[]; smart: ModelCfg
       apiKey: openrouter,
       reasoning,
       maxTokens,
-      headers: { 'x-title': 'hex' },
+      headers: { 'x-title': 'jex' },
       extra: reasoning ? { reasoning: { effort: 'low' } } : { reasoning: { enabled: false } },
     })
     // The same models the original benchmarked for each chain.

@@ -1,20 +1,20 @@
 /**
- * The documentation, as plain text with UPPERCASE headings. `curl /api/hex`
- * prints it as-is; the /hex page renders the same document, so the two
+ * The documentation, as plain text with UPPERCASE headings. `curl /api/jex`
+ * prints it as-is; the /jex page renders the same document, so the two
  * cannot drift. Adapted from classifier.dev's own docs to this site's routes
  * and to what this port measures rather than what the original did.
  */
 import { MAX_INPUTS_PER_REQUEST, MAX_LABELS, MAX_CHARS, TIERS } from './core'
 
-export const API_PATH = '/api/hex'
+export const API_PATH = '/api/jex'
 
-export const docs = (origin: string) => `hex
+export const docs = (origin: string) => `jex
 
 Zero-shot text classification over plain HTTP. You send text and a list of
 labels, you get back the label that fits and how sure the model is. There is no
 API key and no account, so the example below works the moment you paste it.
 
-hex is a clone of classifier.dev (github.com/mrmps/classifier-dev), answered
+jex is a clone of classifier.dev (github.com/mrmps/classifier-dev), answered
 by Kimi K3 on Engy.
 
 

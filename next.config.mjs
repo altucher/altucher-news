@@ -11,11 +11,14 @@ const nextConfig = {
   experimental: {
     nodeMiddleware: true,
   },
-  // hex, the classifier, first shipped at /classify; the old paths still work.
+  // jex, the classifier, first shipped at /classify and then /hex; the old
+  // paths still work.
   async redirects() {
     return [
-      { source: '/classify', destination: '/hex', permanent: true },
-      { source: '/api/classify/:path*', destination: '/api/hex/:path*', permanent: true },
+      { source: '/classify', destination: '/jex', permanent: true },
+      { source: '/hex', destination: '/jex', permanent: true },
+      { source: '/api/classify/:path*', destination: '/api/jex/:path*', permanent: true },
+      { source: '/api/hex/:path*', destination: '/api/jex/:path*', permanent: true },
     ]
   },
 }
