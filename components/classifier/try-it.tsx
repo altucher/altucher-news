@@ -13,7 +13,7 @@ type Single = {
   model: string
   tier: string
 }
-type Multi = { labels: string[]; scores: null; ms: number; model: string; tier: string }
+type Multi = { labels: string[]; scores: Record<string, number> | null; unscored?: string; ms: number; model: string; tier: string }
 type Answer = Single | Multi
 type Failure = { error: string; code: string; try?: string }
 
@@ -157,8 +157,26 @@ export function TryIt() {
       {answer && 'labels' in answer && (
         <div className="result">
           <div className="big">{answer.labels.length ? answer.labels.join(', ') : <span className="dim">none</span>}</div>
+          {ranked && (
+            <div className="scroll">
+              <table className="scores">
+                <tbody>
+                  {ranked.map(([l, v]) => (
+                    <tr key={l} className={answer.labels.includes(l) ? 'best' : undefined}>
+                      <td>{l}</td>
+                      <td className="num">{v.toFixed(4)}</td>
+                      <td className="bar">
+                        <span style={{ width: `${Math.max(1, v * 100)}%` }} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <p className="dim">
-            {answer.ms}ms · {answer.model}
+            {answer.unscored ? `unscored: ${answer.unscored} · ` : ''}
+            {answer.tier} · {answer.ms}ms · {answer.model}
           </p>
         </div>
       )}
@@ -188,7 +206,7 @@ export function TryIt() {
           )}
           <p className="dim">
             {answer.unscored ? `unscored: ${answer.unscored} · ` : ''}
-            {answer.confidence === null && !answer.unscored ? 'no logprobs from this provider, so no score · ' : ''}
+            {answer.confidence === null && !answer.unscored ? 'this provider returned no scores · ' : ''}
             {answer.escalated ? 'escalated to the reasoning model · ' : ''}
             {answer.tier} · {answer.ms}ms · {answer.model}
           </p>

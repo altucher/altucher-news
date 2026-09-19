@@ -14,8 +14,8 @@ Zero-shot text classification over plain HTTP. You send text and a list of
 labels, you get back the label that fits and how sure the model is. There is no
 API key and no account, so the example below works the moment you paste it.
 
-A clone of classifier.dev (github.com/mrmps/classifier-dev), answering from the
-same decentralized inference this site runs on.
+A clone of classifier.dev (github.com/mrmps/classifier-dev), answered by
+Claude Fable 5.1.
 
 
 USAGE
@@ -36,14 +36,14 @@ EXAMPLES
     "labels": ["bug", "feature", "praise"]
   }'
   {
-    "tier": "fast", "model": "chutes/Qwen/Qwen3.8-27B-TEE",
-    "modelsUsed": ["chutes/Qwen/Qwen3.8-27B-TEE"],
+    "tier": "fast", "model": "claude-fable-5-1",
+    "modelsUsed": ["claude-fable-5-1"],
     "results": [{
       "label": "bug", "confidence": 0.9987,
       "scores": {"bug": 0.9987, "feature": 0.0011, "praise": 0.0002},
-      "ms": 410, "model": "chutes/Qwen/Qwen3.8-27B-TEE"
+      "ms": 1200, "model": "claude-fable-5-1"
     }],
-    "usage": {"classifications": 1, "escalated": 0, "ms": 410}
+    "usage": {"classifications": 1, "escalated": 0, "ms": 1200}
   }
 
   curl "${origin}${API_PATH}/entailment,neutral,contradiction/Only+12+of+40+sites+were+inspected.+Every+site+was+inspected."
@@ -89,13 +89,14 @@ PARAMETERS
 
 CONFIDENCE
 
-  A single-label answer is one letter, asked with logprobs. The scores are the
-  probability the model put on each letter, normalised over your labels, so
-  the confidence is the model's own odds that the label is right rather than
-  a number it was asked to make up.
+  Every answer is structured output from Claude Fable 5.1: the label, and a
+  probability for every label, normalised to sum to one. The confidence is
+  the probability the model put on the label it chose. It is the model's own
+  stated calibration rather than a measured logprob, so treat it as a strong
+  ordering signal and set thresholds against your own data.
 
-  Use it. Act on high-confidence answers, and route the rest to a person, a
-  reasoning model, or the smart tier, which does exactly that for you.
+  Use it. Act on high-confidence answers, and route the rest to a person or
+  to the smart tier, which spends more reasoning on every answer.
 
   Three things confidence does not measure.
 
@@ -110,8 +111,8 @@ CONFIDENCE
   "asdkjfhaskdjfh" still lands somewhere, so the label ships with confidence
   and scores null and an unscored field explaining why.
 
-  It is withheld when the provider that answered returned no logprobs. The
-  label is still the model's answer; confidence and scores are null rather
+  It is withheld when a fallback provider answered without logprobs. The
+  label is still that model's answer; confidence and scores are null rather
   than invented, and the model field says which provider it was.
 
 
@@ -126,36 +127,30 @@ MULTI-LABEL
     }'
     {"results": [{
       "labels": ["databases", "serverless", "rust", "caching", ...],
-      "scores": null
+      "scores": {"databases": 0.98, "serverless": 0.95, ..., "gaming": 0.01}
     }]}
 
   On GET, add ?multi=1 and the labels come back one per line.
 
-  Labels are judged in groups of twelve so no one call has to weigh fifty
-  categories, and the survivors are judged once more against each other to
-  get precision back. max_labels keeps the top N.
+  Every label is judged independently as a yes/no probability, and the answer
+  lists those at or above 0.7, most likely first. The full score map is
+  returned so you can set your own threshold. max_labels keeps the top N.
 
 
 TIERS
 
-  fast     Every answer comes from the first provider in the chain that
-           answers, in one round trip.
+  fast     Claude Fable 5.1 at low effort: one round trip, about a second.
 
-  smart    Same first pass, then every single-label answer below 0.7
-           confidence, or with no confidence at all, is re-asked of a
-           reasoning model and replaced. Those results carry escalated: true
-           and the reasoning model's name; the confidence and scores shown
-           are still the first pass's, since they are why it was escalated.
-           usage.escalated counts them. A few seconds per escalated item.
-           If the reasoning model cannot be reached, the fast answer stands
-           without escalated, and usage.escalation_failed says how many.
+  smart    The same model at high effort, so it reasons longer over every
+           input before answering. A few seconds per item. Multi-label
+           answers ignore the tier.
 
-           Multi-label answers ignore the tier.
-
-  The models are a chain across providers: OpenRouter when a key is set (the
-  models classifier.dev itself benchmarked), then Chutes, Targon and Engy,
-  which is what serves the rest of this site. JSON responses always report
-  which model actually answered.
+  Both tiers answer from claude-fable-5-1. If a request to it fails, or no
+  Anthropic key is configured, a chain of OpenAI-compatible providers answers
+  instead (OpenRouter when a key is set, then Chutes, Targon and Engy); on
+  that chain the smart tier re-asks answers below 0.7 confidence of a
+  reasoning model and marks them escalated: true. JSON responses always
+  report which model actually answered.
 
 
 LIMITS
@@ -186,8 +181,8 @@ ERRORS
         empty_label, duplicate_labels, empty_input, input_too_long, bad_tier
   404   not_found
   429   rate_limit_minute, rate_limit_day, with Retry-After
-  502   chain_exhausted or timeout when every provider failed; upstream_other.
-        Retry with backoff.
+  502   refused when the model declined the input, chain_exhausted or timeout
+        when every provider failed; upstream_other. Retry with backoff.
   503   no_provider when no inference key is configured on the server.
 
 
@@ -197,7 +192,7 @@ SOURCE
   https://github.com/mrmps/classifier-dev
   The original answers from a calibrated decision model and runs as a single
   Cloudflare Worker with a CLI and an MCP server; this clone keeps its HTTP
-  surface and answers from this site's own inference providers.
+  surface and answers from Claude Fable 5.1.
 `
 
 export const isHeading = (l: string) => /^[A-Z][A-Z0-9 ,/()'-]{2,}$/.test(l) && l.trim() === l
