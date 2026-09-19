@@ -16,3 +16,7 @@ node_modules
 .vercel
 /.swc
 .env*
+
+# jex benchmark caches: fetched datasets and raw per-item results
+scripts/bench-data/
+scripts/bench-results/
