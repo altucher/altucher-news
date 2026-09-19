@@ -44,7 +44,7 @@ export function TryIt() {
 
   const list = labels.split(',').map((l) => l.trim()).filter(Boolean)
   const seg = (s: string) => encodeURIComponent(s).replace(/%20/g, '+')
-  const path = `/api/classify/${list.map(seg).join(',')}/${seg(text.trim())}`
+  const path = `/api/hex/${list.map(seg).join(',')}/${seg(text.trim())}`
   const query = [tier === 'smart' ? 'tier=smart' : '', multi ? 'multi=1' : ''].filter(Boolean).join('&')
   const url = `${path}${query ? `?${query}` : ''}`
   const curl = `curl "${origin}${url}"`

@@ -5,14 +5,14 @@ import { TryIt } from '@/components/classifier/try-it'
 import { Doc } from '@/components/classifier/doc'
 
 export const metadata: Metadata = {
-  title: 'classifier',
+  title: 'hex',
   description: 'Zero-shot text classification over plain HTTP. No API key, no account.',
 }
 
 export const dynamic = 'force-dynamic'
 
 /**
- * The site, for browsers: the same plain-text document `curl /api/classify`
+ * The site, for browsers: the same plain-text document `curl /api/hex`
  * prints, rendered as markdown in a terminal, with a form at the top that
  * calls the API from the page. Nothing is duplicated: the text below is
  * generated from the same source at request time.
@@ -42,10 +42,10 @@ export default async function ClassifyPage() {
               </p>
             ))}
             <nav className="row" aria-label="Pages">
-              <a className="b on" href="/classify">
+              <a className="b on" href="/hex">
                 <span className="br">[</span>docs<span className="br">]</span>
               </a>
-              <a className="b" href="/api/classify">
+              <a className="b" href="/api/hex">
                 <span className="br">[</span>plain text<span className="br">]</span>
               </a>
               <a className="b" href="https://github.com/mrmps/classifier-dev" rel="noreferrer">
@@ -67,9 +67,9 @@ export default async function ClassifyPage() {
 
           <footer className="foot">
             <p>
-              A clone of classifier.dev. The plain-text document at{' '}
-              <a className="inline" href="/api/classify">
-                {origin}/api/classify
+              hex is a clone of classifier.dev. The plain-text document at{' '}
+              <a className="inline" href="/api/hex">
+                {origin}/api/hex
               </a>{' '}
               is the canonical one; this page is rendered from it.
             </p>

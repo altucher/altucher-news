@@ -1,10 +1,10 @@
 /**
- * The classifier API, after classifier.dev:
+ * hex, the classifier API, after classifier.dev:
  *
- *   GET  /api/classify                          the docs, plain text
- *   GET  /api/classify/{labels}/{text}          one classification, bare label
- *   GET  /api/classify?labels=a,b&text=...      the same, query form
- *   POST /api/classify                          JSON in, JSON out, batches
+ *   GET  /api/hex                          the docs, plain text
+ *   GET  /api/hex/{labels}/{text}          one classification, bare label
+ *   GET  /api/hex?labels=a,b&text=...      the same, query form
+ *   POST /api/hex                          JSON in, JSON out, batches
  *
  * Both GET forms answer a bare label unless ?verbose=1 or Accept: application/json.
  */
@@ -93,11 +93,11 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path?: string[]
   const accept = req.headers.get('accept') ?? ''
   let wantJson = req.method === 'POST' || /\bapplication\/json\b/.test(accept)
 
-  // The raw, still percent-encoded path after /api/classify, so a %2C inside
+  // The raw, still percent-encoded path after /api/hex, so a %2C inside
   // a label survives. Next has already decoded ctx.params, which is why the
   // pathname is read instead.
   const { path: segments } = await ctx.params
-  const rawPath = segments?.length ? url.pathname.replace(/^\/api\/classify\/?/, '') : ''
+  const rawPath = segments?.length ? url.pathname.replace(/^\/api\/hex\/?/, '') : ''
 
   let getReq: GetRequest | undefined
   let inputs: string[] = []
@@ -145,7 +145,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path?: string[]
   } else {
     getReq = readGet(rawPath, url)
     if (getReq.nothing) {
-      // Bare GET /api/classify: the documentation, exactly as the page shows it.
+      // Bare GET /api/hex: the documentation, exactly as the page shows it.
       if (!rawPath) return text(docs(origin), 200, { 'cache-control': 'public, max-age=300' })
       return fail(`Not found. The API is POST ${base}, GET ${base}/{labels}/{text} or GET ${base}?labels=a,b&text=...`, 404, 'not_found')
     }
