@@ -53,6 +53,34 @@ function replaceHtmlDocument(text: string, originalHtml: string, reviewedHtml: s
 
 // Lightweight hover tooltip. Wrapping span catches the hover so the label
 // still appears even when the wrapped button is disabled.
+function MobileMediaMenu({ disabled, busy, onPick }: {
+  disabled: boolean
+  busy: { video: boolean; music: boolean; image: boolean }
+  onPick: (kind: 'video' | 'music' | 'image') => void
+}) {
+  const items: Array<{ kind: 'video' | 'music' | 'image'; label: string; Icon: typeof Film; busy: boolean }> = [
+    { kind: 'video', label: 'Video', Icon: Film, busy: busy.video },
+    { kind: 'music', label: 'Music', Icon: Music, busy: busy.music },
+    { kind: 'image', label: 'Image', Icon: ImageIcon, busy: busy.image },
+  ]
+  return (
+    <div className="sm:hidden mb-2 flex items-center justify-center gap-2">
+      {items.map(({ kind, label, Icon, busy: b }) => (
+        <button
+          key={kind}
+          type="button"
+          disabled={disabled || b}
+          onClick={() => onPick(kind)}
+          className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-foreground disabled:opacity-50"
+        >
+          {b ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function Tip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <span className="relative inline-flex group/tip">
@@ -182,6 +210,9 @@ export default function ChatInterface() {
   // Code mode: routes chat to a coding-optimised system prompt on Engy (Kimi K3),
   // with Chutes (SN64) behind it as failover
   const [codeMode, setCodeMode] = useState(false)
+  // Phones cannot fit five icon buttons in the composer row; the media actions
+  // collapse behind one button that reveals labelled chips above the input.
+  const [mediaMenuOpen, setMediaMenuOpen] = useState(false)
   // Build-mode speed/quality trade-off. Default to Quick: most first attempts
   // are exploratory, and users can opt up to Best Quality when they know what
   // they want (it will then refine their existing build).
@@ -1934,7 +1965,22 @@ export default function ChatInterface() {
    </Button>
   </div>
  )}
- <form onSubmit={handleSubmit} className="relative">
+ {!codeMode && mediaMenuOpen && (
+  <MobileMediaMenu
+    disabled={!input.trim() || isLoading}
+    busy={{ video: generatingVideo, music: generatingMusic, image: generatingImage }}
+    onPick={(kind) => {
+      const prompt = input.trim()
+      if (!prompt) return
+      setInput('')
+      setMediaMenuOpen(false)
+      if (kind === 'video') handleGenerateVideo(prompt)
+      else if (kind === 'music') handleGenerateMusic(prompt)
+      else handleGenerateImage(prompt)
+    }}
+  />
+)}
+<form onSubmit={handleSubmit} className="relative">
   <div className="glass-panel composer-shell relative flex min-h-[58px] items-center rounded-full transition-all">
                       <Button
                         type="button"
@@ -1957,10 +2003,10 @@ export default function ChatInterface() {
                         onKeyDown={handleKeyDown}
                         placeholder={codeMode ? "What would you like to BUILD today?" : uploadedImage ? "Ask about your image..." : uploadedFile ? "Ask about your file..." : "Ask anything privately..."}
                         disabled={isLoading}
-                        className="flex-1 bg-transparent px-4 py-4 text-foreground placeholder:text-[oklch(0.72_0.02_255)] focus:outline-none disabled:opacity-50 text-lg"
+                        className="flex-1 min-w-0 bg-transparent px-4 py-4 text-foreground placeholder:text-[oklch(0.72_0.02_255)] focus:outline-none disabled:opacity-50 text-lg"
                       />
                       {!codeMode && (
-                      <>
+                      <div className="hidden sm:flex items-center">
                       <Tip label="Video">
                         <Button
                           type="button"
@@ -2045,7 +2091,19 @@ export default function ChatInterface() {
                           )}
                         </Button>
                       </Tip>
-                      </>
+                      </div>
+                      )}
+                      {!codeMode && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        aria-label="Create video, music or image"
+                        aria-expanded={mediaMenuOpen}
+                        onClick={(e) => { e.preventDefault(); setMediaMenuOpen((v) => !v) }}
+                        className={cn('sm:hidden mr-1 h-10 w-10 rounded-full transition-all', mediaMenuOpen ? 'bg-primary/20 text-primary' : 'bg-white/[0.04] text-slate-400')}
+                      >
+                        <Sparkles className="w-5 h-5" />
+                      </Button>
                       )}
                       <Tip label={codeMode ? 'Build' : 'Text'}>
                       <Button
@@ -2538,7 +2596,7 @@ export default function ChatInterface() {
         {/* Input Area - Chat Mode */}
                 {(messages.length > 0 || generatedImages.length > 0 || generatingImage || generatedMusic.length > 0 || generatingMusic || generatedVideos.length > 0 || generatingVideo) && (
           <div className="relative z-10 border-t border-border/30 bg-background/80 backdrop-blur-md">
-            <div className="max-w-3xl mx-auto px-4 py-4">
+            <div className="max-w-3xl mx-auto px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {isLoading && (
                 <div role="status" aria-live="polite" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/60">
                   <div className="flex min-w-0 items-center gap-2 text-sky-900 dark:text-sky-100">
@@ -2595,7 +2653,22 @@ export default function ChatInterface() {
                   </button>
                 </div>
               )}
-              <form onSubmit={handleSubmit} className="relative">
+              {!codeMode && mediaMenuOpen && (
+  <MobileMediaMenu
+    disabled={!input.trim() || isLoading}
+    busy={{ video: generatingVideo, music: generatingMusic, image: generatingImage }}
+    onPick={(kind) => {
+      const prompt = input.trim()
+      if (!prompt) return
+      setInput('')
+      setMediaMenuOpen(false)
+      if (kind === 'video') handleGenerateVideo(prompt)
+      else if (kind === 'music') handleGenerateMusic(prompt)
+      else handleGenerateImage(prompt)
+    }}
+  />
+)}
+<form onSubmit={handleSubmit} className="relative">
                 <div className="glass-panel composer-shell relative flex min-h-[58px] items-center rounded-full transition-all">
                   <Button
                     type="button"
@@ -2619,7 +2692,7 @@ export default function ChatInterface() {
                     placeholder={codeMode ? "What would you like to BUILD today?" : uploadedFile ? "Ask about your file..." : "Ask anything..."}
                     disabled={isLoading}
                     rows={1}
-                    className="flex-1 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-[oklch(0.72_0.02_255)] focus:outline-none disabled:opacity-50 max-h-[120px]"
+                    className="flex-1 min-w-0 resize-none bg-transparent px-4 py-3 text-foreground placeholder:text-[oklch(0.72_0.02_255)] focus:outline-none disabled:opacity-50 max-h-[120px]"
                   />
                   {micSupported && (
                     <Button
@@ -2639,7 +2712,7 @@ export default function ChatInterface() {
                     </Button>
                   )}
                   {!codeMode && (
-                  <>
+                  <div className="hidden sm:flex items-center">
                   <Tip label="Video">
                     <Button
                       type="button"
@@ -2724,7 +2797,19 @@ export default function ChatInterface() {
                       )}
                     </Button>
                   </Tip>
-                  </>
+                  </div>
+                  )}
+                  {!codeMode && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    aria-label="Create video, music or image"
+                    aria-expanded={mediaMenuOpen}
+                    onClick={(e) => { e.preventDefault(); setMediaMenuOpen((v) => !v) }}
+                    className={cn('sm:hidden mr-1 h-10 w-10 rounded-full transition-all', mediaMenuOpen ? 'bg-primary/20 text-primary' : 'bg-white/[0.04] text-slate-400')}
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </Button>
                   )}
                   <Tip label={codeMode ? 'Build' : 'Text'}>
                     <Button
@@ -2865,7 +2950,7 @@ function MessageBubble({
       </div>
       <div
         className={cn(
-          'max-w-[80%] space-y-2',
+          'max-w-[88%] sm:max-w-[80%] space-y-2',
           isUser && 'flex flex-col items-end'
         )}
       >

@@ -240,7 +240,7 @@ export default function Thread({ initialProfile, address, emailLive, userEmail }
         </div>
       </main>
 
-      <footer className="border-t border-border/60 bg-background/95 px-3 py-3 backdrop-blur md:px-0">
+      <footer className="border-t border-border/60 bg-background/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:px-0">
         <div className="mx-auto flex max-w-2xl items-end gap-2">
           <button onClick={() => setCalling(true)} className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border hover:bg-secondary" aria-label="Call">
             <Phone className="h-4 w-4" />
@@ -253,7 +253,7 @@ export default function Thread({ initialProfile, address, emailLive, userEmail }
               onKeyDown={onKey}
               rows={1}
               placeholder={`Text ${profile.assistant_name}…`}
-              className="max-h-40 min-h-[1.75rem] flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-snug outline-none placeholder:text-muted-foreground"
+              className="max-h-40 min-h-[1.75rem] flex-1 resize-none bg-transparent py-1.5 text-base sm:text-[15px] leading-snug outline-none placeholder:text-muted-foreground"
               style={{ height: 'auto' }}
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight, 160)}px` }}
             />
@@ -273,7 +273,7 @@ export default function Thread({ initialProfile, address, emailLive, userEmail }
           </button>
         </div>
         <p className="mx-auto mt-1.5 max-w-2xl px-2 text-center text-[11px] text-muted-foreground">
-          {address ? <>Email {profile.assistant_name} at <span className="font-mono">{address}</span>{emailLive ? '' : ' (reserved)'} · </> : null}it keeps working after you close this.
+          {address ? <span className="hidden sm:inline">Email {profile.assistant_name} at <span className="font-mono">{address}</span>{emailLive ? '' : ' (reserved)'} · </span> : null}it keeps working after you close this.
         </p>
       </footer>
 
