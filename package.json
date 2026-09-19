@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "bench:jex": "node scripts/jex-bench.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.119",
