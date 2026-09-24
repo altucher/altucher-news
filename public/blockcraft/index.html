@@ -6,14 +6,22 @@
   <title>BlockCraft</title>
   <meta name="description" content="A Minecraft-style voxel sandbox with a shader-pack renderer, running in your browser on WebGL2." />
   <meta name="theme-color" content="#0b0f17" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4 58 18 32 32 6 18Z' fill='%237fd65a'/%3E%3Cpath d='M6 18 32 32v28L6 46Z' fill='%236d4a2e'/%3E%3Cpath d='M58 18 32 32v28l26-14Z' fill='%23523621'/%3E%3Cpath d='M6 18 32 32l26-14v6L32 38 6 24Z' fill='%2356ad37'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <canvas id="game" tabindex="0"></canvas>
+  <canvas id="game" tabindex="0" aria-label="Game view"></canvas>
   <div id="ui-root"></div>
   <div id="fatal" hidden>
-    <div class="fatal-card"><h1></h1><p></p></div>
+    <div class="fatal-card" role="alert"><h1></h1><p></p></div>
   </div>
+  <noscript>
+    <div class="fatal-screen"><div class="fatal-card"><h1>JavaScript is required</h1><p>BlockCraft runs entirely in your browser. Enable JavaScript and reload the page to play.</p></div></div>
+  </noscript>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
