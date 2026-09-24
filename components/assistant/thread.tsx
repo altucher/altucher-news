@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Send, Mic, Phone, ListChecks, Settings, Mail, ChevronDown, ChevronUp } from 'lucide-react'
+import { Send, Mic, Phone, ListChecks, Settings, Mail, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 import { BlueTaoLogo } from '@/components/animated-background'
 import { useSpeechToText } from '@/hooks/use-voice'
 import CallMode from './call-mode'
@@ -32,6 +32,54 @@ function dayLabel(iso: string): string {
 }
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+// A small "Copy" control under an assistant reply so the text can be pasted
+// straight into a document or notepad. Shows "Copied" for a moment on success.
+function CopyReply({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    const legacyCopy = () => {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    }
+    let ok = false
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        ok = true
+      }
+    } catch {
+      ok = false
+    }
+    if (!ok) {
+      try { ok = legacyCopy() } catch { ok = false }
+    }
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy reply"
+      aria-label={copied ? 'Copied' : 'Copy reply'}
+      className="ml-1 mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+    >
+      {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+      <span>{copied ? 'Copied' : 'Copy'}</span>
+    </button>
+  )
 }
 
 function EmailCard({ m }: { m: Msg }) {
@@ -217,6 +265,7 @@ export default function Thread({ initialProfile, address, emailLive, userEmail }
                       </span>
                     )}
                     <p title={timeLabel(m.created_at)} className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-border bg-card px-4 py-2 text-[15px] leading-snug">{m.content}</p>
+                    {m.content && !m.pending && <CopyReply text={m.content} />}
                   </div>
                 )}
                 {m.role === 'event' && (m.kind === 'email_in' || m.kind === 'email_out') && <div className="my-2"><EmailCard m={m} /></div>}

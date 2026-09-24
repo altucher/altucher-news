@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Music, Film, FolderCode, PartyPopper, Gem, Store } from 'lucide-react'
+import { Send, User, Bot, Loader2, Plus, Newspaper, ExternalLink, Pencil, Lightbulb, Code, Search, Sparkles, Menu, X, MessageSquare, Trash2, LogOut, Zap, ImageIcon, Square, Globe, Paperclip, FileText, Brain, Mic, Volume2, VolumeX, Pickaxe, CloudSun, Check, Copy, Music, Film, FolderCode, PartyPopper, Gem, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -2394,6 +2394,7 @@ export default function ChatInterface() {
                             onSaveCode={user ? handleSaveProject : undefined}
                             saveActive={!!activeProject}
                             projectId={activeProject?.id}
+                            isStreaming={isCurrentlyStreaming}
                           />
                           {message.id === completedBuildMessageIdRef.current && reviewNotice && !isReviewing && (
                             <div role="status" className="mt-2 flex items-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300">
@@ -2910,14 +2911,15 @@ function NewsPanel({ headlines, loading }: { headlines: NewsHeadline[], loading:
   )
 }
 
-function MessageBubble({ 
-  message, 
-  onSpeak, 
-  speakingId, 
+function MessageBubble({
+  message,
+  onSpeak,
+  speakingId,
   ttsLoadingId,
   onSaveCode,
   saveActive,
   projectId,
+  isStreaming,
   }: {
   message: UIMessage
   onSpeak?: (text: string, id: string) => void
@@ -2926,6 +2928,7 @@ function MessageBubble({
   onSaveCode?: (code: string, language: string, publishedUrl?: string) => Promise<void> | void
   saveActive?: boolean
   projectId?: string
+  isStreaming?: boolean
   }) {
   const isUser = message.role === 'user'
   const parts = message.parts || []
@@ -2936,6 +2939,51 @@ function MessageBubble({
     .map((p) => (p as { text?: string }).text || '')
     .join(' ')
     .trim()
+
+  // The response as plain text for the clipboard: text parts joined by blank
+  // lines, with the model's <think> reasoning removed (complete or still open).
+  const copyText = parts
+    .filter((p) => p.type === 'text')
+    .map((p) => (p as { text?: string }).text || '')
+    .join('\n\n')
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/<think>[\s\S]*$/, '')
+    .trim()
+
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async () => {
+    if (!copyText) return
+    // Legacy path for contexts where the async clipboard API is missing or refused
+    // (plain http, embedded browsers): a hidden textarea + execCommand('copy').
+    const legacyCopy = () => {
+      const ta = document.createElement('textarea')
+      ta.value = copyText
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    }
+    let ok = false
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(copyText)
+        ok = true
+      }
+    } catch {
+      ok = false
+    }
+    if (!ok) {
+      try { ok = legacyCopy() } catch { ok = false }
+    }
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    }
+  }
 
   const isSpeaking = speakingId === message.id
   const isTtsLoading = ttsLoadingId === message.id
@@ -3294,21 +3342,41 @@ function MessageBubble({
 
           return null
         })}
-        {!isUser && messageText && onSpeak && (
-          <button
-            onClick={() => onSpeak(messageText, message.id)}
-            title={isSpeaking ? 'Stop' : 'Read aloud'}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-sky-600 transition-colors mt-1 px-1"
-          >
-            {isTtsLoading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : isSpeaking ? (
-              <VolumeX className="w-3.5 h-3.5" />
-            ) : (
-              <Volume2 className="w-3.5 h-3.5" />
+        {!isUser && (copyText || messageText) && (
+          <div className="flex items-center gap-3 mt-1">
+            {copyText && !isStreaming && (
+              <button
+                type="button"
+                onClick={handleCopy}
+                title="Copy response"
+                aria-label={copied ? 'Copied' : 'Copy response'}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-sky-600 transition-colors px-1"
+              >
+                {copied ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
             )}
-            <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
-          </button>
+            {messageText && onSpeak && (
+              <button
+                onClick={() => onSpeak(messageText, message.id)}
+                title={isSpeaking ? 'Stop' : 'Read aloud'}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-sky-600 transition-colors px-1"
+              >
+                {isTtsLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : isSpeaking ? (
+                  <VolumeX className="w-3.5 h-3.5" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5" />
+                )}
+                <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
