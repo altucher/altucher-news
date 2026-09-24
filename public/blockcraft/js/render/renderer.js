@@ -78,20 +78,22 @@ export class Renderer {
     this._createNeutralTextures();
     this._createQuadIndexBuffer();
 
-    this.passes = {
-      shadow: new ShadowPass(this),
-      gbuffer: new GBufferPass(this),
-      ssao: new SSAOPass(this),
-      sky: new SkyPass(this),
-      clouds: new CloudPass(this),
-      deferred: new DeferredPass(this),
-      translucent: new TranslucentPass(this),
-      volumetric: new VolumetricPass(this),
-      taa: new TAAPass(this),
-      bloom: new BloomPass(this),
-      exposure: new ExposurePass(this),
-      final: new FinalPass(this),
+    // A pass that throws (e.g. a shader that fails to compile on some GPU) is
+    // disabled and reported instead of taking the whole frame down.
+    this.failedPasses = new Map(); // name -> error message
+    const PASSES = {
+      shadow: ShadowPass, gbuffer: GBufferPass, ssao: SSAOPass, sky: SkyPass, clouds: CloudPass,
+      deferred: DeferredPass, translucent: TranslucentPass, volumetric: VolumetricPass, taa: TAAPass,
+      bloom: BloomPass, exposure: ExposurePass, final: FinalPass,
     };
+    this.passes = {};
+    for (const [name, Cls] of Object.entries(PASSES)) {
+      try {
+        this.passes[name] = new Cls(this);
+      } catch (e) {
+        this._passFailed(name, e);
+      }
+    }
     this.applySettings(this.settings);
     this._resize(true);
   }
@@ -151,8 +153,32 @@ export class Renderer {
   // ------------------------------------------------------------------ settings & size
   applySettings(settings) {
     this.settings = { ...this.settings, ...settings };
-    for (const p of Object.values(this.passes)) if (p.onSettings) p.onSettings(this.settings);
+    for (const [name, p] of Object.entries(this.passes)) {
+      if (!p.onSettings) continue;
+      try {
+        p.onSettings(this.settings);
+      } catch (e) {
+        this._passFailed(name, e);
+      }
+    }
     this._resize(true);
+  }
+
+  _passFailed(name, e) {
+    console.error(`[renderer] pass "${name}" failed and was disabled:`, e);
+    this.failedPasses.set(name, String(e && e.message ? e.message : e));
+    delete this.passes[name];
+  }
+
+  /** Run pass `name` if it exists; disable it if it throws. */
+  _run(name, ctx) {
+    const p = this.passes[name];
+    if (!p) return;
+    try {
+      p.render(ctx);
+    } catch (e) {
+      this._passFailed(name, e);
+    }
   }
 
   _computeSize() {
@@ -177,7 +203,13 @@ export class Renderer {
     this.width = w;
     this.height = h;
     this._createMainTargets();
-    for (const p of Object.values(this.passes)) p.resize(w, h);
+    for (const [name, p] of Object.entries(this.passes)) {
+      try {
+        p.resize(w, h);
+      } catch (e) {
+        this._passFailed(name, e);
+      }
+    }
     this.camera.resetHistory();
   }
 
@@ -223,7 +255,7 @@ export class Renderer {
       case 'shadowMap': return s.shadows && T.shadowMap ? T.shadowMap : this.shadowDummy;
       case 'shadowMapWater': return s.shadows && T.shadowMapWater ? T.shadowMapWater : this.shadowDummy;
       case 'bloom': return s.bloom && T.bloom ? T.bloom : this.black;
-      case 'resolved': return s.taa && T.taaOutput ? T.taaOutput : T.sceneHDR;
+      case 'resolved': return s.taa && T.taaOutput && this.passes.taa ? T.taaOutput : T.sceneHDR;
       default: return T[name] || this.black;
     }
   }
@@ -438,24 +470,23 @@ export class Renderer {
     gl.disable(gl.BLEND);
     gl.disable(gl.SCISSOR_TEST);
     gl.depthMask(true);
-    const P = this.passes;
-    if (s.shadows) P.shadow.render(ctx);
-    P.gbuffer.render(ctx);
-    if (s.ssao) P.ssao.render(ctx);
-    P.sky.render(ctx);
-    if (s.clouds) P.clouds.render(ctx);
-    P.deferred.render(ctx);
+    if (s.shadows) this._run('shadow', ctx);
+    this._run('gbuffer', ctx);
+    if (s.ssao) this._run('ssao', ctx);
+    this._run('sky', ctx);
+    if (s.clouds) this._run('clouds', ctx);
+    this._run('deferred', ctx);
 
     // Snapshot opaque colour + depth for refraction / SSR / water absorption.
     blit(gl, this.fbos.scene, this.fbos.sceneCopy, gl.COLOR_BUFFER_BIT, gl.NEAREST);
     blit(gl, this.fbos.depthOnly, this.fbos.opaqueDepth, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
 
-    P.translucent.render(ctx);
-    P.volumetric.render(ctx); // also applies underwater/lava fog when VL is off
-    if (s.taa) P.taa.render(ctx);
-    if (s.bloom) P.bloom.render(ctx);
-    P.exposure.render(ctx);
-    P.final.render(ctx);
+    this._run('translucent', ctx);
+    this._run('volumetric', ctx); // also applies underwater/lava fog when VL is off
+    if (s.taa) this._run('taa', ctx);
+    if (s.bloom) this._run('bloom', ctx);
+    this._run('exposure', ctx);
+    this._run('final', ctx);
 
     gl.bindVertexArray(null);
     this.frameIndex++;
